@@ -1,0 +1,22 @@
+name: OKF conformance
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Validate bundle
+        run: python3 .claude/scripts/okf.py validate
+      - name: Run tests
+        run: python3 -m unittest discover -s .claude/tests -p "test_*.py" -v

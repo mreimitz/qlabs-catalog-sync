@@ -1,3 +1,12 @@
+---
+type: "Agent Instruction"
+title: "Research Intake Questions"
+description: "The editable question set used to scope every new research topic."
+tags: ["agent", "instruction", "research", "intake"]
+timestamp: "2026-07-24T00:00:00Z"
+status: "active"
+---
+
 # Research Intake Questions
 
 This is the editable script for the research intake interview. Add, remove, reorder, or reword
@@ -23,7 +32,7 @@ can be skipped with a sensible default.
 
 ## Defaults when the user says "just go"
 
-- Deliverable → a decision-oriented memo in `outputs/`.
+- Deliverable → a decision-oriented `Research Output` concept in `outputs/`.
 - Sources → web + any project-internal material, paraphrased with provenance kept in `sources/`.
 - Success criteria → the objective is answered with traceable evidence and stated confidence.
 - Scope-out → infer from the objective and state your assumption explicitly before proceeding.

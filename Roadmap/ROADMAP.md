@@ -1,34 +1,28 @@
-# ROADMAP
-
-The single master plan for this project. Keep it current. Two indexes below: roadmap items (`RM`)
-and research topics (`RS`). Cross-link them by tag so the dependency graph stays visible.
-
-Status legend: `planned` · `active` · `blocked` · `done` · `archived`
-
+---
+type: "Roadmap"
+title: "Master Roadmap"
+description: "The live project-level index of roadmap items and research topics."
+tags: ["roadmap", "planning"]
+timestamp: "2026-07-24T00:00:00Z"
+status: "active"
 ---
 
-## Roadmap items (RM)
+# Master Roadmap
 
-| Tag     | Item            | Status    | Related research |
-| ------- | --------------- | --------- | ---------------- |
-| RM-01   | {{example}}     | planned   | RS-01            |
+This concept is the live project-level index of roadmap items and research topics.
 
-> Detailed plans for any item live in `Roadmap/RM-NN-<slug>/`. Add new items with `/new-roadmap`.
+## Roadmap Items
 
----
+No roadmap items have been created yet.
 
-## Research topics (RS)
+## Research Topics
 
-| Tag     | Topic           | Status    | Feeds   |
-| ------- | --------------- | --------- | ------- |
-| RS-01   | {{example}}     | active    | RM-01   |
-
-> Each topic lives in `Research/RS-NN-<slug>/`. Add new topics with `/new-research`.
-
----
+No research topics have been created yet.
 
 ## Now / Next / Later
 
-**Now:** {{what's active}}
-**Next:** {{queued}}
-**Later:** {{parked / ideas}}
+**Now:** Define active work in the relevant roadmap item.
+
+**Next:** Prioritize planned roadmap items.
+
+**Later:** Keep parked work in explicit roadmap items rather than loose notes.

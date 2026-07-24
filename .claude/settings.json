@@ -12,12 +12,23 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/validate-okf.sh"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Research project loaded. Rules: docs live in Research/RS-NN-*/ and Roadmap/RM-NN-*/ only. Start new topics with /new-research.'"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/scripts/okf.py\" --root \"$CLAUDE_PROJECT_DIR\" validate"
           }
         ]
       }

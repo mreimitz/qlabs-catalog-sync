@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: validate-okf
+        name: Validate OKF bundle and Research Scaffold profile
+        entry: python3 .claude/scripts/okf.py validate
+        language: system
+        pass_filenames: false
+        always_run: true
