@@ -2,3 +2,4 @@ __pycache__/
 *.py[cod]
 .tag-allocation.lock
 .okf-staging-*/
+tools/.venv/

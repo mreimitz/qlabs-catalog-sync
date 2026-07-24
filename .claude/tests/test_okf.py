@@ -96,6 +96,16 @@ class OkfValidationTests(unittest.TestCase):
         self.assertIn("PROFILE028", {issue.code for issue in okf.hook_pre(ROOT, payload)})
         self.assertIn("knowledge-project scaffold", original)
 
+    def test_pre_hook_rejects_markdown_under_tools(self) -> None:
+        payload = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(ROOT / "tools" / "README.md"),
+                "content": "# Not allowed",
+            },
+        }
+        self.assertIn("PROFILE031", {issue.code for issue in okf.hook_pre(ROOT, payload)})
+
     def test_source_attachment_requires_typed_linking_companion(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

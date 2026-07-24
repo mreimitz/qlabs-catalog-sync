@@ -23,7 +23,7 @@ from typing import Any, Iterable, Optional
 
 
 RESERVED_NAMES = {"index.md", "log.md"}
-SKIP_DIRS = {".git", "__pycache__"}
+SKIP_DIRS = {".git", ".venv", "__pycache__"}
 FRONTMATTER_ORDER = [
     "type",
     "title",
@@ -332,7 +332,10 @@ def validate_concept(
 
     if not body.strip():
         issues.append(Issue("profile", "PROFILE008", rel, "concept body must not be empty"))
-    if PLACEHOLDER_RE.search(text):
+    placeholder_text = text
+    if concept_type == "Source Reference":
+        placeholder_text = body.split("## Extracted content", 1)[0]
+    if PLACEHOLDER_RE.search(placeholder_text):
         issues.append(
             Issue("profile", "PROFILE009", rel, "live concept contains a template placeholder")
         )
@@ -367,7 +370,17 @@ def resolve_link(root: Path, source: Path, target: str) -> Optional[Path]:
 def validate_links(root: Path, path: Path, text: str) -> list[Issue]:
     rel = relative(root, path)
     issues: list[Issue] = []
-    for raw_target in LINK_RE.findall(text):
+    link_text = text
+    if path.name not in RESERVED_NAMES:
+        try:
+            metadata, body = parse_frontmatter(text)
+        except ProfileError:
+            metadata, body = None, text
+        if metadata and metadata.get("type") == "Source Reference":
+            # Converted source bodies may faithfully contain unresolved links from the
+            # original document. Validate provenance links, not opaque extracted content.
+            link_text = body.split("## Extracted content", 1)[0]
+    for raw_target in LINK_RE.findall(link_text):
         resolved = resolve_link(root, path, raw_target)
         if resolved is None:
             continue
@@ -404,7 +417,15 @@ def managed_directories(root: Path) -> list[Path]:
         for directory in research.iterdir():
             if directory.is_dir() and directory.name.startswith("RS-"):
                 directories.append(directory)
-                directories.extend(directory / name for name in ("sources", "notes", "outputs"))
+                for name in ("sources", "notes", "outputs"):
+                    content_root = directory / name
+                    directories.append(content_root)
+                    if content_root.is_dir():
+                        directories.extend(
+                            child
+                            for child in content_root.rglob("*")
+                            if child.is_dir() and child.name not in SKIP_DIRS
+                        )
     if roadmap.exists():
         for directory in roadmap.iterdir():
             if directory.is_dir() and directory.name.startswith("RM-"):
@@ -508,7 +529,7 @@ def validate_source_attachments(root: Path) -> list[Issue]:
     for sources in root.glob("Research/RS-*/sources"):
         if not sources.is_dir():
             continue
-        for attachment in sources.iterdir():
+        for attachment in sources.rglob("*"):
             if (
                 not attachment.is_file()
                 or attachment.name.startswith(".")
@@ -616,6 +637,15 @@ def validate(root: Path) -> list[Issue]:
                     "PROFILE025",
                     rel,
                     "README.md is not allowed; use reserved index.md",
+                )
+            )
+        if Path(rel).parts and Path(rel).parts[0] == "tools":
+            issues.append(
+                Issue(
+                    "profile",
+                    "PROFILE031",
+                    rel,
+                    "tools/ is scaffold infrastructure and must not contain Markdown",
                 )
             )
 
@@ -1081,6 +1111,15 @@ def path_policy_issues(root: Path, path: Path) -> list[Issue]:
     parts = Path(rel).parts
     if not parts:
         return []
+    if parts[0] == "tools" and path.suffix.lower() == ".md":
+        return [
+            Issue(
+                "profile",
+                "PROFILE031",
+                rel,
+                "tools/ is scaffold infrastructure and must not contain Markdown",
+            )
+        ]
     if path.name.lower() == "readme.md":
         return [Issue("profile", "PROFILE025", rel, "use reserved index.md instead")]
     if parts[0] == "Research":

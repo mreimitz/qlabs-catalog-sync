@@ -3,7 +3,7 @@ type: "Project"
 title: "Research Project Scaffold"
 description: "A reusable, strictly validated OKF scaffold for research and roadmap knowledge."
 tags: ["project", "research", "okf"]
-timestamp: "2026-07-24T00:00:00Z"
+timestamp: "2026-07-24T12:20:07Z"
 status: "active"
 ---
 
@@ -23,6 +23,7 @@ either an OKF concept or a reserved `index.md` or `log.md` file.
 ## Daily workflows
 
 - Use `/new-research` to scope and create an `RS-NN` research topic.
+- Use `/doc-intake` to convert a local file or directory into a new `RS-NN` topic.
 - Use `/new-roadmap` to create an `RM-NN` roadmap item.
 - Use `/research-status` to inspect current work.
 - Use `/validate-okf` to validate official OKF and the strict local profile.
@@ -32,3 +33,9 @@ either an OKF concept or a reserved `index.md` or `log.md` file.
 
 Research folders use `RS-NN-short-slug`; roadmap folders use `RM-NN-short-slug`. Numbers are
 zero-padded, allocated atomically, and never reused.
+
+## Scaffold tooling
+
+Non-OKF helper code lives under `tools/`. It is intentionally absent from the knowledge indexes
+and may not contain Markdown. The document-intake tool runs Microsoft MarkItDown in an isolated
+Python 3.10+ environment while core OKF validation remains dependency-free on Python 3.9.

@@ -3,7 +3,7 @@ type: "Agent Instruction"
 title: "Research Project Operating Rules"
 description: "Mandatory structure, OKF conformance, research, and roadmap rules for agents."
 tags: ["agent", "instruction", "okf"]
-timestamp: "2026-07-24T00:00:00Z"
+timestamp: "2026-07-24T12:20:07Z"
 status: "active"
 ---
 
@@ -25,6 +25,9 @@ This repository is one Open Knowledge Format v0.1 bundle. Three knowledge domain
 
 Every `.md` file is either an OKF concept with strict frontmatter or a reserved `index.md` /
 `log.md`. Use `python3 .claude/scripts/okf.py validate` after material changes.
+
+`tools/` is scaffold infrastructure, not an OKF knowledge domain. It contains code, configuration,
+and tests only. Markdown is forbidden under `tools/`, and the root knowledge index must not list it.
 
 ---
 
@@ -88,6 +91,9 @@ When the user wants to start research, **run the intake** rather than guessing s
 5. Synchronize `Roadmap/roadmap.md` and managed indexes.
 6. Only then begin gathering sources and writing notes — inside the new folder.
 
+For file-driven intake, `/doc-intake` asks for a research-entry name, converts one local file or a
+directory recursively, and creates the complete RS topic only after every visible file converts.
+
 ---
 
 ## 6. Working style
@@ -107,6 +113,7 @@ When the user wants to start research, **run the intake** rather than guessing s
 - ❌ Do not write loose files into `Research/` or `Roadmap/` roots.
 - ❌ Do not create `README.md`; use reserved `index.md` for navigation.
 - ❌ Do not create live Markdown from unfinished templates.
+- ❌ Do not create Markdown under `tools/`; tooling is outside the OKF knowledge graph.
 - ❌ Do not reuse a retired tag number.
 - ❌ Do not start a topic without objective and scope recorded in `topic.md`.
 - ❌ Do not bypass a hook block by renaming a path to dodge the check — fix the structure instead.

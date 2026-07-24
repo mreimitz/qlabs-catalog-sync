@@ -3,7 +3,7 @@ type: "Standard Profile"
 title: "Research Scaffold OKF Profile"
 description: "The strict metadata, lifecycle, evidence, and validation rules for this scaffold."
 tags: ["okf", "standard", "validation"]
-timestamp: "2026-07-24T11:57:39Z"
+timestamp: "2026-07-24T12:20:07Z"
 status: "active"
 ---
 
@@ -27,6 +27,9 @@ The validator reports two layers independently:
 Every ordinary concept requires `type`, `title`, `description`, `tags`, `timestamp`, and `status`.
 Frontmatter uses the profile's JSON-compatible YAML subset so validation remains deterministic and
 offline.
+
+Markdown under `tools/` is forbidden. That directory contains non-OKF scaffold implementation;
+ignoring Markdown there would violate the root bundle's official whole-tree conformance boundary.
 
 ## Reserved files
 

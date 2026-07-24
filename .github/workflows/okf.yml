@@ -19,4 +19,6 @@ jobs:
       - name: Validate bundle
         run: python3 .claude/scripts/okf.py validate
       - name: Run tests
-        run: python3 -m unittest discover -s .claude/tests -p "test_*.py" -v
+        run: |
+          python3 -m unittest discover -s .claude/tests -p "test_*.py" -v
+          python3 -m unittest discover -s tools/tests -p "test_*.py" -v
