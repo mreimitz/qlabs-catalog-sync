@@ -637,7 +637,7 @@
       ],
       "dod": "read() returns current Qlik data products and datasets as neutral entities with field envelopes, secureQri, and the last-seen ETag.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/read -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.9",
