@@ -940,7 +940,7 @@
       ],
       "dod": "Bootstrap proposes matches by natural key and binds none without confirmation; confirmed matches persist and are reused; an ambiguous match is reported rather than guessed.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/identity -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T7.2",
