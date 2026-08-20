@@ -45,7 +45,7 @@ Design decisions (see the T4.1 report for the full reasoning):
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Protocol
 
 import httpx
 from databricks.sdk import WorkspaceClient
@@ -76,26 +76,6 @@ __all__ = [
 ]
 
 
-class _AsyncClientTokenTransport:
-    """Adapts ``httpx.AsyncClient.post`` to the SDK's ``TokenTransport`` protocol.
-
-    ``TokenTransport`` (``qlabs_catalog_sync_sdk.auth``) declares
-    ``async def post(self, url: str, **kwargs: Any) -> httpx.Response``. At runtime a
-    plain ``httpx.AsyncClient`` satisfies that duck type fine (its own docstring says
-    so), but ``AsyncClient.post`` is typed with a long list of specific keyword
-    parameters rather than ``**kwargs: Any``, which strict-mode structural matching
-    rejects. This tiny proxy has the exact declared shape, so passing one through
-    :func:`build_oauth_provider` type-checks without editing the SDK (out of scope for
-    this task) or loosening anything.
-    """
-
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._client = client
-
-    async def post(self, url: str, **kwargs: Any) -> httpx.Response:
-        return await self._client.post(url, **kwargs)
-
-
 def build_oauth_provider(
     config: DatabricksConfig,
     *,
@@ -115,7 +95,7 @@ def build_oauth_provider(
         token_url=config.token_url,
         client_id=config.client_id,
         client_secret=config.client_secret.get_secret_value(),
-        transport=_AsyncClientTokenTransport(transport),
+        transport=transport,
         scope=OAUTH_SCOPE,
         encoding=TokenRequestEncoding.FORM,
         clock=clock,
