@@ -870,7 +870,7 @@
       ],
       "dod": "Comments, owners, physical names and properties map into the correct neutral fields; read-only fields are never emitted as writable.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/mapping -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.7",
