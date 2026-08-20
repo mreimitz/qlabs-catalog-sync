@@ -14,6 +14,7 @@ implemented here — see the placeholder note on each method below.
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any, ClassVar
 from urllib.parse import urlsplit
@@ -31,17 +32,31 @@ from qlabs_catalog_sync_sdk.contract import (
     ListChangedResult,
     NeutralEntity,
     Watermark,
+    WriteResult,
 )
 from qlabs_catalog_sync_sdk.contract import Connector as ConnectorABC
 from qlabs_catalog_sync_sdk.exceptions import AuthError, ConnectorError, TransientError
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 
-from . import read
+from . import read, write
 from .auth import build_http_endpoint, classify_response_error, classify_transport_error
 from .config import QlikConfig
 from .manifest import qlik_capability_manifest
+from .resolve import DatasetIdentityLookup
 
 __all__ = ["Connector"]
+
+
+async def _no_identity_binding(neutral_id: uuid.UUID) -> str | None:
+    """Default dataset identity seam: no answer.
+
+    The engine owns the IdentityMap, and a connector may never import it, so it injects
+    a real lookup before ``setup()``. Answering "unknown" is honest; the writer then
+    falls back to a name match within the target space and reports whatever it still
+    cannot place (decision D2).
+    """
+    del neutral_id
+    return None
 
 
 class Connector(ConnectorABC):
@@ -59,6 +74,9 @@ class Connector(ConnectorABC):
         super().__init__()
         self.ctx: ConnectorContext[QlikConfig] | None = None
         self.http: HttpEndpoint | None = None
+        self.writer: write.QlikWriter | None = None
+        self.dataset_identity_lookup: DatasetIdentityLookup = _no_identity_binding
+        self.dataset_name_lookup: write.DatasetNameLookup = write.no_dataset_names
         self._oauth_provider: OAuth2ClientCredentialsProvider | None = None
         self._token_client: httpx.AsyncClient | None = None
 
@@ -75,6 +93,14 @@ class Connector(ConnectorABC):
         http, oauth_provider, token_client = build_http_endpoint(config, clock=ctx.clock)
         self.ctx = ctx
         self.http = http
+        self.writer = write.build_writer(
+            http,
+            endpoint=self.name,
+            tenant_id=self._tenant_id(),
+            space_id=ctx.config.space_id,
+            dataset_identity_lookup=self.dataset_identity_lookup,
+            dataset_name_lookup=self.dataset_name_lookup,
+        )
         self._oauth_provider = oauth_provider
         self._token_client = token_client
         await ctx.logger.ainfo(
@@ -210,7 +236,20 @@ class Connector(ConnectorABC):
             )
         return host
 
-    # -- write path (T3.4/T3.5/T3.6/T3.7) ---------------------------------------------
+    # -- write path -------------------------------------------------------------------
+
+    async def create(self, entity: NeutralEntity) -> WriteResult:
+        """Create ``entity`` as a Qlik data product in the configured space.
+
+        Never creates a Qlik dataset or user to make a reference resolve (D2, D3) and
+        never activates the new product (D7). Members and owners that cannot be placed
+        are omitted from the payload and reported on the result.
+        """
+        if self.writer is None:
+            raise RuntimeError("setup() must be called before create()")
+        return await self.writer.create(entity)
+
+    # -- remaining write path (T3.5/T3.7) ---------------------------------------------
     # create/update/delete are intentionally left at the ABC's defaults (they raise
     # CapabilityError) rather than overridden here: they are not abstract, so nothing
     # blocks instantiation, and the honest-refusal default is exactly right until the
