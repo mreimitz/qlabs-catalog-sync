@@ -136,7 +136,7 @@
       ],
       "dod": "Contributor guide states the package boundaries and the connector->SDK-only dependency rule and points to the ADR location.",
       "verify": "uv run python -c \"import pathlib,sys; sys.exit(0 if pathlib.Path('CONTRIBUTING.md').is_file() else 1)\"",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.1",
