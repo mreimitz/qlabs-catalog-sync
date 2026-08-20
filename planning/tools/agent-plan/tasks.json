@@ -360,7 +360,7 @@
       ],
       "dod": "Contract version constant is exported, the compatibility gate rejects a mismatched major with a clear message, and the public surface imports cleanly.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/version -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.1",
