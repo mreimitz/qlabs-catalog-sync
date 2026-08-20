@@ -158,7 +158,7 @@
       ],
       "dod": "All neutral entities are defined, validate, and serialize round-trip; mypy strict clean.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/models -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.2",
