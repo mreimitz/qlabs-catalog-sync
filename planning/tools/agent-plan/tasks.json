@@ -499,7 +499,7 @@
       ],
       "dod": "Per-pair jobs run on cadence with jitter and never overlap; a long-running cycle causes the next trigger to be skipped rather than queued.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/scheduler -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.7",
@@ -707,7 +707,7 @@
       ],
       "dod": "update() issues replace-only JSON Patch honoring the path enum, full-replace arrays, if-match and 8-op batching; a 412 triggers exactly one re-read/re-diff cycle; an out-of-enum path raises CapabilityError.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.7",
