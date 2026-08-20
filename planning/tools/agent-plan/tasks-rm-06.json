@@ -24,7 +24,7 @@
       ],
       "dod": "Migration applies and rolls back cleanly on SQLite; every table round-trips through the ORM; no column anywhere in the schema can hold a credential value.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T10.2",
@@ -44,7 +44,7 @@
       ],
       "dod": "A reference resolves to a live credential for connector setup; resolve-status returns only a boolean and a reason; a test asserts no secret value appears in any log record or serialized response.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_secrets.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T10.3",
@@ -109,7 +109,7 @@
       ],
       "dod": "The include-then-exclude-then-carve-back-in case resolves correctly and names the deciding rule; an empty rule set includes nothing; a rule set of plain include globs reproduces RM-01 D1 semantics exactly; evaluation is order-stable and side-effect free.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/selection",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T11.2",
