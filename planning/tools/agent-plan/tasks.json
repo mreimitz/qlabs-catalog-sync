@@ -1072,7 +1072,7 @@
       ],
       "dod": "Re-run is a zero-write no-op, a simulated crash mid-cycle leaves state and watermark untouched, and restart resumes from the persisted watermark.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/restart -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T8.5",
