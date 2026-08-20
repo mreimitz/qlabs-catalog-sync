@@ -114,7 +114,7 @@
       ],
       "dod": "CI runs the corrected gate commands and builds a wheel per package on push; the workflow is green.",
       "verify": "uv sync --all-packages && uv run ruff check packages && uv run mypy && uv run pytest -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T0.4",
