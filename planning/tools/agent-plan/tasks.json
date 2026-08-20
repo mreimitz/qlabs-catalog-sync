@@ -591,7 +591,7 @@
       ],
       "dod": "Connector authenticates to a Qlik tenant via OAuth2 M2M against the configured base URL and healthcheck reports status; unit tested with respx.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/auth -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.2",
