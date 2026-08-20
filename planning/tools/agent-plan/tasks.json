@@ -428,7 +428,7 @@
       ],
       "dod": "Engine loads endpoint config, resolves secrets from a configured backend, and validates a sync-pair definition including UC selector patterns and the target space; invalid config fails at startup with a precise message.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/config -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.4",
