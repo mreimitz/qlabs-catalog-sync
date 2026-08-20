@@ -66,7 +66,7 @@
       ],
       "dod": "Every mutating operation writes exactly one audit row and one generation bump; a validation failure or a mid-transaction error commits neither; secret values are rejected if submitted inline rather than as a reference.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_service.py packages/qlabs-catalog-sync/tests/configstore/test_audit.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T10.4",
@@ -86,7 +86,7 @@
       ],
       "dod": "An environment-only deployment comes up with the same behavior as before; a second start imports nothing; an edit made through the service survives a restart unchanged.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_bootstrap.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T11.1",
