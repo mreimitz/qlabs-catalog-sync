@@ -40,7 +40,7 @@ Run these commands from the repository root before marking anything done. All fo
 
 ```bash
 uv sync --all-packages         # install every workspace member + dev group
-uv run ruff check packages     # lint (never `ruff check .` — planning/ is out of scope)
+uv run ruff check packages scripts   # lint (never `ruff check .` — planning/ is out of scope)
 uv run mypy                    # strict type-check (scoped to packages/*/src)
 uv run pytest -q               # tests (pytest-asyncio; respx for unit, vcrpy for recorded)
 ```

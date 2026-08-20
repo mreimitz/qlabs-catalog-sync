@@ -36,7 +36,7 @@ uv workspace, with its own Node toolchain. It does not exist yet.
 ```bash
 uv sync --all-packages         # install every workspace member + dev group (plain `uv sync` does NOT)
 uv run pytest -q               # tests (pytest-asyncio; respx for unit, vcrpy for recorded)
-uv run ruff check packages     # lint — never `ruff check .`, that would lint planning/
+uv run ruff check packages scripts   # lint — never `ruff check .`, that would lint planning/
 uv run mypy                    # strict type-check (scoped to packages/*/src)
 ```
 

@@ -34,7 +34,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["packages/*/src", "packages/*/tests"]
+src = ["packages/*/src", "packages/*/tests", "scripts"]
 # This root project's tooling must never touch planning/ — it is a separately
 # governed OKF bundle with its own conformance tooling.
 extend-exclude = ["planning"]
@@ -64,6 +64,9 @@ mypy_path = [
     "packages/qlabs-connector-snowflake/src",
 ]
 files = [
+    # scripts/ ships to operators and runs against a live tenant, so it is held to the
+    # same strict standard as the packages rather than left outside the gate.
+    "scripts",
     "packages/qlabs-catalog-sync-sdk/src",
     "packages/qlabs-catalog-sync/src",
     "packages/qlabs-connector-qlik/src",
