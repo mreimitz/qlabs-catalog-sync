@@ -315,7 +315,7 @@
       ],
       "dod": "Run history pages deterministically under concurrent writes; issues are attributable to a specific run and object; the change log answers when a given schema entered or left scope.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_history.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T12.8",
