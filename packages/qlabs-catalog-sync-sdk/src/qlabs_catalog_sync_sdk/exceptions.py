@@ -169,8 +169,9 @@ class CapabilityError(ConnectorError):
     the manifest declares ``ro``/``na``. Never retryable: retrying sends the exact same
     invalid request again. This is a planning bug, not a transient condition, and the
     conformance kit (T1.8) asserts connectors raise it in exactly this situation.
-    ``field`` is the neutral field name the engine tried to write, and
-    ``capability_mode`` is the manifest mode that forbade it (``"ro"`` or ``"na"``),
+    ``field`` is the neutral field name the engine tried to write,
+    ``capability_mode`` is the manifest mode that forbade it (``"ro"`` or ``"na"``), and
+    ``operation`` is what was attempted (``"create"``, ``"update"``, ``"delete"``, ...),
     when the connector has them to hand.
     """
 
@@ -185,7 +186,9 @@ class CapabilityError(ConnectorError):
         cause: BaseException | None = None,
         field: str | None = None,
         capability_mode: str | None = None,
+        operation: str | None = None,
     ) -> None:
         super().__init__(message, endpoint=endpoint, entity_type=entity_type, cause=cause)
         self.field = field
         self.capability_mode = capability_mode
+        self.operation = operation

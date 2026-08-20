@@ -2,9 +2,9 @@
 
 Everything here is a real implementation of the contract, not a mock: the manifest stub
 implements ``CapabilityManifestBase``, the connector stubs subclass ``Connector`` and are
-actually instantiated and awaited, and the context stub is checked against the
-``ConnectorContext`` protocol. The point of these tests is that the contract *works*, so
-nothing is patched out.
+actually instantiated and awaited, and ``setup`` receives a real
+``ConnectorContext``. The point of these tests is that the contract *works*, so nothing is
+patched out.
 """
 
 from __future__ import annotations
@@ -68,23 +68,6 @@ class StubManifest(CapabilityManifestBase):
 
 class StubConfig(BaseSettings):
     base_url: str = "https://example.invalid"
-
-
-class StubContext:
-    """A plain object that structurally satisfies ``ConnectorContext``."""
-
-    def __init__(self, endpoint: str, config: StubConfig) -> None:
-        self.endpoint = endpoint
-        self.config = config
-        self.logger = _RecordingLogger()
-
-
-class _RecordingLogger:
-    def __init__(self) -> None:
-        self.records: list[tuple[str, dict[str, object]]] = []
-
-    def info(self, event: str, **kwargs: object) -> None:
-        self.records.append((event, kwargs))
 
 
 # --------------------------------------------------------------------------------------
@@ -216,8 +199,8 @@ def target_connector() -> WriteTargetConnector:
 
 
 @pytest.fixture
-def context() -> StubContext:
-    return StubContext(SOURCE, StubConfig())
+def context() -> ConnectorContext[StubConfig]:
+    return ConnectorContext.build(config=StubConfig(), endpoint=SOURCE, tenant=TENANT)
 
 
 @pytest.fixture

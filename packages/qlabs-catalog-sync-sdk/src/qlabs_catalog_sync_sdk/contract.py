@@ -17,20 +17,15 @@ section 4.1):
   post-D8 skeleton in the RM-01 agent guide.
 
 Layering. ``models.py`` (T1.1) is the leaf; this module sits directly on top of it and
-depends on nothing else in the SDK. Three types this contract needs are owned by tasks
-that run *after* it, so rather than import upwards (which would be circular, or simply
-unresolvable today) this module **declares the abstract shape and the later module fills
-it in**:
+depends only on ``models`` (the neutral types), ``exceptions`` (the typed error
+hierarchy) and ``config`` (the runtime context), each of which imports nothing from here.
 
-* :class:`CapabilityManifestBase` — T1.3's concrete ``manifest.CapabilityManifest`` must
-  subclass it.
-* :class:`ConnectorContext` — a structural :class:`typing.Protocol`; T1.7's concrete
-  runtime context satisfies it without importing it.
-* :class:`ConnectorError` / :class:`CapabilityError` — the contract itself raises
-  ``CapabilityError`` from its default write paths, so the two anchor classes live here
-  and T1.7's ``exceptions.py`` **re-exports** them (and builds ``TransientError``,
-  ``AuthError``, ``NotFound`` and ``ConflictError`` on ``ConnectorError``) rather than
-  redefining them.
+* :class:`CapabilityManifestBase` — the query surface the contract needs from a manifest.
+  T1.3's concrete ``manifest.CapabilityManifest`` subclasses it, so the manifest keeps
+  full freedom over its own shape while the contract stays typed and non-circular.
+* :class:`ConnectorContext` and :class:`CapabilityError` / :class:`ConnectorError` are
+  **re-exported** here for connector authors' convenience; they are defined in ``config``
+  and ``exceptions`` respectively, and there is exactly one of each in the SDK.
 
 Read-only source connectors. ``create``/``update``/``delete`` are **not** abstract: their
 default implementations raise :class:`CapabilityError`. A read-only connector (Databricks,
@@ -45,11 +40,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, ClassVar, Final, Protocol, TypeVar, runtime_checkable
+from typing import Any, ClassVar, Final
 
 from pydantic import AwareDatetime, ConfigDict, Field, JsonValue, model_validator
 from pydantic_settings import BaseSettings
 
+from .config import ConnectorContext
+from .exceptions import CapabilityError, ConnectorError
 from .models import (
     EntityType,
     FieldDiff,
@@ -85,46 +82,6 @@ __all__ = [
 #: :attr:`Connector.sdk_contract_version` differs from this (RS-08 section 7). Defined
 #: here because :class:`Connector` stamps it; T1.9's ``version.py`` re-exports it.
 SDK_CONTRACT_VERSION: Final[int] = 1
-
-
-# --------------------------------------------------------------------------------------
-# Exception anchors (re-exported by exceptions.py, T1.7 — never redefined there)
-# --------------------------------------------------------------------------------------
-
-
-class ConnectorError(Exception):
-    """Root of the SDK's typed exception hierarchy.
-
-    Every SDK exception derives from this so the engine can react uniformly (retry vs
-    skip vs fail). It is declared in the contract because the contract itself raises
-    :class:`CapabilityError`; ``exceptions.py`` (T1.7) layers above the contract and adds
-    ``TransientError``, ``AuthError``, ``NotFound`` and ``ConflictError`` on top of it.
-    """
-
-
-class CapabilityError(ConnectorError):
-    """A connector was asked for something its capability manifest does not declare.
-
-    Raised — never an API call — when a write targets a field declared ``ro``/``na``, or
-    any operation targets an unsupported entity type. This is the exception the
-    conformance kit's capability-honesty check asserts on (RS-08 section 9).
-    """
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        endpoint: str | None = None,
-        entity_type: EntityType | None = None,
-        field: str | None = None,
-        operation: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.message = message
-        self.endpoint = endpoint
-        self.entity_type = entity_type
-        self.field = field
-        self.operation = operation
 
 
 # --------------------------------------------------------------------------------------
@@ -166,49 +123,6 @@ class CapabilityManifestBase(NeutralModel, ABC):
         partial diff into a read-modify-write full replacement before calling
         :meth:`Connector.update` (RS-07 section 2; Qlik data-product arrays are the
         motivating case).
-        """
-
-
-# --------------------------------------------------------------------------------------
-# Connector context (concrete type: config.py, T1.7)
-# --------------------------------------------------------------------------------------
-
-
-ConfigT_co = TypeVar("ConfigT_co", bound=BaseSettings, covariant=True)
-
-
-@runtime_checkable
-class ConnectorContext(Protocol[ConfigT_co]):
-    """What the engine injects into :meth:`Connector.setup`.
-
-    Structural on purpose: T1.7's concrete runtime context satisfies this protocol
-    without either module importing the other, and the protocol is generic over the
-    connector's own ``ConfigModel`` so ``ctx.config`` keeps its connector-specific type
-    (``ConnectorContext[QlikConfig]`` gives a ``QlikConfig``).
-
-    Only the members the contract itself promises are declared. T1.7's context may carry
-    more (a metrics handle, a clock); a protocol is satisfied by any object that has *at
-    least* these.
-    """
-
-    @property
-    def endpoint(self) -> str:
-        """The endpoint key — the connector's entry-point name (RS-08 section 3)."""
-
-    @property
-    def config(self) -> ConfigT_co:
-        """The validated instance of this connector's ``ConfigModel``.
-
-        Built and bound by the engine from its config plus secret backend; connectors
-        never read the environment themselves.
-        """
-
-    @property
-    def logger(self) -> Any:
-        """A ``structlog`` logger already bound with endpoint/tenant context.
-
-        Typed loosely because T1.7 chooses the concrete ``structlog`` bound-logger class;
-        tightening it later is additive. Secrets are redacted by the SDK's log processor.
         """
 
 

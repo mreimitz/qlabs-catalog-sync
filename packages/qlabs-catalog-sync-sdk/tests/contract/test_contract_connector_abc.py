@@ -113,8 +113,10 @@ def test_a_subclass_without_a_name_cannot_be_instantiated(source_connector) -> N
 # --------------------------------------------------------------------------------------
 
 
-async def test_setup_receives_a_context_matching_the_protocol(source_connector, context) -> None:
+async def test_setup_receives_the_sdk_connector_context(source_connector, context) -> None:
     assert isinstance(context, ConnectorContext)
+    assert context.endpoint == source_connector.name
+    assert context.logger is not None
 
     await source_connector.setup(context)
 
