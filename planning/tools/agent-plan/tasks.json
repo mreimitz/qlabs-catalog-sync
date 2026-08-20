@@ -707,7 +707,7 @@
       ],
       "dod": "update() issues replace-only JSON Patch honoring the path enum, full-replace arrays, if-match and 8-op batching; a 412 triggers exactly one re-read/re-diff cycle; an out-of-enum path raises CapabilityError.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.7",
@@ -917,7 +917,7 @@
       ],
       "dod": "The Databricks connector passes the SDK conformance kit in read mode, and attempting any write raises CapabilityError without issuing a request.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T7.1",
