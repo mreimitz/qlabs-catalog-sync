@@ -203,7 +203,7 @@ and the behaviours only a real tenant can confirm are listed in
 
 ### Status at a glance
 
-As of 2026-08-20 — RM-01 (the engine) is 46 of 52 tasks done, with 1,576 tests passing.
+As of 2026-08-20 — RM-01 (the engine) is **complete**: 52 of 52 tasks, 1,600 tests passing.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
@@ -215,8 +215,8 @@ As of 2026-08-20 — RM-01 (the engine) is 46 of 52 tasks done, with 1,576 tests
 | WP5 | Collibra read connector | 0 / 6 | Blocked (Track B, RM-05) |
 | WP6 | Snowflake read connector | 0 / 6 | Blocked (Track B, RM-05) |
 | WP7 | Identity map, field diff, owner correlation | 4 / 4 | **Done** |
-| WP8 | Integration, end-to-end pilot, release readiness | 2 / 4 | In progress |
-| WP9 | Packaging, deployment, runbook, v0.1 tag | 0 / 4 | Not started |
+| WP8 | Integration, end-to-end pilot, release readiness | 4 / 4 | **Done** |
+| WP9 | Packaging, deployment, runbook, v0.1 tag | 4 / 4 | **Done** |
 | WP10 | Configuration store, secret references, audit log | 0 / 4 | Not started (console, RM-06) |
 | WP11 | Selection rule engine, source tree, run history | 0 / 4 | Not started (console, RM-06) |
 | WP12 | REST API, authentication, generated client | 0 / 9 | Not started (console, RM-06) |
@@ -265,14 +265,21 @@ tenant has been involved.
 - **Operations:** structured JSON logs with sync context and no secrets, Prometheus metrics,
   `/healthz` and `/metrics`, a per-pair scheduler with jitter that never overlaps a cycle
   with itself, and automatic database migration on startup.
+- **It ships as one container.** `serve` runs the service — one process, one job per pair —
+  as a non-root user with state on a mounted volume. `SIGTERM` pauses the scheduler and lets
+  a cycle already running finish rather than throwing away API budget already spent.
+- **Deploying it is documented.** [`docs/runbook.md`](docs/runbook.md) covers deploy,
+  configure, dry-run, confirm identity, read an orphan report and diagnose a red healthcheck;
+  [`deploy/`](deploy/) has per-tenant config and secret templates plus cadence defaults with
+  the request-cost arithmetic behind them; and
+  [`docs/capability-matrix.json`](docs/capability-matrix.json) is generated from the live
+  connector manifests, with a `--check` mode that fails when it drifts.
 
 ### What does not exist yet
 
 - **No live-tenant verification.** The connectors have never talked to a real Databricks
   workspace or Qlik tenant. See [Known-unverified behavior](#known-unverified-behavior) and
   the checklist in [`docs/tenant-verification.md`](docs/tenant-verification.md).
-- **No packaging or runbook yet** — no container image, no per-tenant config templates, no
-  operator runbook. That is WP9, and v0.1 is not tagged.
 - **No Collibra or Snowflake connector.** Both packages exist as placeholders that declare
   an entry point, so the engine reports them as unavailable at startup. They are Track B
   (RM-05) and start after v0.1.
@@ -321,15 +328,35 @@ engine depends on the SDK and discovers connectors at runtime via the
 `qlabs_catalog_sync.connectors` entry-point group. Nothing depends on a connector
 directly.
 
-## Quickstart (for developers)
+## Quickstart
 
-There is nothing to install as a user yet. To work on the code:
+### Running it
+
+Copy the templates in [`deploy/config/`](deploy/config/), fill in your two endpoints, and
+look before you leap — `dry-run` writes a plan and changes nothing:
 
 ```bash
-uv sync --all-packages         # install every workspace member + dev group
-uv run ruff check packages     # lint
-uv run mypy                    # strict type-check
-uv run pytest -q               # tests
+cp deploy/config/tenant.example.yaml config.yaml     # edit: hosts, space, selector patterns
+cp deploy/config/tenant.env.example .env             # edit: the two client secrets
+
+qlabs-catalog-sync dry-run --config config.yaml --plan-file plan.json
+qlabs-catalog-sync run     --config config.yaml      # apply one cycle
+qlabs-catalog-sync serve   --config config.yaml      # or run it as a service
+```
+
+A first sync against an empty Qlik space needs `--create-missing`; against a space that
+already holds data products, use `identity-confirm` — nothing binds without you confirming
+it. [`docs/runbook.md`](docs/runbook.md) is the operator guide, and
+[`docs/tenant-verification.md`](docs/tenant-verification.md) is the checklist to run
+**before** pointing this at production, because it has never run against a live tenant.
+
+### Working on the code
+
+```bash
+uv sync --all-packages              # install every workspace member + dev group
+uv run ruff check packages scripts  # lint
+uv run mypy                         # strict type-check
+uv run pytest -q                    # tests
 ```
 
 ## Working on it
