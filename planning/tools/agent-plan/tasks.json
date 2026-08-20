@@ -659,7 +659,7 @@
       ],
       "dod": "Dataset members resolve to existing Qlik dataset ids or are reported unresolved; owner emails resolve to Qlik userIds or are reported unmatched; no code path creates a Qlik dataset.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/resolve -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.4",
