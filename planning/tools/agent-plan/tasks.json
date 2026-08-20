@@ -456,7 +456,7 @@
       ],
       "dod": "One cycle reads, resolves, diffs, writes, persists and advances the watermark transactionally; a re-run performs zero writes; a simulated mid-cycle failure leaves state and watermark untouched.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.5",
