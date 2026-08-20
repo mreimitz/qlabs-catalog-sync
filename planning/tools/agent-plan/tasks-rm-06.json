@@ -420,7 +420,7 @@
       ],
       "dod": "An endpoint can be registered and healthchecked entirely from the browser; validation errors are shown against the offending field; the UI never offers to store a credential; an unresolvable secret reference is visible at a glance.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T13.4",
