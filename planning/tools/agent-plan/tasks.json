@@ -566,7 +566,7 @@
       ],
       "dod": "A vanished source object is logged as an orphan and reported; a test asserts the engine issues no delete or deactivate call in any code path.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/orphans -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.1",
