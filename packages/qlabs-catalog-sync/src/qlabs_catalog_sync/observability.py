@@ -491,6 +491,22 @@ def _build_handler(
 class ObservabilityServer:
     """The small HTTP surface exposing ``/healthz`` and ``/metrics``.
 
+    .. note::
+
+       **No longer the service's HTTP surface.** RM-06 decision C8 requires the REST API,
+       the console's static assets, ``/healthz`` and ``/metrics`` to share one process,
+       one origin and one port, which a second listener on its own thread cannot do. Since
+       WP12, ``cli/serve_command.py`` runs the FastAPI application
+       (:func:`qlabs_catalog_sync.api.app.create_app` via
+       :class:`qlabs_catalog_sync.api.server.ApiServer`) instead, and that app renders both
+       endpoints through the very same :func:`render_healthz` / :func:`render_metrics`
+       functions this class calls -- byte for byte, asserted by ``tests/api/test_healthz.py``
+       and ``tests/api/test_metrics.py``.
+
+       This class is kept because it is the reference those parity tests are written
+       against and it remains independently tested, but nothing in the running service
+       starts it. Removing it is a deliberate follow-up, not an oversight.
+
     Built on the stdlib ``http.server.ThreadingHTTPServer`` running in a background daemon
     thread — not an ASGI/WSGI framework. Neither ``prometheus_client`` nor any part of this
     package pulls one in, and the architecture doc (RS-07 section 6) is explicit that this is
