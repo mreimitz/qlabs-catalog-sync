@@ -3,7 +3,7 @@ type: "Roadmap"
 title: "Master Roadmap"
 description: "The live project-level index of roadmap items and research topics."
 tags: ["roadmap", "planning"]
-timestamp: "2026-08-20T10:41:58Z"
+timestamp: "2026-08-20T12:34:07Z"
 status: "active"
 ---
 
@@ -18,6 +18,7 @@ This concept is the live project-level index of roadmap items and research topic
 * [RM-03-pluggable-endpoints](RM-03-pluggable-endpoints/item.md) — Pluggable endpoint framework for future catalogs · `planned`
 * [RM-04-access-observe-report](RM-04-access-observe-report/item.md) — Access observe and report (post-v1) · `planned`
 * [RM-05-track-b-connectors-glossary](RM-05-track-b-connectors-glossary/item.md) — Track B source connectors and the Qlik glossary · `planned`
+* [RM-06-sync-console](RM-06-sync-console/item.md) — Catalog sync console: endpoint management and sync selection · `planned`
 
 ## Completed Roadmap Items
 

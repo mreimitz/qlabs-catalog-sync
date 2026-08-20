@@ -110,16 +110,37 @@ contract, round-trip, idempotency, HTTP-behavior and capability-honesty suites.
 
 ### What you will configure, and what you will run
 
-Configuration is a set of **sync pairs**. A pair names its source endpoint, which objects
-to select (for Databricks, glob patterns over `catalog.schema`), the target Qlik space,
-which entity types to sync, the poll cadence, the policy for values edited by hand in the
-target, and whether product activation is enabled. Credentials come from environment
+Configuration is a set of **sync pairs**. A pair names its source endpoint, the target Qlik
+space, which entity types to sync, the poll cadence, the policy for values edited by hand
+in the target, and whether product activation is enabled. Credentials come from environment
 variables or a secret manager; connectors never read the environment themselves, and
 secrets are redacted from logs and never written to state.
+
+**Which objects a pair syncs is a rule set, not a fixed list.** Rules are ordered, each one
+includes or excludes by name pattern, source tag or owner, and the last rule that matches an
+object decides — so "everything in this catalog except the staging schemas, but keep this one"
+is expressible, and individual objects can be pinned in or out by hand. Rules apply at two
+levels: which `catalog.schema` become data products, and which tables and views inside a
+selected schema become that product's members.
 
 The service runs as a single long-lived process — one container — exposing `/healthz` and
 `/metrics` (Prometheus) and emitting structured JSON logs. Per-pair jobs run on their own
 cadence with jitter, and a pair never overlaps itself.
+
+**A browser console configures all of it.** Endpoints, pairs and selection rules live in the
+service's own database rather than in environment variables, so they can be edited while it
+runs and take effect without a restart. Credentials stay outside: an endpoint stores a *named
+reference* to a secret — an environment variable, later a secret manager — and the console
+shows only whether it resolves and whether the endpoint is healthy. Adding a catalog means
+registering an instance of a connector already present in the image; nothing is downloaded or
+installed from the browser. Every configuration change is recorded in an append-only log.
+
+The console's point is the **preview**: change a rule and see exactly which objects fall in
+and out of scope and which rule decided each one, then see the full planned write set — every
+create, every field-level update, and every reference that failed to resolve — before a single
+write happens. The same evaluator answers the preview and drives the real sync, so the two
+cannot disagree. It also shows run history, the orphan and unresolved-reference reports, and
+run-now, pause and resume controls.
 
 There will also be a CLI, whose most important mode is **dry-run**: it computes the full
 planned write set, emits it as a machine-readable plan file plus a human-readable log, and
@@ -179,25 +200,35 @@ placeholder connector classes and one CLI entry function.
 
 ### Status at a glance
 
-As of 2026-08-20 — 67 tasks on the board, 6 done.
+As of 2026-08-20 — 95 tasks across three boards, 20 done.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
 | WP0 | Workspace, tooling, dependency pinning, CI | 6 / 6 | **Done** |
-| WP1 | Connector SDK — model, contract, manifest, conformance kit | 0 / 10 | Not started |
-| WP2 | Engine — discovery, state store, sync loop, scheduler, CLI | 0 / 9 | Not started |
-| WP3 | Qlik write connector (sole writer) | 0 / 9 | Not started |
-| WP4 | Databricks read connector | 0 / 7 | Not started |
+| WP1 | Connector SDK — model, contract, manifest, conformance kit | 8 / 10 | In progress |
+| WP2 | Engine — discovery, state store, sync loop, scheduler, CLI | 2 / 9 | In progress |
+| WP3 | Qlik write connector (sole writer) | 1 / 9 | In progress |
+| WP4 | Databricks read connector | 1 / 7 | In progress |
 | WP5 | Collibra read connector | 0 / 6 | Blocked (Track B, RM-05) |
 | WP6 | Snowflake read connector | 0 / 6 | Blocked (Track B, RM-05) |
-| WP7 | Identity map, field diff, owner correlation | 0 / 4 | Not started |
+| WP7 | Identity map, field diff, owner correlation | 2 / 4 | In progress |
 | WP8 | Integration, end-to-end pilot, release readiness | 0 / 6 | Not started |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 0 / 4 | Not started |
+| WP10 | Configuration store, secret references, audit log | 0 / 4 | Not started (console, RM-06) |
+| WP11 | Selection rule engine, source tree, run history | 0 / 4 | Not started (console, RM-06) |
+| WP12 | REST API, authentication, generated client | 0 / 9 | Not started (console, RM-06) |
+| WP13 | Console SPA | 0 / 8 | Not started (console, RM-06) |
+| WP14 | One image, operator docs, console-driven pilot | 0 / 3 | Not started (console, RM-06) |
+
+**v0.1 ships the engine and the console together.** WP0-WP4 and WP7-WP9 are the engine
+(RM-01); WP10-WP14 are the console (RM-06); WP5 and WP6 are Track B (RM-05) and start only
+after v0.1 is tagged.
 
 Regenerate this picture at any time:
 
 ```bash
 python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01
+python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-06
 ```
 
 ### What works today
@@ -227,6 +258,8 @@ That is the complete list.
 - **No connector implementations.** The four `Connector` classes are placeholders with a
   `name` attribute and no methods.
 - **No configuration format.** No config schema, no example config, no `.env` template.
+- **No console and no HTTP API.** No configuration store, no selection rule engine, no REST
+  API, no SPA — the whole of WP10-WP14 is unbuilt.
 - **No usable CLI.** The `qlabs-catalog-sync` console script installs and then raises
   `NotImplementedError`.
 - **No real tests.** Six import smoke tests, no conformance suite, no cassettes.
@@ -261,6 +294,7 @@ packages/
   qlabs-connector-databricks/   # read-only source connector                                 (WP4)
   qlabs-connector-collibra/     # read-only source connector                (WP5, Track B, RM-05)
   qlabs-connector-snowflake/    # read-only source connector                (WP6, Track B, RM-05)
+console/                        # the operator console SPA — not built yet          (WP13)
 planning/                       # design, research & plan — a separately-governed OKF bundle
 ```
 
@@ -286,7 +320,8 @@ The task board is machine-readable. To see everything ready to pick up right now
 dependencies `done`):
 
 ```bash
-python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01
+python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01   # the engine
+python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-06   # the console
 ```
 
 Then read [`AGENTS.md`](AGENTS.md) for how to claim and land a task, and

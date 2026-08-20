@@ -1199,12 +1199,13 @@
       "id": "T9.4",
       "wp": "WP9",
       "title": "Runbook + generated capability matrix + tag v0.1",
-      "description": "Operator runbook (deploy, configure a pair, run dry-run, read the plan file, confirm identity matches, read the orphan report, respond to a red healthcheck) plus a capability matrix generated from the connector manifests so it cannot drift, then tag v0.1.",
+      "description": "Operator runbook (deploy, configure a pair, run dry-run, read the plan file, confirm identity matches, read the orphan report, respond to a red healthcheck) plus a capability matrix generated from the connector manifests so it cannot drift, then tag v0.1. The v0.1 tag ships the engine and the RM-06 console together, so this task also waits on T14.3 (the pilot driven through the console).",
       "model": "haiku",
       "depends_on": [
         "T9.1",
         "T9.2",
-        "T9.3"
+        "T9.3",
+        "T14.3"
       ],
       "parallel": false,
       "owns_paths": [

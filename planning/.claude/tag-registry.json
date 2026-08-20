@@ -5,7 +5,8 @@
     "RM-02",
     "RM-03",
     "RM-04",
-    "RM-05"
+    "RM-05",
+    "RM-06"
   ],
   "allocated_rs": [
     "RS-01",
@@ -19,6 +20,6 @@
     "RS-09"
   ],
   "next_dc": 1,
-  "next_rm": 6,
+  "next_rm": 7,
   "next_rs": 10
 }

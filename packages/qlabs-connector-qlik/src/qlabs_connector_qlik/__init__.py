@@ -8,9 +8,8 @@ T3.1 (this task) builds auth, config and connector setup: :class:`QlikConfig`
 (``config.py``), the OAuth2 machine-to-machine wiring (``auth.py``), and here,
 :class:`Connector` — its ``setup()`` (builds the authenticated ``HttpEndpoint``) and
 ``healthcheck()`` (proves the credentials work and the configured target space is
-reachable). ``capabilities()`` (T3.2), ``list_changed``/``read`` (T3.3) and the write
-paths (T3.4/T3.5/T3.6/T3.7) are **not** implemented here — see the placeholder note on
-each method below.
+reachable). ``list_changed``/``read`` (T3.3) and the write paths (T3.4/T3.5/T3.6/T3.7) are **not**
+implemented here — see the placeholder note on each method below.
 """
 
 from __future__ import annotations
@@ -38,6 +37,7 @@ from qlabs_catalog_sync_sdk.http import HttpEndpoint
 
 from .auth import build_http_endpoint, classify_response_error, classify_transport_error
 from .config import QlikConfig
+from .manifest import qlik_capability_manifest
 
 __all__ = ["Connector"]
 
@@ -160,15 +160,14 @@ class Connector(ConnectorABC):
     # -- declaration -----------------------------------------------------------------
 
     def capabilities(self) -> CapabilityManifestBase:
-        """Not implemented here. T3.2 builds the Qlik capability manifest
-        (``manifest.py``) — data products and datasets/items as ``rw`` with ETag
-        concurrency, product arrays as ``partial_update=false``. Deliberately not a
-        fake manifest: a placeholder that claimed capabilities would be picked up by the
-        engine's planning and the conformance kit's capability-honesty check as if it
-        were real."""
-        raise NotImplementedError(
-            "T3.2 implements the Qlik capability manifest; see manifest.py"
-        )
+        """What this connector genuinely supports — see ``manifest.py``.
+
+        Data products are writable through the closed eight-path JSON Patch enum with
+        ETag concurrency and full-replace arrays; datasets are read-only (D2: the
+        connector resolves datasets that already exist, it never creates one); glossary
+        entities are unsupported in v1 (D5). The engine plans strictly from this.
+        """
+        return qlik_capability_manifest()
 
     # -- read path (T3.3) -------------------------------------------------------------
 

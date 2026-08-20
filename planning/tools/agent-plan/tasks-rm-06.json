@@ -1,0 +1,578 @@
+{
+  "version": 1,
+  "roadmap_item": "RM-06",
+  "tasks": [
+    {
+      "id": "T10.1",
+      "wp": "WP10",
+      "title": "Configuration schema + Alembic migration",
+      "description": "Add the configuration tables to the state store: endpoints (name, connector entry-point, role, secret_ref, non-secret settings JSON, enabled), sync_pairs (source/target endpoint, target space, entity types, cadence, jitter, manual-edit policy, activation opt-in, enabled), selection_rules (pair, ordinal, scope, include/exclude, matcher kind, pattern), selection_overrides (pair, scope, stable object id, decision, reason), config_generation (single-row counter) and config_changes (append-only audit). New module and new migration only; the T2.2 models are not edited.",
+      "model": "sonnet",
+      "depends_on": ["T2.2"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/__init__.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/models.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/types.py",
+        "packages/qlabs-catalog-sync/alembic/versions/0002_config_store.py",
+        "packages/qlabs-catalog-sync/tests/configstore/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "Migration applies and rolls back cleanly on SQLite; every table round-trips through the ORM; no column anywhere in the schema can hold a credential value.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore",
+      "status": "pending"
+    },
+    {
+      "id": "T10.2",
+      "wp": "WP10",
+      "title": "Secret references and the secret backend (C2)",
+      "description": "Parse and validate secret references of the form scheme:locator (env:QLIK_ACME today, vault:... later). Define the SecretBackend protocol and ship the environment backend, honoring the SDK's ConnectorConfig.for_endpoint prefix convention so an endpoint named qlik-acme reads QLIK_ACME__*. Expose a resolve-status query that reports resolvable/unresolvable and never returns or logs a value.",
+      "model": "sonnet",
+      "depends_on": ["T1.7", "T2.3", "T10.1"],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/secrets.py",
+        "packages/qlabs-catalog-sync/tests/configstore/test_secrets.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "A reference resolves to a live credential for connector setup; resolve-status returns only a boolean and a reason; a test asserts no secret value appears in any log record or serialized response.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_secrets.py",
+      "status": "pending"
+    },
+    {
+      "id": "T10.3",
+      "wp": "WP10",
+      "title": "Configuration service: CRUD, audit and generation in one transaction",
+      "description": "The service layer every API route calls. Create, read, update, delete and reorder endpoints, pairs, rules and overrides. Each write validates endpoint settings against the connector's own ConfigModel before persisting, appends a config_changes row recording what changed with old and new values and the actor, and bumps config_generation - all inside a single transaction, so a failed write leaves no audit row and no generation bump.",
+      "model": "sonnet",
+      "depends_on": ["T10.1", "T10.2"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/service.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/audit.py",
+        "packages/qlabs-catalog-sync/tests/configstore/test_service.py",
+        "packages/qlabs-catalog-sync/tests/configstore/test_audit.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md"
+      ],
+      "dod": "Every mutating operation writes exactly one audit row and one generation bump; a validation failure or a mid-transaction error commits neither; secret values are rejected if submitted inline rather than as a reference.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_service.py packages/qlabs-catalog-sync/tests/configstore/test_audit.py",
+      "status": "pending"
+    },
+    {
+      "id": "T10.4",
+      "wp": "WP10",
+      "title": "Bootstrap import from environment-declared configuration (C1)",
+      "description": "On first start, seed endpoints and sync pairs from whatever T2.3 finds in the environment, converting each pair's glob selector into equivalent include rules. After the first import the database is authoritative and the importer is a no-op, so a restart never overwrites an operator's console edits.",
+      "model": "sonnet",
+      "depends_on": ["T10.3", "T2.3"],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/bootstrap.py",
+        "packages/qlabs-catalog-sync/tests/configstore/test_bootstrap.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+      ],
+      "dod": "An environment-only deployment comes up with the same behavior as before; a second start imports nothing; an edit made through the service survives a restart unchanged.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_bootstrap.py",
+      "status": "pending"
+    },
+    {
+      "id": "T11.1",
+      "wp": "WP11",
+      "title": "Selection rule model and evaluator (C3, C4)",
+      "description": "The pure evaluator at the center of this item. Input: an ordered rule list, the override set, and candidate objects. Output: per object, whether it is included and which rule decided. Ordered evaluation, last match wins, overrides beat every rule. Matchers: glob over the fully-qualified name, source tag, and owner email. Two scopes - object (catalog.schema, becomes a data product) and dataset (tables and views inside a selected schema). No I/O, no connector calls, fully deterministic.",
+      "model": "opus",
+      "depends_on": ["T10.1"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/selection/__init__.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/selection/rules.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/selection/evaluator.py",
+        "packages/qlabs-catalog-sync/tests/selection/test_evaluator.py",
+        "packages/qlabs-catalog-sync/tests/selection/test_rules.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+      ],
+      "dod": "The include-then-exclude-then-carve-back-in case resolves correctly and names the deciding rule; an empty rule set includes nothing; a rule set of plain include globs reproduces RM-01 D1 semantics exactly; evaluation is order-stable and side-effect free.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/selection",
+      "status": "pending"
+    },
+    {
+      "id": "T11.2",
+      "wp": "WP11",
+      "title": "Source-tree provider",
+      "description": "Lazy, paged enumeration of a source endpoint's candidate objects through the connector contract, one level at a time (catalog, then schema, then table), each node decorated with its selection decision and deciding rule. Matchers the source cannot support are reported unavailable rather than silently empty - Databricks offers tags only when a SQL warehouse is configured (RM-01 D6), and the manifest is the authority.",
+      "model": "sonnet",
+      "depends_on": ["T11.1", "T2.1"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/selection/source_tree.py",
+        "packages/qlabs-catalog-sync/tests/selection/test_source_tree.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md"
+      ],
+      "dod": "A large catalog pages without loading everything; each node carries its decision and deciding rule; an unsupported matcher is reported as unavailable with the manifest field that explains why.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/selection/test_source_tree.py",
+      "status": "pending"
+    },
+    {
+      "id": "T11.3",
+      "wp": "WP11",
+      "title": "Sync-loop integration: the loop selects through the evaluator",
+      "description": "Replace the loop's glob-list selector with the evaluator, honoring the pair's entity types and the dataset scope when resolving a product's members. Edits sync/loop.py, which T2.4 owns, and therefore starts only after T2.4 is done. Behavior for an existing glob-only configuration is unchanged, and a pair whose rules match nothing is a clean no-op rather than an error.",
+      "model": "opus",
+      "depends_on": ["T11.1", "T2.4"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/sync/loop.py",
+        "packages/qlabs-catalog-sync/tests/selection/test_loop_selection.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+      ],
+      "dod": "A cycle syncs exactly the objects the evaluator includes; the preview API and the cycle agree object for object on the same rule set; transactional and idempotency guarantees from T2.4 still hold; the full engine suite passes.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests",
+      "status": "pending"
+    },
+    {
+      "id": "T11.4",
+      "wp": "WP11",
+      "title": "Run history model and recorder",
+      "description": "Add runs and run_items tables with their migration, and a recorder the sync loop drives: run start and finish, status, per-entity counts written, skipped and failed, plus the issues the console reports - dataset members that did not resolve (RM-01 D2), owner emails with no Qlik user (D3), and source objects that vanished (D4, which stay reported and never deleted).",
+      "model": "sonnet",
+      "depends_on": ["T11.3", "T2.9"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/runs/__init__.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/runs/models.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/runs/recorder.py",
+        "packages/qlabs-catalog-sync/alembic/versions/0003_run_history.py",
+        "packages/qlabs-catalog-sync/tests/runs/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+      ],
+      "dod": "Every cycle produces exactly one run row; a crashed cycle leaves the run marked failed rather than open forever; counts reconcile with what the loop actually wrote; unresolved references and orphans are queryable per run.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/runs",
+      "status": "pending"
+    },
+    {
+      "id": "T12.1",
+      "wp": "WP12",
+      "title": "FastAPI application, error model and static mount",
+      "description": "Stand up the API in the same process that already serves /healthz and /metrics, leaving both exactly as T2.7 defines them. Shared error model with stable machine-readable codes, request-scoped structlog binding through the existing redaction processor, and the static-asset mount with SPA history fallback that WP13's build output drops into.",
+      "model": "sonnet",
+      "depends_on": ["T2.7", "T10.3"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/__init__.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/app.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/errors.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/static.py",
+        "packages/qlabs-catalog-sync/tests/api/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "/healthz and /metrics behave exactly as before; an unknown API path returns the error model, an unknown non-API path returns the SPA shell; the app boots with no static assets present.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api",
+      "status": "pending"
+    },
+    {
+      "id": "T12.2",
+      "wp": "WP12",
+      "title": "Administrator authentication (C7)",
+      "description": "Single administrator identity. The credential comes from the environment or a secret backend and is compared against a password hash, never in plaintext. Session is an HttpOnly, SameSite, Secure-when-TLS cookie; every mutating request requires a CSRF token. When no credential is configured the console and the API refuse to serve rather than defaulting open, and the refusal is logged once at start.",
+      "model": "opus",
+      "depends_on": ["T12.1"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/auth.py",
+        "packages/qlabs-catalog-sync/tests/api/test_auth.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md"
+      ],
+      "dod": "Unauthenticated access to every route except the health surface and the sign-in route is refused; a mutating request without a valid CSRF token is refused; no credential configured means the console does not serve; the credential never appears in a log record.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_auth.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.3",
+      "wp": "WP12",
+      "title": "Connector and endpoint routes (C6)",
+      "description": "List the connectors entry-point discovery found in the running image together with their capability manifests, and expose endpoint CRUD: register an instance of a discovered connector, edit its non-secret settings, bind a secret reference, run healthcheck, read resolve status, enable and disable. Registering an endpoint installs nothing and executes no downloaded code.",
+      "model": "sonnet",
+      "depends_on": ["T12.2", "T2.1", "T10.3"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/__init__.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/connectors.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/endpoints.py",
+        "packages/qlabs-catalog-sync/tests/api/test_endpoints.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "An endpoint can be registered, healthchecked and enabled end to end against FakeConnector; invalid settings are rejected with field-level errors from the connector's own ConfigModel; no route accepts a secret value.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_endpoints.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.4",
+      "wp": "WP12",
+      "title": "Sync-pair, rule and override routes",
+      "description": "CRUD for sync pairs (source and target endpoint, target Qlik space, entity types, cadence, manual-edit policy, activation opt-in, enabled) and for the ordered selection rules and per-object overrides, including rule reordering as an explicit operation rather than an implicit side effect of an update.",
+      "model": "sonnet",
+      "depends_on": ["T12.3", "T11.1"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/pairs.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/selection.py",
+        "packages/qlabs-catalog-sync/tests/api/test_pairs.py",
+        "packages/qlabs-catalog-sync/tests/api/test_selection_routes.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "Rule order is stable and explicit; reordering rewrites ordinals in one transaction; a pair referencing a disabled or missing endpoint is rejected; every mutation appears in the change log.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_pairs.py packages/qlabs-catalog-sync/tests/api/test_selection_routes.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.5",
+      "wp": "WP12",
+      "title": "Source-tree and preview routes",
+      "description": "Browse a source endpoint's candidates lazily by path, each node carrying its decision and deciding rule, and evaluate a rule set to included and excluded counts plus a sample - against a saved rule set or against an unsaved draft, so the console can preview an edit before committing it. Neither route writes to a target or mutates configuration.",
+      "model": "sonnet",
+      "depends_on": ["T12.4", "T11.2"],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/preview.py",
+        "packages/qlabs-catalog-sync/tests/api/test_preview.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md"
+      ],
+      "dod": "Preview results match a real cycle's selection object for object on the same rule set; a draft preview leaves the stored configuration untouched; a large source pages rather than timing out.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_preview.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.6",
+      "wp": "WP12",
+      "title": "Dry-run and run-control routes",
+      "description": "Return T2.8's planned write set for a pair - creates, updates, no-ops, and the references that did not resolve - applying zero mutations, and expose run-now, pause and resume against the scheduler. Run-now respects the per-pair max_instances=1 guarantee and refuses rather than queueing a second concurrent cycle.",
+      "model": "sonnet",
+      "depends_on": ["T12.4", "T2.8", "T2.6"],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/run_control.py",
+        "packages/qlabs-catalog-sync/tests/api/test_run_control.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+      ],
+      "dod": "A dry-run over a configured pair returns the plan and writes nothing; run-now on a pair already running is refused with a clear code; a paused pair does not fire on its cadence and resumes cleanly.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_run_control.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.7",
+      "wp": "WP12",
+      "title": "Run history, issue and change-log routes",
+      "description": "Run list with filters and paging, run detail with counts, per-run issues (unresolved dataset members, unresolvable owners, orphaned source objects), and the configuration change log. Read-only routes over what T11.4 and T10.3 already record.",
+      "model": "sonnet",
+      "depends_on": ["T12.4", "T11.4"],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/routes/history.py",
+        "packages/qlabs-catalog-sync/tests/api/test_history.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "Run history pages deterministically under concurrent writes; issues are attributable to a specific run and object; the change log answers when a given schema entered or left scope.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_history.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.8",
+      "wp": "WP12",
+      "title": "OpenAPI export and generated TypeScript client",
+      "description": "Export the OpenAPI document from the FastAPI app, generate a typed TypeScript client into console/src/api/generated/, commit both, and add a check that regenerating produces no diff so an API change that outruns the client fails the build instead of failing in a browser.",
+      "model": "sonnet",
+      "depends_on": ["T12.3", "T12.4", "T12.5", "T12.6", "T12.7"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/api/openapi.py",
+        "scripts/gen_openapi.py",
+        "scripts/gen_api_client.sh",
+        "console/src/api/generated/",
+        "packages/qlabs-catalog-sync/tests/api/test_openapi_contract.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "The committed OpenAPI document matches the running app; regenerating the client is a no-op on a clean tree; the drift check fails when a route or model changes without regeneration.",
+      "verify": "uv run python scripts/gen_openapi.py --check && uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_openapi_contract.py",
+      "status": "pending"
+    },
+    {
+      "id": "T12.9",
+      "wp": "WP12",
+      "title": "Scheduler reconcile against the configuration generation (C1)",
+      "description": "The scheduler reconciles its job set against the store on a short interval, keyed on the configuration generation counter: pairs added, removed, paused, or with a changed cadence are picked up without a restart. A cycle already in flight keeps the configuration it started with, and the per-pair max_instances=1 guarantee is preserved across a reconcile. Edits scheduler.py, which T2.6 owns, and therefore runs after it.",
+      "model": "opus",
+      "depends_on": ["T12.4", "T2.6", "T10.3"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/scheduler.py",
+        "packages/qlabs-catalog-sync/tests/api/test_reconcile.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md"
+      ],
+      "dod": "A pair created through the API starts running without a restart; deleting or pausing one stops it; a reconcile during an in-flight cycle neither cancels it nor changes its configuration mid-run; no pair ever runs twice concurrently.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_reconcile.py",
+      "status": "pending"
+    },
+    {
+      "id": "T13.1",
+      "wp": "WP13",
+      "title": "Console app-spec and scaffold",
+      "description": "Write console/app-spec.md - screens, archetype, theme and dials - and scaffold the application from it with `brand-ui scaffold app-spec.md --write console` in standalone mode. The @elabs-ai/components-* packages are public on npmjs.org at 4.0.0, so no registry configuration and no token is needed in development or CI.",
+      "model": "sonnet",
+      "depends_on": ["T12.8"],
+      "parallel": false,
+      "owns_paths": [
+        "console/app-spec.md",
+        "console/package.json",
+        "console/pnpm-lock.yaml",
+        "console/vite.config.ts",
+        "console/tsconfig.json",
+        "console/index.html",
+        "console/src/main.tsx",
+        "console/src/styles/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "A clean checkout installs and builds the console with no registry configuration; the dev server runs; the token stylesheet and theme provider are wired as the scaffold emits them.",
+      "verify": "pnpm -C console install --frozen-lockfile && pnpm -C console build",
+      "status": "pending"
+    },
+    {
+      "id": "T13.2",
+      "wp": "WP13",
+      "title": "Application shell, sign-in and theme switcher",
+      "description": "The shell every screen mounts into: navigation, the sign-in screen against the auth routes, session handling with expiry and sign-out, CSRF token plumbing in the generated client, and the theme switcher. An expired session returns the operator to sign-in without losing the route they were on.",
+      "model": "sonnet",
+      "depends_on": ["T13.1"],
+      "parallel": false,
+      "owns_paths": [
+        "console/src/app/",
+        "console/src/auth/",
+        "console/src/api/client.ts"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md"
+      ],
+      "dod": "Sign-in, sign-out and session expiry all behave correctly against the real API; every mutating call carries its CSRF token; the theme switcher persists a choice across reloads.",
+      "verify": "pnpm -C console typecheck && pnpm -C console test --run",
+      "status": "pending"
+    },
+    {
+      "id": "T13.3",
+      "wp": "WP13",
+      "title": "Endpoints screens",
+      "description": "List registered endpoints with health and secret-reference status; register a new one by choosing a discovered connector, naming it, filling its settings form (driven by the connector's own config schema), and binding a secret reference; edit, healthcheck, enable and disable; and view the capability manifest so an operator can see what the catalog actually supports before building a pair on it.",
+      "model": "sonnet",
+      "depends_on": ["T13.2"],
+      "parallel": false,
+      "owns_paths": [
+        "console/src/features/endpoints/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "An endpoint can be registered and healthchecked entirely from the browser; validation errors are shown against the offending field; the UI never offers to store a credential; an unresolvable secret reference is visible at a glance.",
+      "verify": "pnpm -C console typecheck && pnpm -C console test --run",
+      "status": "pending"
+    },
+    {
+      "id": "T13.4",
+      "wp": "WP13",
+      "title": "Sync-pair screens",
+      "description": "List and edit sync pairs: source and target endpoint, target Qlik space, entity types, cadence, manual-edit policy and activation opt-in. Activation is off unless explicitly enabled and the screen says what enabling it does, since an activated Qlik data product becomes discoverable tenant-wide (RM-01 D7).",
+      "model": "sonnet",
+      "depends_on": ["T13.3"],
+      "parallel": false,
+      "owns_paths": [
+        "console/src/features/pairs/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+      ],
+      "dod": "A pair can be created, edited and disabled from the browser; activation defaults to off and its consequence is stated in the UI; only enabled, healthy endpoints can be chosen.",
+      "verify": "pnpm -C console typecheck && pnpm -C console test --run",
+      "status": "pending"
+    },
+    {
+      "id": "T13.5",
+      "wp": "WP13",
+      "title": "Selection screen: source tree, rule editor and live preview",
+      "description": "The screen this item exists for. A lazy source tree where every node shows included or excluded and which rule decided it; the ordered rule editor with drag-to-reorder, include/exclude, matcher and pattern; per-object overrides pinned from the tree; and a live preview of resulting counts that updates as rules change, evaluated against the unsaved draft. Matchers the source cannot support are disabled with the reason shown.",
+      "model": "opus",
+      "depends_on": ["T13.4"],
+      "parallel": false,
+      "owns_paths": [
+        "console/src/features/selection/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+      ],
+      "dod": "Reordering rules changes the preview and the tree consistently; every node can be traced to its deciding rule; a draft is previewable before saving and discardable; a catalog with thousands of tables stays responsive.",
+      "verify": "pnpm -C console typecheck && pnpm -C console test --run",
+      "status": "pending"
+    },
+    {
+      "id": "T13.6",
+      "wp": "WP13",
+      "title": "Dry-run screen",
+      "description": "Render the planned write set for a pair, grouped by data product and split into creates, updates and no-ops, with the field-level changes an update would make and the references that did not resolve - dataset members that do not exist in the target space (RM-01 D2) and owner emails with no matching Qlik user (D3) - called out rather than buried.",
+      "model": "sonnet",
+      "depends_on": ["T13.5"],
+      "parallel": true,
+      "owns_paths": [
+        "console/src/features/dry-run/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+      ],
+      "dod": "The screen makes it obvious what a run would change before it runs; unresolved references are listed with the reason; a no-op plan is presented as such rather than as an empty screen.",
+      "verify": "pnpm -C console typecheck && pnpm -C console test --run",
+      "status": "pending"
+    },
+    {
+      "id": "T13.7",
+      "wp": "WP13",
+      "title": "Runs screens",
+      "description": "Run history per pair with status and duration, run detail with counts and issues, the orphan and unresolved-reference report, and the run-now, pause and resume controls. Orphans are presented as reported-not-deleted, matching what the engine actually does (RM-01 D4).",
+      "model": "sonnet",
+      "depends_on": ["T13.4"],
+      "parallel": true,
+      "owns_paths": [
+        "console/src/features/runs/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "A run's outcome is legible without reading logs; issues link back to the object that caused them; run-now reflects live status; the UI never implies an orphan was deleted.",
+      "verify": "pnpm -C console typecheck && pnpm -C console test --run",
+      "status": "pending"
+    },
+    {
+      "id": "T13.8",
+      "wp": "WP13",
+      "title": "Console gate and CI job",
+      "description": "The console's half of the repository gate: tsc --noEmit, lint, Vitest with Testing Library, and the brand-ui accessibility checks, wired into a CI job beside the Python gate. Browser-driven end-to-end tests are deliberately out of v0.1.",
+      "model": "sonnet",
+      "depends_on": ["T13.6", "T13.7"],
+      "parallel": false,
+      "owns_paths": [
+        "console/vitest.config.ts",
+        "console/biome.json",
+        "console/src/test/",
+        ".github/workflows/console.yml"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "All four checks run in one CI job and pass on a clean tree; a type error, a lint violation, a failing test or an accessibility regression fails the build.",
+      "verify": "pnpm -C console typecheck && pnpm -C console lint && pnpm -C console test --run && pnpm -C console a11y",
+      "status": "pending"
+    },
+    {
+      "id": "T14.1",
+      "wp": "WP14",
+      "title": "One image: build the console into the engine container",
+      "description": "Extend the container built by T9.1 with a Node build stage that builds the console and copies its assets into the Python runtime image, so one process serves the API, the console, /healthz and /metrics on one port. Edits the Dockerfile that T9.1 owns, and therefore runs after it.",
+      "model": "sonnet",
+      "depends_on": ["T13.8", "T9.1"],
+      "parallel": false,
+      "owns_paths": [
+        "Dockerfile",
+        ".dockerignore"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md"
+      ],
+      "dod": "A single built image serves the console and the API on one port; the image contains no Node runtime, only the built assets; /healthz and /metrics are unchanged.",
+      "verify": "docker build -t qlabs-catalog-sync:console-test . && docker run --rm -d --name qlabs-console-test -p 8080:8080 qlabs-catalog-sync:console-test && sleep 5 && curl -fsS http://localhost:8080/healthz && curl -fsS http://localhost:8080/ >/dev/null; docker rm -f qlabs-console-test",
+      "status": "pending"
+    },
+    {
+      "id": "T14.2",
+      "wp": "WP14",
+      "title": "Operator documentation for the console",
+      "description": "Document what an operator needs: enabling the console and setting the administrator credential, how secret references work and which backends exist, registering endpoints and pairs, the selection rule model and how to read the deciding rule, the dry-run workflow, and what the console deliberately does not do. Updates the root README to match, as the repository rules require at the end of a work package.",
+      "model": "sonnet",
+      "depends_on": ["T14.1"],
+      "parallel": true,
+      "owns_paths": [
+        "docs/console/",
+        "README.md"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md"
+      ],
+      "dod": "An operator can go from a built image to a running sync using only this documentation; the README's status table and its what-works-today and what-does-not-exist-yet lists match the shipped console.",
+      "verify": "uv run python -c \"import pathlib,sys; t=pathlib.Path('README.md').read_text(); sys.exit(0 if 'console' in t.lower() and 'selection' in t.lower() else 1)\"",
+      "status": "pending"
+    },
+    {
+      "id": "T14.3",
+      "wp": "WP14",
+      "title": "Pilot the Databricks-to-Qlik sync through the console",
+      "description": "Run the RM-01 pilot entirely from the browser: register the Databricks and Qlik endpoints, define the pair, narrow scope with include and exclude rules, review the dry-run, apply it, confirm the run report, and confirm a re-run is a no-op. This is the acceptance gate for the whole item and the last task before v0.1 is tagged.",
+      "model": "opus",
+      "depends_on": ["T14.1", "T8.1"],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/pilot/test_console_pilot.py"
+      ],
+      "inputs": [
+        "/Roadmap/RM-06-sync-console/implementation-plan.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+      ],
+      "dod": "The full pilot is driven through the API with no environment-variable configuration and no CLI step; the second run writes nothing; the run report matches the dry-run that preceded the first apply.",
+      "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/pilot/test_console_pilot.py",
+      "status": "pending"
+    }
+  ]
+}

@@ -17,6 +17,9 @@ qlabs-connector-collibra     # read-only source connector                       
 qlabs-connector-snowflake    # read-only source connector                                   (WP6)
 ```
 
+`console/` — the operator console SPA (WP13) — is a top-level sibling of `packages/`, outside the
+uv workspace, with its own Node toolchain. It does not exist yet.
+
 ## Hard dependency rule (do not violate)
 
 - **Connectors depend ONLY on the SDK** (`qlabs-catalog-sync-sdk`) plus their own vendor
@@ -37,6 +40,9 @@ uv run ruff check packages     # lint — never `ruff check .`, that would lint 
 uv run mypy                    # strict type-check (scoped to packages/*/src)
 ```
 
+Once `console/` exists (WP13), it carries its own gate — `pnpm -C console typecheck`, `lint`,
+`test` and `a11y` — and a change is not done while either gate fails.
+
 A change is not done while `ruff`, `mypy` (strict), or `pytest` fails.
 
 **A work package is not done until the root `README.md` matches it.** When the last task of
@@ -49,13 +55,23 @@ only README in this repository; never create one under `planning/`.
 
 ## What ships first
 
-**The MVP is a one-way Databricks-to-Qlik metadata sync** — that is RM-01 in full (WP0-WP4,
-WP7-WP9), 52 tasks on `planning/tools/agent-plan/tasks.json`. Collibra, Snowflake, and the Qlik
-glossary write path are RM-05, on their own board `tasks-rm-05.json`, and start only after v0.1 is
-tagged; every task there sits as `blocked` until then. Scope the ready queue with
-`--roadmap RM-01` while building the MVP. The mappings the MVP depends on are locked in
-`planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` — read it before
-touching a connector.
+**The MVP is a one-way Databricks-to-Qlik metadata sync plus the console that configures it.**
+It is two roadmap items on two boards, and v0.1 is not tagged until both are finished:
+
+- **RM-01** — the engine (WP0-WP4, WP7-WP9), 52 tasks on `planning/tools/agent-plan/tasks.json`.
+- **RM-06** — the operator console and the selection rule engine (WP10-WP14), 28 tasks on
+  `tasks-rm-06.json`. RM-01's T9.4 (tag v0.1) depends on RM-06's last task.
+
+Collibra, Snowflake, and the Qlik glossary write path are RM-05, on their own board
+`tasks-rm-05.json`, and start only after v0.1 is tagged; every task there sits as `blocked` until
+then. `ready_queue.py` loads every `tasks*.json` and resolves dependencies across all of them, so
+always scope with `--roadmap RM-01` or `--roadmap RM-06`.
+
+The mappings the MVP depends on are locked in
+`planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (D1-D8) — read it
+before touching a connector — and the console's own decisions in
+`planning/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md` (C1-C8). C3 widens
+D1's glob selector into an ordered rule set; nothing else in D1-D8 changes.
 
 ## v1 scope guardrails (upstream-only)
 
@@ -83,6 +99,9 @@ All under `planning/` (read them; execute against the board):
 - Scope decision: `planning/Roadmap/RM-01-one-way-sync-mvp/decision.md`
 - Task board: `planning/tools/agent-plan/tasks.json`
   (ready queue: `python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01`)
+- Console plan: `planning/Roadmap/RM-06-sync-console/implementation-plan.md`
+- Console decision: `planning/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md`
+- Console board: `planning/tools/agent-plan/tasks-rm-06.json` (RM-06; part of the MVP)
 - Track B board: `planning/tools/agent-plan/tasks-rm-05.json` (RM-05; blocked until v0.1)
 
 ## Implementation lifecycle (HARD RULE)
