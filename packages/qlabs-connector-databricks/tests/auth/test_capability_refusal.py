@@ -32,19 +32,22 @@ def test_capabilities_needs_setup_first():
         Connector().capabilities()
 
 
-async def test_list_changed_is_not_this_tasks_scope():
+async def test_list_changed_needs_setup_first():
+    """The read path talks over an HttpEndpoint that setup() builds, so asking before
+    setup is a lifecycle error rather than a silent empty result."""
     connector = Connector()
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(RuntimeError, match="setup"):
         await connector.list_changed(
             EntityType.DATA_PRODUCT,
             Watermark.initial("databricks", EntityType.DATA_PRODUCT),
         )
 
 
-async def test_read_is_not_this_tasks_scope():
+async def test_read_needs_setup_first():
+    """Same lifecycle rule as list_changed."""
     connector = Connector()
-    with pytest.raises(NotImplementedError):
-        await connector.read(_ref())
+    with pytest.raises(RuntimeError, match="setup"):
+        await connector.read(_ref(EntityType.DATA_PRODUCT))
 
 
 async def test_create_refuses_with_capability_error():

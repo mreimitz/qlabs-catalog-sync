@@ -34,8 +34,10 @@ from qlabs_catalog_sync_sdk.contract import (
 )
 from qlabs_catalog_sync_sdk.contract import Connector as ConnectorABC
 from qlabs_catalog_sync_sdk.exceptions import AuthError, TransientError
+from qlabs_catalog_sync_sdk.http import HttpEndpoint
 from qlabs_catalog_sync_sdk.models import EntityType, IdentityRef, NeutralEntity
 
+from . import changes, read
 from .auth import (
     AuthClock,
     WorkspaceClientFactory,
@@ -91,6 +93,7 @@ class Connector(ConnectorABC):
         self._clock = clock
         self._token_provider: OAuth2ClientCredentialsProvider | None = None
         self._client: WorkspaceClient | None = None
+        self._http: HttpEndpoint | None = None
         self._ctx: ConnectorContext[DatabricksConfig] | None = None
 
     # -- declaration -----------------------------------------------------------------
@@ -131,6 +134,11 @@ class Connector(ConnectorABC):
             config, transport=self._transport, clock=self._clock
         )
         await self._refresh_client()
+        # Unity Catalog's REST surface is read straight over HTTP (read.py, changes.py):
+        # databricks-sdk's client is synchronous and cannot be intercepted by respx, so
+        # the SDK's HttpEndpoint carries the retry/backoff and pagination those modules
+        # need. The OAuth provider satisfies its auth protocol directly.
+        self._http = HttpEndpoint(config.host, auth=self._token_provider)
         ctx.logger.info(
             "databricks.setup.complete",
             host=config.host,
@@ -181,19 +189,48 @@ class Connector(ConnectorABC):
         return HealthStatus.healthy(endpoint, details={"probe": "unity_catalog.catalogs.list"})
 
     async def close(self) -> None:
-        """Release the owned ``httpx.AsyncClient``, if this connector built one."""
+        """Release the HTTP endpoint and the owned ``httpx.AsyncClient``, if any."""
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
         if self._owns_transport:
             await self._transport.aclose()
 
     # -- read path (T4.3 / T4.4) --------------------------------------------------------
 
     async def list_changed(self, entity_type: EntityType, since: Watermark) -> ListChangedResult:
-        """Not this task's scope. T4.3 implements listing changed UC objects."""
-        raise NotImplementedError("list_changed() is built in T4.3, not T4.1")
+        """UC objects changed since ``since``, plus the proposed next watermark.
+
+        Unity Catalog has no server-side "modified since" filter, so this compares a
+        canonical checksum per object against the snapshot carried in the watermark —
+        see ``changes.py``. Identity comes from ``read.py``'s builders, so a ref listed
+        here is exactly the ref :meth:`read` accepts.
+        """
+        return await changes.list_changed(
+            self._require_http(), entity_type, since, endpoint=self.name
+        )
 
     async def read(self, ref: IdentityRef) -> NeutralEntity:
-        """Not this task's scope. T4.4 implements reading + mapping a UC object."""
-        raise NotImplementedError("read() is built in T4.4, not T4.1")
+        """The current state of ``ref`` as a neutral entity with field envelopes.
+
+        A ``DATA_PRODUCT`` ref is a Unity Catalog schema and a ``DATASET`` ref one of
+        its tables or views (D1).
+        """
+        return await read.read_entity(
+            self._require_http(),
+            ref,
+            catalog_schema_patterns=self._require_ctx().config.catalog_schema_patterns,
+        )
+
+    def _require_http(self) -> HttpEndpoint:
+        if self._http is None:
+            raise RuntimeError("setup() must be called before the read path is used")
+        return self._http
+
+    def _require_ctx(self) -> ConnectorContext[DatabricksConfig]:
+        if self._ctx is None:
+            raise RuntimeError("setup() must be called before the read path is used")
+        return self._ctx
 
     # -- write path: intentionally NOT overridden ---------------------------------------
     # create()/update()/delete() inherit the ConnectorABC defaults, which refuse with

@@ -61,6 +61,17 @@ class DatabricksConfig(ConnectorConfig):
         ),
     )
 
+    catalog_schema_patterns: list[str] = Field(
+        default_factory=lambda: ["*.*"],
+        description=(
+            "Endpoint-level allow-list of `catalog.schema` glob patterns this connector "
+            "may read at all. Defaults to everything the service principal can see; the "
+            "per-pair selector (SyncPairConfig.catalog_schema_patterns, decision D1) is "
+            "applied by the engine on top of this and is the one an operator normally "
+            "edits. Present here because Connector.read(ref) receives only a ref."
+        ),
+    )
+
     @field_validator("host")
     @classmethod
     def _validate_host(cls, value: str) -> str:
