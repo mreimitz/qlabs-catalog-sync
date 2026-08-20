@@ -13,5 +13,6 @@ okf_version: "0.1"
 ## Sections
 
 * [Claude Controls](.claude/) - Browse claude controls.
+* [Documentation](Docu/) - Browse documentation.
 * [Research Topics](Research/) - Browse research topics.
 * [Roadmap](Roadmap/) - Browse roadmap.

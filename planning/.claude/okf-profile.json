@@ -45,6 +45,8 @@
     ".claude/index.md",
     "Research/index.md",
     "Roadmap/index.md",
-    "Roadmap/roadmap.md"
+    "Roadmap/roadmap.md",
+    "Roadmap/completed/index.md",
+    "Docu/index.md"
   ]
 }
