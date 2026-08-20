@@ -109,7 +109,7 @@
       ],
       "dod": "The include-then-exclude-then-carve-back-in case resolves correctly and names the deciding rule; an empty rule set includes nothing; a rule set of plain include globs reproduces RM-01 D1 semantics exactly; evaluation is order-stable and side-effect free.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/selection",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T11.2",
@@ -129,7 +129,7 @@
       ],
       "dod": "A large catalog pages without loading everything; each node carries its decision and deciding rule; an unsupported matcher is reported as unavailable with the manifest field that explains why.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/selection/test_source_tree.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T11.3",
@@ -149,7 +149,7 @@
       ],
       "dod": "A cycle syncs exactly the objects the evaluator includes; the preview API and the cycle agree object for object on the same rule set; transactional and idempotency guarantees from T2.4 still hold; the full engine suite passes.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T11.4",
