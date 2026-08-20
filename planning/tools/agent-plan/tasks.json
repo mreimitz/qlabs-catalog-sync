@@ -917,7 +917,7 @@
       ],
       "dod": "The Databricks connector passes the SDK conformance kit in read mode, and attempting any write raises CapabilityError without issuing a request.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T7.1",
