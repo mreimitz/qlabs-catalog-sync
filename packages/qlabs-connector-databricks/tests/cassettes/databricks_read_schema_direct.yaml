@@ -1,0 +1,39 @@
+# Hand-authored, NOT captured from a live Databricks tenant -- see
+# databricks_connector_setup_and_read_schema.yaml's header comment for the RM-01
+# "no live tenants" convention this follows and the RS-01 sections these payloads mirror.
+# No OAuth interaction here: this cassette backs a test that calls
+# qlabs_connector_databricks.read.read_schema() directly against a plain HttpEndpoint
+# (no auth provider attached), exactly like tests/read/*.py's own respx-based tests do --
+# the same read() the connector calls at runtime, exercised without the connector's
+# OAuth wiring around it, so this test can assert on the full SchemaRead (data product
+# *and* its member datasets) that Connector.read() itself only returns half of.
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://acme.cloud.databricks.com/api/2.1/unity-catalog/schemas?catalog_name=prod&max_results=100
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"schemas": [{"catalog_name": "prod", "name": "sales", "full_name": "prod.sales", "comment": "Sales domain schema, owned by data engineering.", "owner": "data-eng@acme.com", "properties": {"team": "sales"}, "schema_id": "b4b7c3d2-4e9a-4b1b-9a3f-2e6d9c8a7f10", "metastore_id": "11111111-2222-3333-4444-555555555555", "created_at": 1700000000000, "created_by": "admin@acme.com", "updated_at": 1700000000000, "updated_by": "data-eng@acme.com"}]}'
+  - request:
+      method: GET
+      uri: https://acme.cloud.databricks.com/api/2.1/unity-catalog/tables?catalog_name=prod&schema_name=sales&max_results=100
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"tables": [{"catalog_name": "prod", "schema_name": "sales", "name": "orders", "full_name": "prod.sales.orders", "table_type": "MANAGED", "columns": [{"name": "order_id", "type_name": "BIGINT", "nullable": false, "position": 0, "comment": "Primary key"}, {"name": "customer_id", "type_name": "BIGINT", "nullable": false, "position": 1}, {"name": "order_total", "type_name": "DECIMAL", "nullable": true, "position": 2}], "comment": "One row per customer order.", "owner": "data-eng@acme.com", "properties": {"delta.minReaderVersion": "1"}, "table_id": "c5d8e4f3-5f0b-4c2c-8b4a-3f7e0d9b8a21", "metastore_id": "11111111-2222-3333-4444-555555555555", "created_at": 1700000000000, "created_by": "admin@acme.com", "updated_at": 1700000000000, "updated_by": "data-eng@acme.com", "data_source_format": "DELTA"}, {"catalog_name": "prod", "schema_name": "sales", "name": "customers", "full_name": "prod.sales.customers", "table_type": "VIEW", "columns": [{"name": "customer_id", "type_name": "BIGINT", "nullable": false, "position": 0}, {"name": "customer_name", "type_name": "STRING", "nullable": true, "position": 1}], "comment": "Customer-facing view over orders joined with the customer dimension.", "owner": "data-eng@acme.com", "properties": {}, "table_id": "d6e9f5a4-6f1c-4d3d-9c5b-4a8f1e0c9b32", "metastore_id": "11111111-2222-3333-4444-555555555555", "created_at": 1700000000000, "created_by": "admin@acme.com", "updated_at": 1700000000000, "updated_by": "data-eng@acme.com"}]}'
