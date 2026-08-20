@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, ClassVar
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -35,6 +36,7 @@ from qlabs_catalog_sync_sdk.contract import Connector as ConnectorABC
 from qlabs_catalog_sync_sdk.exceptions import AuthError, ConnectorError, TransientError
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 
+from . import read
 from .auth import build_http_endpoint, classify_response_error, classify_transport_error
 from .config import QlikConfig
 from .manifest import qlik_capability_manifest
@@ -172,12 +174,41 @@ class Connector(ConnectorABC):
     # -- read path (T3.3) -------------------------------------------------------------
 
     async def list_changed(self, entity_type: EntityType, since: Watermark) -> ListChangedResult:
-        """Not implemented here. T3.3 implements the Qlik read path (``read.py``)."""
-        raise NotImplementedError("T3.3 implements the Qlik read path; see read.py")
+        """Candidates changed since ``since``, plus the proposed next watermark."""
+        if self.ctx is None or self.http is None:
+            raise RuntimeError("setup() must be called before list_changed()")
+        return await read.list_changed(
+            self.http,
+            entity_type,
+            since,
+            endpoint=self.name,
+            tenant_id=self._tenant_id(),
+            space_id=self.ctx.config.space_id,
+        )
 
     async def read(self, ref: IdentityRef) -> NeutralEntity:
-        """Not implemented here. T3.3 implements the Qlik read path (``read.py``)."""
-        raise NotImplementedError("T3.3 implements the Qlik read path; see read.py")
+        """The current state of ``ref`` as a neutral entity with field envelopes."""
+        if self.http is None:
+            raise RuntimeError("setup() must be called before read()")
+        return await read.read(self.http, ref, endpoint=self.name)
+
+    def _tenant_id(self) -> str:
+        """The tenant every ``IdentityRef`` is scoped by.
+
+        Qlik ids are unique only within a tenant, so this is never allowed to be empty.
+        The engine's configured ``tenant`` wins when it is set; otherwise the tenant
+        hostname out of the configured base URL is used, which is what actually
+        identifies a Qlik Cloud tenant (``https://<tenant>.<region>.qlikcloud.com``).
+        """
+        assert self.ctx is not None  # callers narrow before reaching here
+        if self.ctx.tenant:
+            return self.ctx.tenant
+        host = urlsplit(self.ctx.config.base_url).hostname
+        if not host:
+            raise ValueError(
+                f"cannot derive a tenant id: base_url {self.ctx.config.base_url!r} has no host"
+            )
+        return host
 
     # -- write path (T3.4/T3.5/T3.6/T3.7) ---------------------------------------------
     # create/update/delete are intentionally left at the ABC's defaults (they raise
