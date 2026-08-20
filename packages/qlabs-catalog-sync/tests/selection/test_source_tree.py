@@ -18,12 +18,15 @@ from pathlib import Path
 import pytest
 from selection_helpers import dataset_candidate, exclude, include, schema_candidate
 
+from qlabs_catalog_sync.config import SyncPairConfig
 from qlabs_catalog_sync.selection import (
     UNKNOWN,
+    DecisionSource,
     MatcherKind,
     RuleScope,
     SelectionRuleSet,
     evaluate,
+    object_rules_from_catalog_schema_patterns,
     source_tree,
 )
 from qlabs_catalog_sync.selection.source_tree import (
@@ -720,3 +723,171 @@ async def test_a_vanished_object_yields_unknown_facts_without_crashing_the_walk(
     # One attempted (and failed) read for the stale create; the deletion itself is never
     # attempted at all.
     assert source.call_count("read") == 1
+
+
+# --------------------------------------------------------------------------------------
+# Inheritance: a dataset with no dataset-scope verdict follows its included parent (C3)
+# --------------------------------------------------------------------------------------
+#
+# Regression coverage for a certification-probe finding: an object-only rule set (exactly
+# what object_rules_from_catalog_schema_patterns produces, and exactly what T10.4's
+# bootstrap import feeds it from existing D1 YAML) used to select the schema and *none* of
+# its datasets, because a dataset that matched no dataset-scope rule fell to
+# DEFAULT_DECISION a second time instead of inheriting the schema's own inclusion. That is
+# a silent behavior change to the locked D1 mapping, which C3 forbids.
+
+
+async def test_an_object_only_rule_set_selects_datasets_by_d1_equivalence_end_to_end() -> None:
+    """The test whose absence let the defect through: convert a D1 pattern list with
+    ``object_rules_from_catalog_schema_patterns`` (T10.4's exact bootstrap-import path),
+    walk a real source seeded with several schemas and datasets across matching and
+    non-matching catalogs, and cross-check the selected *datasets* against
+    ``SyncPairConfig.matches`` on their parent -- the same oracle T11.1 uses for schemas.
+
+    Before the inheritance fix, every ``included`` assertion below for a dataset under a
+    selected schema would fail: the selected set would be empty.
+    """
+    patterns = ["analytics.*", "finance.reporting", "warehouse.prod*"]
+    pair = SyncPairConfig(
+        name="databricks-to-qlik",
+        source="databricks_prod",
+        target="qlik_acme",
+        catalog_schema_patterns=patterns,
+        target_space="Data Products",
+        entity_types=[EntityType.DATA_PRODUCT],
+    )
+    rule_set = SelectionRuleSet.build(object_rules_from_catalog_schema_patterns(patterns))
+
+    fixtures = [
+        ("analytics", "sales", "orders"),
+        ("analytics", "finance", "ledger"),
+        ("finance", "reporting", "summary"),
+        ("finance", "other", "detail"),
+        ("warehouse", "prod", "metrics"),
+        ("warehouse", "dev", "metrics"),
+        ("other", "other", "x"),
+    ]
+
+    source = FakeConnector.read_only_source()
+    for catalog, schema, table in fixtures:
+        source.seed(DataProduct(name=schema), native_key=f"{catalog}.{schema}")
+        source.seed(Dataset(name=table), native_key=f"{catalog}.{schema}.{table}")
+
+    nodes = [node async for node in walk_source_tree(source, rule_set)]
+    dataset_nodes = [node for node in nodes if isinstance(node, DatasetNode)]
+    assert len(dataset_nodes) == len(fixtures)
+
+    selected = {node.candidate.object_id for node in dataset_nodes if node.included}
+    expected = {
+        f"{catalog}.{schema}.{table}"
+        for catalog, schema, table in fixtures
+        if pair.matches(catalog, schema)
+    }
+    assert expected  # sanity: the fixture actually exercises inclusion, not just exclusion
+    assert selected == expected
+
+    # And every included one got there by inheritance -- no dataset-scope rule exists at
+    # all in this rule set, so DecisionSource.RULE is impossible here.
+    for node in dataset_nodes:
+        if node.included:
+            assert node.selection.dataset.source is DecisionSource.DEFAULT
+
+
+async def test_a_dataset_scope_exclude_rule_does_not_disable_inheritance_for_siblings() -> None:
+    """No cliff: one exclude rule removes exactly what it matches. It must not flip every
+    other dataset under the same included schema (or any other schema) to excluded."""
+    rule_set = SelectionRuleSet.build(
+        [
+            include(0, "analytics.*", rule_id="schemas"),
+            exclude(0, "analytics.sales.tmp*", scope=RuleScope.DATASET, rule_id="no-tmp"),
+        ]
+    )
+    source = FakeConnector.read_only_source()
+    source.seed(DataProduct(name="Sales"), native_key="analytics.sales")
+    source.seed(Dataset(name="Orders"), native_key="analytics.sales.orders")
+    source.seed(Dataset(name="Tmp Orders"), native_key="analytics.sales.tmp_orders")
+    source.seed(DataProduct(name="Finance"), native_key="analytics.finance")
+    source.seed(Dataset(name="Ledger"), native_key="analytics.finance.ledger")
+
+    nodes = [node async for node in walk_source_tree(source, rule_set)]
+    by_id = {node.candidate.object_id: node for node in nodes if isinstance(node, DatasetNode)}
+
+    orders = by_id["analytics.sales.orders"]
+    assert orders.included  # inherited: no dataset rule touches it
+    assert orders.selection.dataset.source is DecisionSource.DEFAULT
+
+    tmp = by_id["analytics.sales.tmp_orders"]
+    assert not tmp.included  # its own exclude rule decided, not the default
+    assert tmp.selection.dataset.source is DecisionSource.RULE
+    assert tmp.selection.dataset.rule_id == "no-tmp"
+
+    # A dataset under a *different* included schema is unaffected by the exclude rule
+    # living under analytics.sales.
+    ledger = by_id["analytics.finance.ledger"]
+    assert ledger.included
+    assert ledger.selection.dataset.source is DecisionSource.DEFAULT
+
+
+async def test_a_dataset_under_an_excluded_parent_does_not_inherit_inclusion_either() -> None:
+    """Inheritance only ever applies once the parent is already included (C5 still holds):
+    an excluded parent excludes every dataset under it, whether or not any dataset-scope
+    rule exists to have an opinion."""
+    rule_set = SelectionRuleSet.build([exclude(0, "analytics.staging", rule_id="no-staging")])
+    source = FakeConnector.read_only_source()
+    source.seed(DataProduct(name="Staging"), native_key="analytics.staging")
+    source.seed(Dataset(name="Audit"), native_key="analytics.staging.audit")
+
+    nodes = [node async for node in walk_source_tree(source, rule_set)]
+    dataset_node = next(node for node in nodes if isinstance(node, DatasetNode))
+
+    assert not dataset_node.selection.parent.included
+    assert dataset_node.selection.dataset.source is DecisionSource.DEFAULT
+    assert not dataset_node.included
+
+
+def test_a_dataset_scope_include_rule_still_cannot_rescue_an_excluded_parent() -> None:
+    """C5 is unchanged by the inheritance fix: a matching dataset-scope rule (not just the
+    default) is still overridden by an excluded parent."""
+    rule_set = SelectionRuleSet.build(
+        [
+            exclude(0, "analytics.staging", rule_id="no-staging"),
+            include(0, "analytics.staging.*", scope=RuleScope.DATASET, rule_id="would-include"),
+        ]
+    )
+    parent = evaluate(rule_set, schema_candidate("analytics.staging"))
+    selection = compose_dataset_selection(
+        rule_set, dataset_candidate("analytics.staging.audit_log"), parent=parent
+    )
+    assert selection.dataset.source is DecisionSource.RULE
+    assert selection.dataset.included
+    assert not selection.included
+
+
+def test_explain_names_inheritance_rather_than_a_default_when_nothing_matched() -> None:
+    rule_set = SelectionRuleSet.build([include(0, "analytics.*", rule_id="schemas")])
+    parent = evaluate(rule_set, schema_candidate("analytics.sales"))
+    selection = compose_dataset_selection(
+        rule_set, dataset_candidate("analytics.sales.orders"), parent=parent
+    )
+    assert selection.included
+    assert selection.explain() == (
+        "included: inherits parent schema's selection "
+        "(included by rule #0 include glob 'analytics.*')"
+    )
+
+
+async def test_select_dataset_change_and_the_tree_agree_under_an_object_only_rule_set() -> None:
+    """Both entry points to the one join must land on the same composed decision for the
+    same dataset -- here, specifically exercising the new inherited-inclusion path."""
+    rule_set = SelectionRuleSet.build(object_rules_from_catalog_schema_patterns(["analytics.*"]))
+    source = FakeConnector.read_only_source()
+    source.seed(DataProduct(name="Sales"), native_key="analytics.sales")
+    source.seed(Dataset(name="Orders"), native_key="analytics.sales.orders")
+
+    nodes = [node async for node in walk_source_tree(source, rule_set)]
+    dataset_node = next(node for node in nodes if isinstance(node, DatasetNode))
+    assert dataset_node.included  # sanity: this scenario actually exercises the fix
+
+    via_select_dataset_change = select_dataset_change(rule_set, dataset_node.change)
+    assert via_select_dataset_change == dataset_node.selection
+    assert via_select_dataset_change.included == dataset_node.included

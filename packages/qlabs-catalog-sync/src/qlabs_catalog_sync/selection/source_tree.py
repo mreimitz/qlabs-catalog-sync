@@ -47,11 +47,15 @@ asks for more.
 The schema-then-dataset composition, and the two shapes that need it
 ----------------------------------------------------------------------
 
-:func:`compose_dataset_selection` is the one join C5 requires: a dataset is included only
-when its parent schema's object-scope decision is ``include`` *and* the dataset's own
-dataset-scope rules include it. "No matter what dataset-scope rules say" is
-:class:`DatasetSelection.included` checking the parent first; :meth:`DatasetSelection.explain`
-names the parent's exclusion, never a dataset rule, when that is what decided.
+:func:`compose_dataset_selection` is the one join C5 requires: a dataset under an excluded
+parent is excluded no matter what dataset-scope rules say (:class:`DatasetSelection.included`
+checks the parent first; :meth:`DatasetSelection.explain` names the parent's exclusion, never
+a dataset rule, when that is what decided). Under an *included* parent, a dataset-scope
+override or matching rule decides as normal, and a dataset that matches no dataset-scope rule
+at all **inherits its parent's inclusion** rather than falling to dataset scope's own default
+-- see :class:`DatasetSelection`'s docstring for why this is required by C3 (D1's flat
+selector synced every table under a selected schema with no dataset-level configuration) and
+why it does not reopen object scope's own default-exclude.
 
 Two callers need this join and they do not hold the same information, so they cannot supply
 its ``parent`` argument the same way:
@@ -114,6 +118,7 @@ from typing import Final
 from qlabs_catalog_sync.selection import (
     SEGMENTS_BY_SCOPE,
     UNKNOWN,
+    DecisionSource,
     OwnerFacts,
     QualifiedName,
     RuleScope,
@@ -313,10 +318,47 @@ class DatasetSelection:
     """C5's two-step decision for one dataset: its parent schema's object-scope result,
     composed with the dataset's own dataset-scope result.
 
-    A dataset whose parent schema was excluded is excluded here regardless of what
-    ``dataset`` says -- see :attr:`included` and :meth:`explain`, which check ``parent``
-    first. ``dataset`` is always the real evaluated result (never withheld), so a caller
-    that wants to know what the dataset's *own* rules would have said can still ask.
+    Three cases, checked in this order:
+
+    1. **The parent schema is excluded.** This dataset is excluded here regardless of
+       what ``dataset`` says -- see :attr:`included` and :meth:`explain`, which check
+       ``parent`` first, no matter which dataset-scope rule (if any) matched.
+    2. **The parent is included and a dataset-scope override or rule decided** --
+       ``dataset.source`` is :attr:`~.evaluator.DecisionSource.OVERRIDE` or
+       :attr:`~.evaluator.DecisionSource.RULE`. That decision stands as-is.
+    3. **The parent is included and nothing dataset-scope matched at all** --
+       ``dataset.source`` is :attr:`~.evaluator.DecisionSource.DEFAULT`. The dataset
+       *inherits* its parent's inclusion rather than falling to
+       :data:`~.rules.DEFAULT_DECISION` a second time.
+
+    Case 3 is what makes decision C3 true for datasets, not just schemas: D1's flat
+    ``catalog.schema`` selector synced every table under a selected schema with zero
+    dataset-level configuration, so ``object_rules_from_catalog_schema_patterns`` -- one
+    include rule per pattern, object scope only -- must keep doing that. Without
+    inheritance, a rule set built purely from that converter would select every schema
+    and *no* datasets at all: :attr:`~.rules.DEFAULT_DECISION` is exclude, and an
+    object-only rule set never matches a dataset-scope candidate, so every dataset would
+    fall to the default. That is a real behavior change to the locked mapping, which C3
+    forbids, and it is silent -- nothing about "the pattern list still parses" would
+    reveal that every table stopped syncing.
+
+    This does **not** reopen dataset scope's own default-exclude, and it does not touch
+    :data:`~.rules.DEFAULT_DECISION` at all -- object scope still fails closed, which is
+    what keeps the blast radius bounded (the original D1 defect was an *unbounded*
+    default-*include* across an entire metastore, not a bounded one). A dataset is only
+    ever composed here because its parent schema was already, explicitly included by an
+    object-scope rule or override; inheriting *inside* that already-selected schema costs
+    nothing outside of it. A dataset-scope rule that actually fires -- an include or an
+    exclude -- still decides over the inherited default, exactly like any other override
+    of a default: one ``exclude analytics.sales.tmp*`` rule removes only what it matches,
+    not every other dataset in the schema (there is no "if this rule set has any
+    dataset-scope rules, stop inheriting" special case -- that would make adding one
+    exclude rule to one schema silently flip every unrelated dataset everywhere else to
+    excluded, which is a far worse cliff than the one this fixes).
+
+    ``dataset`` is always the real evaluated result (never withheld), so a caller that
+    wants to know what the dataset's *own* rules concluded, independent of inheritance,
+    can still ask.
     """
 
     parent: SelectionResult
@@ -329,15 +371,34 @@ class DatasetSelection:
             raise ValueError("DatasetSelection.dataset must be a dataset-scope SelectionResult")
 
     @property
+    def _inherits_parent(self) -> bool:
+        """True when nothing dataset-scope (no override, no rule) reached a verdict."""
+        return self.dataset.source is DecisionSource.DEFAULT
+
+    @property
     def included(self) -> bool:
-        """Whether this dataset is selected: its parent schema *and* its own rules agree."""
-        return self.parent.included and self.dataset.included
+        """Whether this dataset is selected.
+
+        The parent must be included, full stop. Given that, an override or a matching
+        dataset-scope rule decides; with neither, the dataset inherits the parent's
+        inclusion (which, having passed the first check, is ``True``) rather than falling
+        to dataset scope's own default. See the class docstring for why.
+        """
+        if not self.parent.included:
+            return False
+        if self._inherits_parent:
+            return True
+        return self.dataset.included
 
     def explain(self) -> str:
-        """A one-line reason, naming the parent's exclusion rather than a dataset rule
-        whenever the parent is what decided -- never the other way around."""
+        """A one-line, truthful reason for every case the class docstring describes --
+        naming the parent's exclusion rather than a dataset rule whenever the parent is
+        what decided, and naming the inheritance rather than claiming a default excluded
+        it when nothing dataset-scope matched."""
         if not self.parent.included:
             return f"excluded: parent schema not selected ({self.parent.explain()})"
+        if self._inherits_parent:
+            return f"included: inherits parent schema's selection ({self.parent.explain()})"
         return self.dataset.explain()
 
 
