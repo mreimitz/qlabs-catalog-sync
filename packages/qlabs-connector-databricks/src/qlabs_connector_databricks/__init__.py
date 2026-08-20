@@ -216,10 +216,12 @@ class Connector(ConnectorABC):
         A ``DATA_PRODUCT`` ref is a Unity Catalog schema and a ``DATASET`` ref one of
         its tables or views (D1).
         """
+        config = self._require_ctx().config
         return await read.read_entity(
             self._require_http(),
             ref,
-            catalog_schema_patterns=self._require_ctx().config.catalog_schema_patterns,
+            catalog_schema_patterns=config.catalog_schema_patterns,
+            sql_warehouse_id=config.sql_warehouse_id,
         )
 
     def _require_http(self) -> HttpEndpoint:

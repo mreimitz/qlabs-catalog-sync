@@ -144,7 +144,7 @@ import httpx
 import structlog
 
 from qlabs_catalog_sync_sdk.config import Clock, SystemClock
-from qlabs_catalog_sync_sdk.exceptions import AuthError, TransientError
+from qlabs_catalog_sync_sdk.exceptions import AuthError, ConnectorError, TransientError
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 from qlabs_catalog_sync_sdk.models import Tag
 
@@ -660,9 +660,28 @@ def _tag_from_row(tag_name: Any, tag_value: Any) -> Tag:
     return Tag(key=str(tag_name), value=None if tag_value is None else str(tag_value))
 
 
+def _require_row_width(row: Sequence[Any], *, expected: int, table: str) -> None:
+    """Fail loudly when a result row is not the shape this module assumes.
+
+    The ``INFORMATION_SCHEMA`` column sets are a documented assumption, not something
+    confirmed against a live workspace (see this module's TENANT_UNVERIFIED notes), so a
+    row of the wrong width means the assumption is wrong. Raising a typed
+    :class:`ConnectorError` names that plainly; indexing past the end would surface as a
+    bare ``IndexError`` the engine has no handling for, and silently skipping the row
+    would hide a wrong column assumption behind an entity that simply looks untagged.
+    """
+    if len(row) < expected:
+        raise ConnectorError(
+            f"{table} returned a row with {len(row)} column(s), expected at least "
+            f"{expected}: the assumed INFORMATION_SCHEMA column set does not match this "
+            f"workspace"
+        )
+
+
 def _group_schema_tag_rows(rows: Sequence[Sequence[Any]]) -> dict[str, tuple[Tag, ...]]:
     grouped: dict[str, list[Tag]] = {}
     for row in rows:
+        _require_row_width(row, expected=4, table="INFORMATION_SCHEMA.SCHEMA_TAGS")
         catalog_name, schema_name, tag_name, tag_value = row[0], row[1], row[2], row[3]
         full_name = _schema_full_name(str(catalog_name), str(schema_name))
         grouped.setdefault(full_name, []).append(_tag_from_row(tag_name, tag_value))
@@ -672,6 +691,7 @@ def _group_schema_tag_rows(rows: Sequence[Sequence[Any]]) -> dict[str, tuple[Tag
 def _group_table_tag_rows(rows: Sequence[Sequence[Any]]) -> dict[str, tuple[Tag, ...]]:
     grouped: dict[str, list[Tag]] = {}
     for row in rows:
+        _require_row_width(row, expected=5, table="INFORMATION_SCHEMA.TABLE_TAGS")
         catalog_name, schema_name, table_name, tag_name, tag_value = (
             row[0],
             row[1],

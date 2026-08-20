@@ -88,6 +88,7 @@ from qlabs_catalog_sync_sdk.models import (
     EntityType,
     IdentityRef,
     NeutralEntity,
+    Tag,
 )
 
 from .mapping import (
@@ -95,6 +96,7 @@ from .mapping import (
     map_data_product_fields,
     map_dataset_fields,
 )
+from .sql_tags import read_catalog_tags
 
 __all__ = [
     "DEFAULT_MAX_ITEMS",
@@ -327,7 +329,9 @@ def build_table_identity_ref(raw_table: Mapping[str, Any], *, endpoint: str) -> 
     )
 
 
-def build_data_product(raw_schema: Mapping[str, Any], *, endpoint: str) -> DataProduct:
+def build_data_product(
+    raw_schema: Mapping[str, Any], *, endpoint: str, tags: Sequence[Tag] | None = None
+) -> DataProduct:
     """Build the neutral :class:`DataProduct` for one Unity Catalog schema (decision D1).
 
     Structural only: ``name`` and ``identities``, plus every field this module does
@@ -341,6 +345,11 @@ def build_data_product(raw_schema: Mapping[str, Any], *, endpoint: str) -> DataP
     name = _require_str(raw_schema, "name")
     custom_attributes = map_custom_attributes(raw_schema, exclude=_SCHEMA_STRUCTURAL_FIELDS)
     content = map_data_product_fields(raw_schema)
+    if tags is not None:
+        # `None` means the SQL read path was never run (no warehouse, decision D6), so
+        # `tags` stays absent and the engine leaves the target's tags alone. `[]` means
+        # it ran and the schema genuinely has none, which is a value worth syncing.
+        content["tags"] = list(tags)
     values: dict[str, Any] = {"name": name, "custom_attributes": custom_attributes, **content}
     field_envelopes = build_field_envelopes(
         values,
@@ -356,7 +365,9 @@ def build_data_product(raw_schema: Mapping[str, Any], *, endpoint: str) -> DataP
     )
 
 
-def build_dataset(raw_table: Mapping[str, Any], *, endpoint: str) -> Dataset:
+def build_dataset(
+    raw_table: Mapping[str, Any], *, endpoint: str, tags: Sequence[Tag] | None = None
+) -> Dataset:
     """Build the neutral :class:`Dataset` for one Unity Catalog table or view.
 
     Structural: ``name``, ``identities``, and ``asset_type`` (mapped from
@@ -370,6 +381,10 @@ def build_dataset(raw_table: Mapping[str, Any], *, endpoint: str) -> Dataset:
     asset_type = asset_type_for_table(raw_table.get("table_type"))
     custom_attributes = map_custom_attributes(raw_table, exclude=_TABLE_STRUCTURAL_FIELDS)
     content = map_dataset_fields(raw_table)
+    if tags is not None:
+        # See build_data_product: absent means "not read", [] means "read, has none".
+        content["tags"] = list(tags)
+        content["classifications"] = [tag.key for tag in tags]
     values: dict[str, Any] = {
         "name": name,
         "asset_type": asset_type,
@@ -648,6 +663,7 @@ async def read_schema(
     ref: IdentityRef,
     *,
     catalog_schema_patterns: Sequence[str],
+    sql_warehouse_id: str | None = None,
     page_size: int = DEFAULT_PAGE_SIZE,
     max_items: int = DEFAULT_MAX_ITEMS,
 ) -> SchemaRead:
@@ -686,9 +702,31 @@ async def read_schema(
             entity_type=ref.entity_type,
             native_key=ref.native_key,
         )
-    data_product = build_data_product(raw_schema, endpoint=ref.endpoint)
+    # Decision D6: UC tags are readable only over the Statement Execution API, and only
+    # when a SQL warehouse is configured. One index per catalog covers the schema and
+    # every table in it, so this is two statements regardless of table count.
+    tag_index = await read_catalog_tags(
+        http,
+        sql_warehouse_id=sql_warehouse_id,
+        catalog_name=catalog,
+        endpoint=ref.endpoint,
+        schema_names=[schema],
+    )
+    data_product = build_data_product(
+        raw_schema,
+        endpoint=ref.endpoint,
+        tags=None if tag_index is None else tag_index.for_schema(full_name),
+    )
     datasets = [
-        build_dataset(raw_table, endpoint=ref.endpoint)
+        build_dataset(
+            raw_table,
+            endpoint=ref.endpoint,
+            tags=(
+                None
+                if tag_index is None
+                else tag_index.for_table(str(raw_table.get("full_name", "")))
+            ),
+        )
         async for raw_table in _iter_tables_in_schema(
             http,
             catalog_name=catalog,
@@ -708,7 +746,9 @@ async def read_schema(
     return SchemaRead(data_product=data_product, datasets=datasets)
 
 
-async def read_dataset(http: HttpEndpoint, ref: IdentityRef) -> Dataset:
+async def read_dataset(
+    http: HttpEndpoint, ref: IdentityRef, *, sql_warehouse_id: str | None = None
+) -> Dataset:
     """Read one table or view (``ref.entity_type`` must be ``DATASET``) into a
     :class:`Dataset`, by a single ``GET /tables/{full_name}`` -- no paging, since the
     object is already uniquely identified.
@@ -716,8 +756,20 @@ async def read_dataset(http: HttpEndpoint, ref: IdentityRef) -> Dataset:
     _require_entity_type(ref, EntityType.DATASET)
     full_name = _require_secondary_key(ref, "full_name")
     split_table_full_name(full_name)  # validates the shape; raises ValueError if malformed
+    catalog, schema, _table = split_table_full_name(full_name)
     raw_table = await _get_table(http, full_name=full_name, endpoint=ref.endpoint)
-    return build_dataset(raw_table, endpoint=ref.endpoint)
+    tag_index = await read_catalog_tags(
+        http,
+        sql_warehouse_id=sql_warehouse_id,
+        catalog_name=catalog,
+        endpoint=ref.endpoint,
+        schema_names=[schema],
+    )
+    return build_dataset(
+        raw_table,
+        endpoint=ref.endpoint,
+        tags=None if tag_index is None else tag_index.for_table(full_name),
+    )
 
 
 async def read_entity(
@@ -725,6 +777,7 @@ async def read_entity(
     ref: IdentityRef,
     *,
     catalog_schema_patterns: Sequence[str],
+    sql_warehouse_id: str | None = None,
     page_size: int = DEFAULT_PAGE_SIZE,
     max_items: int = DEFAULT_MAX_ITEMS,
 ) -> NeutralEntity:
@@ -745,12 +798,13 @@ async def read_entity(
             http,
             ref,
             catalog_schema_patterns=catalog_schema_patterns,
+            sql_warehouse_id=sql_warehouse_id,
             page_size=page_size,
             max_items=max_items,
         )
         return schema_read.data_product
     if ref.entity_type is EntityType.DATASET:
-        return await read_dataset(http, ref)
+        return await read_dataset(http, ref, sql_warehouse_id=sql_warehouse_id)
     raise CapabilityError(
         f"the Databricks connector does not support reading {ref.entity_type!r}",
         endpoint=ref.endpoint,

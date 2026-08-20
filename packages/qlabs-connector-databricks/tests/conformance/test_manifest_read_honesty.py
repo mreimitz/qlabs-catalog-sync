@@ -29,27 +29,11 @@ calls ``read.read_entity()`` alone, which never invokes ``sql_tags.read_catalog_
 ``read_tags_for_catalogs`` no matter how ``DatabricksConfig.sql_warehouse_id`` is set.
 
 The tests below pin this down with a **positive** proof, not just an absence: a
-Statement Execution API route that *would* answer with real tag rows if the connector
-called it, asserted to receive zero calls. They are marked ``xfail(strict=True)`` --
-documenting a real, verifiable defect without failing the repo-wide ``pytest -q`` gate
-this task's own ``verify`` command runs (a naked failing test here would block every
-other task's build on a bug outside every path T4.6 is allowed to touch). ``strict=True``
-means an XPASS -- the assertion suddenly holding -- fails loudly instead of going quiet,
-so the fix is easy to rediscover the moment someone wires the two together.
-
-**The fix** (outside every path T4.6 owns): in ``read.py``'s ``read_schema``/
-``read_dataset`` (or ``build_data_product``/``build_dataset``), accept a
-``sql_warehouse_id: str | None`` parameter and, when set, call
-``sql_tags.read_catalog_tags(http, sql_warehouse_id=..., catalog_name=..., endpoint=...)``
-and merge ``{"tags": index.for_schema(full_name)}`` (schema) / ``{"tags":
-index.for_table(full_name), "classifications": [t.key for t in
-index.for_table(full_name)]}`` (table, per RS-03 section 8.2's "classifications | RW
-(tags)") into ``content`` before ``build_field_envelopes`` -- exactly the
-``dict.update()`` seam ``mapping.py``'s own docstring already names ("whoever wires T4.7
-in adds its own fragment ... beside the ones this module returns, the same
-``dict.update()`` way"). ``__init__.py``'s ``read()`` needs to pass
-``self._require_ctx().config.sql_warehouse_id`` through alongside
-``catalog_schema_patterns`` for this to reach ``read.py`` at all.
+Statement Execution API route that *would* answer with real tag rows, asserted to
+actually receive the call and to have its rows reach the entity. They were written
+against a real defect — ``read()`` never called ``sql_tags`` at all — and are kept as the
+standing guarantee that the manifest's ``ro`` promise for ``tags`` is honored rather than
+merely declared.
 """
 
 from __future__ import annotations
@@ -96,6 +80,18 @@ def _statement_response(rows: list[list[str]]) -> httpx.Response:
     )
 
 
+def _tag_statement_responder(request: httpx.Request) -> httpx.Response:
+    """Answer each tag statement with its own table's column set.
+
+    A single canned response for both statements would feed four-column SCHEMA_TAGS rows
+    to the five-column TABLE_TAGS parser, which the connector now rejects outright — so a
+    shared mock would be testing an impossible workspace rather than a real one.
+    """
+    statement = request.content.decode()
+    rows = _REAL_TABLE_TAG_ROWS if "TABLE_TAGS" in statement else _REAL_SCHEMA_TAG_ROWS
+    return _statement_response(rows)
+
+
 @pytest.fixture
 async def connector_with_warehouse() -> AsyncIterator[Connector]:
     async with setup_connector(sql_warehouse_id="warehouse-conformance-1") as connector:
@@ -139,7 +135,7 @@ async def test_read_dataset_without_a_warehouse_correctly_makes_no_statement_cal
         with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
             mock_get_table(router, full_name=full_name, table=table)
             statement_route = router.post(STATEMENTS_URL).mock(
-                return_value=_statement_response(_REAL_TABLE_TAG_ROWS)
+                side_effect=_tag_statement_responder
             )
             dataset = await connector.read(ref)
 
@@ -148,14 +144,6 @@ async def test_read_dataset_without_a_warehouse_correctly_makes_no_statement_cal
         assert dataset.classifications == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "connector defect: sql_tags.py (T4.7) is never wired into read.py/__init__.py's "
-        "read() path -- see this module's docstring for the exact fix. Remove this xfail "
-        "once read() calls sql_tags.read_catalog_tags() when a warehouse is configured."
-    ),
-)
 async def test_read_dataset_delivers_the_tags_its_ro_manifest_promises(
     connector_with_warehouse: Connector,
 ) -> None:
@@ -173,7 +161,7 @@ async def test_read_dataset_delivers_the_tags_its_ro_manifest_promises(
         # This route WOULD hand back a real "pii" tag if the connector ever asked --
         # proving the gap is "never called", not "called and got nothing back".
         statement_route = router.post(STATEMENTS_URL).mock(
-            return_value=_statement_response(_REAL_TABLE_TAG_ROWS)
+            side_effect=_tag_statement_responder
         )
         dataset = await connector_with_warehouse.read(ref)
 
@@ -187,14 +175,6 @@ async def test_read_dataset_delivers_the_tags_its_ro_manifest_promises(
     assert "tags" in dataset.field_envelopes
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "connector defect: sql_tags.py (T4.7) is never wired into read.py/__init__.py's "
-        "read() path -- see this module's docstring for the exact fix. Remove this xfail "
-        "once read() calls sql_tags.read_catalog_tags() when a warehouse is configured."
-    ),
-)
 async def test_read_schema_delivers_the_tags_its_ro_manifest_promises(
     connector_with_warehouse: Connector,
 ) -> None:
@@ -211,7 +191,7 @@ async def test_read_schema_delivers_the_tags_its_ro_manifest_promises(
         mock_schema_list(router, catalog_name="prod", schemas=[schema])
         mock_table_list(router, catalog_name="prod", schema_name="sales", tables=[])
         statement_route = router.post(STATEMENTS_URL).mock(
-            return_value=_statement_response(_REAL_SCHEMA_TAG_ROWS)
+            side_effect=_tag_statement_responder
         )
         data_product = await connector_with_warehouse.read(ref)
 
