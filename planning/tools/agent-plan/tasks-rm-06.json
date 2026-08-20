@@ -337,7 +337,7 @@
       ],
       "dod": "The committed OpenAPI document matches the running app; regenerating the client is a no-op on a clean tree; the drift check fails when a route or model changes without regeneration.",
       "verify": "uv run python scripts/gen_openapi.py --check && uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_openapi_contract.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.9",
