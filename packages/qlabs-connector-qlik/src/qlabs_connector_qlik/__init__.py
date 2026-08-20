@@ -26,6 +26,7 @@ from qlabs_catalog_sync_sdk.contract import (
     CapabilityManifestBase,
     ConnectorContext,
     EntityType,
+    FieldDiff,
     HealthState,
     HealthStatus,
     IdentityRef,
@@ -271,7 +272,19 @@ class Connector(ConnectorABC):
             raise RuntimeError("setup() must be called before delete()")
         await self.lifecycle.delete(ref)
 
-    # -- remaining write path (T3.5) ----------------------------------------------------
+    async def update(self, ref: IdentityRef, diff: FieldDiff) -> WriteResult:
+        """Apply ``diff`` to an existing Qlik data product via JSON Patch.
+
+        Replace-only, against the closed eight-path enum, guarded with ``if-match``. A
+        field the manifest declares ``ro``/``na`` — or one Qlik changes through a
+        lifecycle action rather than the PATCH enum (``status``, ``placement``) — is
+        refused with ``CapabilityError`` before any request, never silently skipped.
+        """
+        if self.writer is None:
+            raise RuntimeError("setup() must be called before update()")
+        return await self.writer.update(ref, diff)
+
+    # -- delete and the lifecycle actions ------------------------------------------------
     # create/update/delete are intentionally left at the ABC's defaults (they raise
     # CapabilityError) rather than overridden here: they are not abstract, so nothing
     # blocks instantiation, and the honest-refusal default is exactly right until the
