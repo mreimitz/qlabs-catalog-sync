@@ -86,7 +86,7 @@
       ],
       "dod": "An environment-only deployment comes up with the same behavior as before; a second start imports nothing; an edit made through the service survives a restart unchanged.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_bootstrap.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T11.1",
