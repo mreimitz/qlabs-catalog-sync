@@ -601,6 +601,8 @@ export interface components {
             /** Distribution */
             distribution?: string | null;
             manifest?: components["schemas"]["CapabilityManifestOut"] | null;
+            /** Manifest Unavailable Reason */
+            manifest_unavailable_reason?: string | null;
             /** Name */
             name: string;
         };

@@ -8,8 +8,25 @@ was already built at process startup (WP2/T2.1, entry-point discovery over the
 ``qlabs_catalog_sync.connectors`` group), and reading it here is two side-effect-free
 operations -- ``registry.names()``/``registry.broken()`` (pure lookups) and, for each
 already-loaded connector class, instantiating it (``Connector.__init__`` only checks a
-class attribute, per its own docstring) and calling its synchronous, no-I/O
-``capabilities()`` (``qlabs_catalog_sync_sdk.contract.Connector.capabilities``).
+class attribute, per its own docstring) and asking it for its capability manifest.
+
+**A manifest is not always available from an unconfigured connector class, and this
+route must not pretend otherwise.** RS-08's connector lifecycle is *discover, configure,
+``setup``, then ``capabilities``* -- so a connector whose manifest genuinely varies with
+its resolved configuration is entitled to refuse before ``setup()``. The Databricks
+connector does exactly that (``qlabs_connector_databricks``: D6 makes ``tags`` readable
+only when a SQL warehouse is configured, so there is no honest answer to give yet), and
+this route lists connector *classes*, which by definition have no configuration.
+
+Until this was fixed, ``GET /connectors`` raised ``RuntimeError`` straight through the
+generic 500 handler on any image with the Databricks connector installed -- which is
+every real image, Databricks being the MVP's source. Every test of this route built its
+registry from ``FakeConnector``, whose ``capabilities()`` needs no ``setup()``, so
+nothing caught it. ``tests/api/test_connectors_real_registry.py`` is the regression
+test, and it drives the **real** entry-point registry rather than a fake, precisely
+because a fake is what hid this. A connector that cannot answer yet is reported as
+``available`` with ``manifest`` unset and ``manifest_unavailable_reason`` explaining
+why -- never as broken (it loaded fine) and never as a 500.
 
 **Broken connectors are listed, not hidden.** ``qlabs_catalog_sync.discovery``'s own
 module docstring is explicit about why a connector whose entry point failed to load, gate
@@ -101,7 +118,15 @@ class ConnectorInfo(BaseModel):
     name: str
     available: bool
     manifest: CapabilityManifestOut | None = None
-    """Set only when ``available`` -- the connector's live ``capabilities()``."""
+    """The connector's live ``capabilities()``. Set only when ``available`` -- and even
+    then, ``None`` when the connector cannot describe itself until it is configured, in
+    which case ``manifest_unavailable_reason`` says so. See the module docstring."""
+    manifest_unavailable_reason: str | None = None
+    """Set only when ``available`` and ``manifest`` is ``None``: why this connector
+    cannot report a capability manifest from an unconfigured class. Human-readable and
+    safe to render as-is. The console must show this rather than an empty manifest --
+    "this connector describes itself once configured" and "this connector supports
+    nothing" are opposite facts."""
     distribution: str | None = None
     """Set only when not ``available`` -- the installed distribution that claims this
     entry-point name (``qlabs_catalog_sync.discovery.BrokenConnector.distribution``)."""
@@ -152,6 +177,32 @@ def _capability_manifest_out(manifest: CapabilityManifestBase) -> CapabilityMani
     )
 
 
+def _describe_available(registry: ConnectorRegistry, name: str) -> ConnectorInfo:
+    """Describe one connector that discovery loaded successfully.
+
+    Asking an unconfigured connector class for its manifest is allowed to fail -- see the
+    module docstring. When it does, this reports the connector as ``available`` (it loaded;
+    an operator can register an endpoint against it) with no manifest and a reason, rather
+    than letting the exception reach the generic 500 handler and taking the whole listing
+    down with it. One connector that cannot describe itself must never hide every other
+    connector in the image.
+    """
+    try:
+        manifest = registry.get_connector(name)().capabilities()
+    except Exception as exc:  # noqa: BLE001 -- a connector may refuse for any reason
+        return ConnectorInfo(
+            name=name,
+            available=True,
+            manifest=None,
+            manifest_unavailable_reason=(
+                "this connector reports what it supports only once an endpoint using it "
+                "has been configured, because its capabilities depend on that "
+                f"configuration. Register an endpoint to see its manifest. ({exc})"
+            ),
+        )
+    return ConnectorInfo(name=name, available=True, manifest=_capability_manifest_out(manifest))
+
+
 def build_connectors_router(registry: ConnectorRegistry) -> APIRouter:
     """Build the ``/connectors`` router over an already-built ``registry``.
 
@@ -173,14 +224,7 @@ def build_connectors_router(registry: ConnectorRegistry) -> APIRouter:
         could not turn into one, with its reason. Installs, fetches and executes
         nothing beyond what process startup already did -- see the module docstring.
         """
-        available = [
-            ConnectorInfo(
-                name=name,
-                available=True,
-                manifest=_capability_manifest_out(registry.get_connector(name)().capabilities()),
-            )
-            for name in registry.names()
-        ]
+        available = [_describe_available(registry, name) for name in registry.names()]
         broken = [
             ConnectorInfo(
                 name=broken.name,

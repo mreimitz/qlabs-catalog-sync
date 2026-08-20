@@ -230,6 +230,17 @@
               }
             ]
           },
+          "manifest_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Unavailable Reason"
+          },
           "name": {
             "title": "Name",
             "type": "string"
