@@ -381,7 +381,7 @@
       ],
       "dod": "A clean checkout installs and builds the console with no registry configuration; the dev server runs; the token stylesheet and theme provider are wired as the scaffold emits them.",
       "verify": "pnpm -C console install --frozen-lockfile && pnpm -C console build",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T13.2",
