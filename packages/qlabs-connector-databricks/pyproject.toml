@@ -5,7 +5,7 @@ description = "QLabs Catalog Sync — Databricks read-only source connector."
 requires-python = ">=3.11"
 dependencies = [
     "qlabs-catalog-sync-sdk",
-    "databricks-sdk",
+    "databricks-sdk>=0.28,<1",
 ]
 
 [project.entry-points."qlabs_catalog_sync.connectors"]

@@ -5,12 +5,14 @@ description = "QLabs Catalog Sync engine — discovery, upstream sync loop, stat
 requires-python = ">=3.11"
 dependencies = [
     "qlabs-catalog-sync-sdk",
-    "sqlalchemy>=2",
-    "alembic",
-    "apscheduler<4",
-    "structlog",
-    "prometheus-client",
-    "pydantic-settings",
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.4,<3",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "apscheduler>=3.10,<4",
+    "structlog>=24.1,<27",
+    "prometheus-client>=0.20,<1",
+    "click>=8.1,<9",
 ]
 
 [project.scripts]

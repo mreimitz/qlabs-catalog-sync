@@ -422,6 +422,18 @@ wheels = [
 ]
 
 [[package]]
+name = "click"
+version = "8.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/e2/79c688af8b210d232694e31e59da9f6ec747bae31c3f5946e4e9b98860d5/click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76", size = 119243, upload-time = "2026-06-24T17:45:13.73Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1294,7 +1306,9 @@ source = { editable = "packages/qlabs-catalog-sync" }
 dependencies = [
     { name = "alembic" },
     { name = "apscheduler" },
+    { name = "click" },
     { name = "prometheus-client" },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "qlabs-catalog-sync-sdk" },
     { name = "sqlalchemy" },
@@ -1303,13 +1317,15 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic" },
-    { name = "apscheduler", specifier = "<4" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
+    { name = "alembic", specifier = ">=1.13,<2" },
+    { name = "apscheduler", specifier = ">=3.10,<4" },
+    { name = "click", specifier = ">=8.1,<9" },
+    { name = "prometheus-client", specifier = ">=0.20,<1" },
+    { name = "pydantic", specifier = ">=2.7,<3" },
+    { name = "pydantic-settings", specifier = ">=2.4,<3" },
     { name = "qlabs-catalog-sync-sdk", editable = "packages/qlabs-catalog-sync-sdk" },
-    { name = "sqlalchemy", specifier = ">=2" },
-    { name = "structlog" },
+    { name = "sqlalchemy", specifier = ">=2.0,<3" },
+    { name = "structlog", specifier = ">=24.1,<27" },
 ]
 
 [[package]]
@@ -1319,14 +1335,18 @@ source = { editable = "packages/qlabs-catalog-sync-sdk" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "structlog" },
     { name = "tenacity" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx" },
-    { name = "pydantic", specifier = ">=2" },
-    { name = "tenacity" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "pydantic", specifier = ">=2.7,<3" },
+    { name = "pydantic-settings", specifier = ">=2.4,<3" },
+    { name = "structlog", specifier = ">=24.1,<27" },
+    { name = "tenacity", specifier = ">=8.2,<10" },
 ]
 
 [[package]]
@@ -1382,7 +1402,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "databricks-sdk" },
+    { name = "databricks-sdk", specifier = ">=0.28,<1" },
     { name = "qlabs-catalog-sync-sdk", editable = "packages/qlabs-catalog-sync-sdk" },
 ]
 
@@ -1397,7 +1417,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx" },
+    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "qlabs-catalog-sync-sdk", editable = "packages/qlabs-catalog-sync-sdk" },
 ]
 

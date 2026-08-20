@@ -4,9 +4,11 @@ version = "0.0.0"
 description = "QLabs Catalog Sync SDK — the public contract, neutral model, shared helpers, and conformance kit."
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2",
-    "httpx",
-    "tenacity",
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.4,<3",
+    "httpx>=0.27,<1",
+    "tenacity>=8.2,<10",
+    "structlog>=24.1,<27",
 ]
 
 [build-system]
