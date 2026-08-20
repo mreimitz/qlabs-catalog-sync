@@ -520,7 +520,7 @@
       ],
       "dod": "Structured logs carry sync context and no secrets; /healthz and /metrics respond and expose the sync metrics.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/observability -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.8",
