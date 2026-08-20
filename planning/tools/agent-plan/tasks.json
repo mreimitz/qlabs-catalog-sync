@@ -986,7 +986,7 @@
       ],
       "dod": "Owners correlate on email as plain metadata; unmatched owners are reported; no code path treats a correlation as an authorization decision.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/party -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T7.4",
