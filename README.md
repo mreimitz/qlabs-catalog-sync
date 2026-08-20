@@ -179,11 +179,11 @@ placeholder connector classes and one CLI entry function.
 
 ### Status at a glance
 
-As of 2026-08-20 — 67 tasks on the board, 2 done.
+As of 2026-08-20 — 67 tasks on the board, 6 done.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
-| WP0 | Workspace, tooling, dependency pinning, CI | 2 / 6 | In progress |
+| WP0 | Workspace, tooling, dependency pinning, CI | 6 / 6 | **Done** |
 | WP1 | Connector SDK — model, contract, manifest, conformance kit | 0 / 10 | Not started |
 | WP2 | Engine — discovery, state store, sync loop, scheduler, CLI | 0 / 9 | Not started |
 | WP3 | Qlik write connector (sole writer) | 0 / 9 | Not started |
@@ -209,6 +209,12 @@ python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01
   entry-point group name `qlabs_catalog_sync.connectors`.
 - The build gate is green: `uv run ruff check packages`, `uv run mypy` (strict) and
   `uv run pytest -q` all pass from a clean checkout.
+- Every runtime library the build needs is pinned and locked, in the package that uses
+  it, so no later change has to touch packaging metadata.
+- CI runs that same gate on every push and pull request and builds a wheel per package,
+  uploading all six as build artifacts.
+- `CONTRIBUTING.md` documents the package boundaries, the dependency rule and the gate;
+  `docs/adr/` is the home for decisions taken during implementation.
 
 That is the complete list.
 
