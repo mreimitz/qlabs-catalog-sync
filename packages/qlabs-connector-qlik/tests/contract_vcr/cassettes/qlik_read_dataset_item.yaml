@@ -1,0 +1,32 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant -- see
+# qlik_setup_and_read_data_product.yaml's header comment for the conventions this
+# follows. No OAuth interaction here: this cassette backs a test that calls
+# qlabs_connector_qlik.read.read_dataset() directly against a plain HttpEndpoint with a
+# static bearer token (no auth provider attached).
+#
+# What this pins: the Items API single-item GET shape (RS-02
+# qlik-catalog-api-reference.md section 1.1), and specifically
+# resourceAttributes.secureQri -- the forward-looking durable dataset key read.py treats
+# as the primary native identity (falling back to the legacy resourceAttributes.qri,
+# then the item id, in that order). This is also the base cassette for
+# test_qlik_contract_vcr_altered_cassettes.py's "renamed field" proof: that test copies
+# this exact file, renames secureQri -> secureQRI in the response body, and shows the
+# connector silently falls back to the legacy qri instead of raising -- the "silent data
+# loss" this whole task exists to catch.
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://contract-vcr.eu.qlikcloud.example/api/v1/items/item-contract-vcr-orders-1
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-static-token"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"id": "item-contract-vcr-orders-1", "resourceId": "ds-orders-contract-1", "resourceType": "dataset", "resourceSubType": "qix-df", "name": "orders", "description": "One row per customer order.", "spaceId": "710b3f4c5d6e7f8a9b0c1d2e", "ownerId": "user-ada-001", "meta": {"tags": [{"id": "tag-1", "name": "finance"}, {"id": "tag-2", "name": "orders"}]}, "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-10T00:00:00Z", "resourceAttributes": {"secureQri": "qdf-secure:contract-vcr-tenant:710b3f4c5d6e7f8a9b0c1d2e:ds-orders-contract-1", "qri": "qdf:contract-vcr-tenant:710b3f4c5d6e7f8a9b0c1d2e:ds-orders-contract-1"}}'

@@ -1,0 +1,66 @@
+# Hand-authored, NOT captured from a live Databricks workspace. RM-01 is built without
+# live tenants (planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md,
+# D8). Every field/value/URL is typed by hand from
+# planning/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md
+# sections 1.2 (schema/table field shapes), 3.2 (OAuth M2M -- form-encoded body, HTTP
+# Basic client auth, scope=all-apis) and 3.6 (pagination).
+#
+# Exercised by test_databricks_contract_vcr_reads.py's
+# test_connector_setup_and_read_pins_oauth_and_schema_shape: a real Connector.setup()
+# (OAuth M2M token fetch) followed by Connector.read() on a DATA_PRODUCT ref -- the
+# connector's own two public entry points, called exactly as the engine would call them.
+# No SQL warehouse is configured for this cassette, so the tag read path (decision D6)
+# makes no HTTP call at all here -- see databricks_sql_tags_statement_execution.yaml for
+# that shape on its own.
+#
+# What this pins: the OAuth M2M token exchange (form-encoded body, HTTP Basic
+# Authorization header, scope=all-apis -- NOT the JSON body Qlik's OAuth2 uses, a real
+# difference between the two connectors this task's brief calls out), and a single-page
+# /schemas + /tables listing.
+version: 1
+interactions:
+  - request:
+      method: POST
+      uri: https://contract-vcr.cloud.databricks.com/oidc/v1/token
+      body: grant_type=client_credentials&scope=all-apis
+      headers:
+        content-type: ["application/x-www-form-urlencoded"]
+        authorization: ["Basic <redacted-in-a-real-recording>"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"access_token": "contract-vcr-databricks-token-1", "token_type": "Bearer", "expires_in": 3600}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.1/unity-catalog/schemas?catalog_name=prod&max_results=100
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-databricks-token-1"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"schemas": [{"catalog_name": "prod", "name": "sales", "full_name": "prod.sales", "comment": "Sales domain schema.", "owner": "data-eng@contract-vcr.example", "properties": {"team": "sales"}, "schema_id": "11112222-3333-4444-5555-666677778888", "metastore_id": "99999999-8888-7777-6666-555555555555", "created_at": 1700000000000, "created_by": "admin@contract-vcr.example", "updated_at": 1700000000000, "updated_by": "data-eng@contract-vcr.example"}]}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.1/unity-catalog/tables?catalog_name=prod&schema_name=sales&max_results=100
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-databricks-token-1"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"tables": [{"catalog_name": "prod", "schema_name": "sales", "name": "orders", "full_name": "prod.sales.orders", "table_type": "MANAGED", "columns": [{"name": "order_id", "type_name": "BIGINT", "nullable": false, "position": 0}], "comment": "One row per order.", "owner": "data-eng@contract-vcr.example", "properties": {}, "table_id": "22223333-4444-5555-6666-777788889999", "metastore_id": "99999999-8888-7777-6666-555555555555", "created_at": 1700000000000, "created_by": "admin@contract-vcr.example", "updated_at": 1700000000000, "updated_by": "data-eng@contract-vcr.example", "data_source_format": "DELTA"}, {"catalog_name": "prod", "schema_name": "sales", "name": "customers", "full_name": "prod.sales.customers", "table_type": "VIEW", "columns": [{"name": "customer_id", "type_name": "BIGINT", "nullable": false, "position": 0}], "comment": "Customer-facing view.", "owner": "data-eng@contract-vcr.example", "properties": {}, "table_id": "33334444-5555-6666-7777-888899990000", "metastore_id": "99999999-8888-7777-6666-555555555555", "created_at": 1700000000000, "created_by": "admin@contract-vcr.example", "updated_at": 1700000000000, "updated_by": "data-eng@contract-vcr.example"}]}'

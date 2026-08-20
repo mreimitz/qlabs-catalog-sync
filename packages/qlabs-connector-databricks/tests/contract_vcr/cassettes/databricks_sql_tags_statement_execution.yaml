@@ -1,0 +1,98 @@
+# Hand-authored, NOT captured from a live Databricks workspace -- see
+# databricks_setup_and_read_schema.yaml's header comment for the conventions this
+# follows. Every field/value/URL is typed by hand from
+# planning/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md
+# section 1.3 (UC tags have no REST read-back -- only INFORMATION_SCHEMA.SCHEMA_TAGS /
+# TABLE_TAGS over the Statement Execution API) and section 3.1 (the Statement Execution
+# API itself). No OAuth interaction: this cassette backs a test that calls
+# qlabs_connector_databricks.sql_tags.read_catalog_tags() directly against a plain
+# HttpEndpoint (decision D6's read half).
+#
+# What this pins, in call order (sql_tags.py's own module docstring, "Polling"): every
+# statement is submitted with wait_timeout: "0s" -- fully asynchronous, the POST
+# response never itself carries the result -- so the result can only be learned by
+# polling GET /api/2.0/sql/statements/{id} until status.state leaves
+# {PENDING, RUNNING}. The SCHEMA_TAGS statement below is deliberately given two polls
+# (PENDING -> RUNNING -> SUCCEEDED) to prove the loop genuinely polls more than once;
+# the TABLE_TAGS statement is given one, to keep the cassette a reasonable size while
+# still being truly asynchronous (submit never returns the terminal state itself).
+#
+# This is also the base cassette for
+# test_databricks_contract_vcr_altered_cassettes.py's "moved nesting level" proof: that
+# test copies this file, moves the terminal SCHEMA_TAGS poll's "state" out of its
+# "status" wrapper to the top level, and shows the connector raises TransientError
+# instead of silently treating the (now unrecognized) response as success.
+version: 1
+interactions:
+  - request:
+      method: POST
+      uri: https://contract-vcr.cloud.databricks.com/api/2.0/sql/statements
+      body: '{"warehouse_id": "contract-vcr-wh-1", "statement": "SELECT catalog_name, schema_name, tag_name, tag_value FROM `prod`.INFORMATION_SCHEMA.SCHEMA_TAGS WHERE schema_name IN (:s0) ORDER BY schema_name, tag_name", "wait_timeout": "0s", "format": "JSON_ARRAY", "disposition": "INLINE", "parameters": [{"name": "s0", "value": "sales", "type": "STRING"}]}'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"statement_id": "contract-vcr-stmt-schema-1", "status": {"state": "PENDING"}}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.0/sql/statements/contract-vcr-stmt-schema-1
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"statement_id": "contract-vcr-stmt-schema-1", "status": {"state": "RUNNING"}}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.0/sql/statements/contract-vcr-stmt-schema-1
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"statement_id": "contract-vcr-stmt-schema-1", "status": {"state": "SUCCEEDED"}, "result": {"data_array": [["prod", "sales", "team", "data-eng"], ["prod", "sales", "tier", "gold"]]}}'
+  - request:
+      method: POST
+      uri: https://contract-vcr.cloud.databricks.com/api/2.0/sql/statements
+      body: '{"warehouse_id": "contract-vcr-wh-1", "statement": "SELECT catalog_name, schema_name, table_name, tag_name, tag_value FROM `prod`.INFORMATION_SCHEMA.TABLE_TAGS WHERE schema_name IN (:s0) ORDER BY schema_name, table_name, tag_name", "wait_timeout": "0s", "format": "JSON_ARRAY", "disposition": "INLINE", "parameters": [{"name": "s0", "value": "sales", "type": "STRING"}]}'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"statement_id": "contract-vcr-stmt-table-1", "status": {"state": "PENDING"}}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.0/sql/statements/contract-vcr-stmt-table-1
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"statement_id": "contract-vcr-stmt-table-1", "status": {"state": "SUCCEEDED"}, "result": {"data_array": [["prod", "sales", "orders", "pii", "false"]]}}'

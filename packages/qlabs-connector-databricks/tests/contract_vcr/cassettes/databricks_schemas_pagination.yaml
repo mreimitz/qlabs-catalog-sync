@@ -1,0 +1,45 @@
+# Hand-authored, NOT captured from a live Databricks workspace -- see
+# databricks_setup_and_read_schema.yaml's header comment for the conventions this
+# follows. No OAuth interaction: this cassette backs a test that calls
+# qlabs_connector_databricks.read.iter_matching_schemas() directly against a plain
+# HttpEndpoint, exactly like tests/read/*.py's own respx-based tests do.
+#
+# What this pins: defensive offset/token pagination over GET
+# /api/2.1/unity-catalog/schemas (RS-01 section 3.6) -- page 1 carries
+# "next_page_token" and page 2 does not, which is the only signal
+# HttpEndpoint.paginate_offset uses to know when to stop. This is also the base
+# cassette for test_databricks_contract_vcr_altered_cassettes.py's "renamed field"
+# proof: that test copies this exact file, renames next_page_token -> nextPageToken on
+# page 1's response, and shows the connector silently stops after page 1 instead of
+# raising -- a listing quietly truncated is exactly the "silent data loss" this task
+# exists to catch.
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.1/unity-catalog/schemas?catalog_name=prod&max_results=2
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"schemas": [{"catalog_name": "prod", "name": "sales", "full_name": "prod.sales", "comment": "Sales schema.", "owner": "data-eng@contract-vcr.example", "properties": {}, "schema_id": "aaaa1111-bbbb-2222-cccc-333344445555", "metastore_id": "99999999-8888-7777-6666-555555555555", "created_at": 1700000000000, "created_by": "admin@contract-vcr.example", "updated_at": 1700000000000, "updated_by": "data-eng@contract-vcr.example"}, {"catalog_name": "prod", "name": "marketing", "full_name": "prod.marketing", "comment": "Marketing schema.", "owner": "data-eng@contract-vcr.example", "properties": {}, "schema_id": "bbbb2222-cccc-3333-dddd-444455556666", "metastore_id": "99999999-8888-7777-6666-555555555555", "created_at": 1700000000000, "created_by": "admin@contract-vcr.example", "updated_at": 1700000000000, "updated_by": "data-eng@contract-vcr.example"}], "next_page_token": "contract-vcr-schemas-page-2"}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.cloud.databricks.com/api/2.1/unity-catalog/schemas?catalog_name=prod&max_results=2&page_token=contract-vcr-schemas-page-2
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"schemas": [{"catalog_name": "prod", "name": "finance", "full_name": "prod.finance", "comment": "Finance schema.", "owner": "data-eng@contract-vcr.example", "properties": {}, "schema_id": "cccc3333-dddd-4444-eeee-555566667777", "metastore_id": "99999999-8888-7777-6666-555555555555", "created_at": 1700000000000, "created_by": "admin@contract-vcr.example", "updated_at": 1700000000000, "updated_by": "data-eng@contract-vcr.example"}]}'
