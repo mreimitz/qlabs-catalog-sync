@@ -1008,7 +1008,7 @@
       ],
       "dod": "Neutral status maps to the correct Qlik lifecycle action; with activation opt-in off, no activate call is ever issued.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/status -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T8.1",
