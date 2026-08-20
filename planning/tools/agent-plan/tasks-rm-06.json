@@ -401,7 +401,7 @@
       ],
       "dod": "Sign-in, sign-out and session expiry all behave correctly against the real API; every mutating call carries its CSRF token; the theme switcher persists a choice across reloads.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T13.3",
