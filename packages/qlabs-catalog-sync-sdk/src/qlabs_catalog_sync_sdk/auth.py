@@ -38,11 +38,9 @@ worktree, so this module deliberately does not import either.
   A plain ``httpx.AsyncClient`` satisfies it as-is, so callers do not need any
   adapter; once ``HttpEndpoint`` lands, anything it exposes with a compatible
   ``post`` also satisfies the protocol without a change here.
-* Instead of ``exceptions.AuthError``, auth failures raise the local
-  :class:`AuthError` defined in this module. It is deliberately a plain,
-  narrowly-scoped exception so that once T1.7 lands, ``AuthError`` here can
-  become an alias for (or a subclass of) ``exceptions.AuthError`` without
-  touching any call site that already does ``except AuthError``.
+* Auth failures raise the SDK's typed :class:`~qlabs_catalog_sync_sdk.exceptions.AuthError`,
+  re-exported from this module for convenience. It is not retryable: the engine
+  quarantines the endpoint rather than retrying with the same bad credentials.
 
 Tokens are held in memory only: never written to disk, never logged, and never
 included in a provider's or a cached token's ``repr()``/``str()``.
@@ -60,6 +58,8 @@ from typing import Any, Literal, Protocol
 import httpx
 import jwt
 import structlog
+
+from qlabs_catalog_sync_sdk.exceptions import AuthError
 
 __all__ = [
     "DEFAULT_REFRESH_MARGIN",
@@ -80,21 +80,6 @@ _log = structlog.get_logger(__name__)
 #: comfortably outrun clock skew and one retried HTTP round trip without
 #: refreshing so eagerly that we double request volume.
 DEFAULT_REFRESH_MARGIN = timedelta(seconds=60)
-
-
-class AuthError(Exception):
-    """Raised when acquiring or refreshing an auth token fails.
-
-    Local stand-in for the SDK's typed ``exceptions.AuthError`` (T1.7), which
-    does not exist yet in this worktree. Every failure path in this module
-    raises exactly this name so that once T1.7 lands, reconciling the two
-    (alias or subclass) is a one-line change here rather than a rewrite of
-    every ``except AuthError`` call site.
-
-    Messages here must never include a secret (API key, client secret, private
-    key, or a fetched token value) — only status codes, endpoint kinds, and
-    other non-sensitive context.
-    """
 
 
 class Clock(Protocol):
