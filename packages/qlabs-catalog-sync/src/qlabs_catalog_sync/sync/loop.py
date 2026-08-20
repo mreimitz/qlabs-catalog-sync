@@ -79,6 +79,39 @@ unchanged checksum short-circuits before any write).
 previous page proposed, while the *committable* position only ever moves past pages that
 were fully terminal — so the watermark can never run ahead of unprocessed work.
 
+Selection fails closed
+----------------------
+
+WP11 / T11.3. Scope is decided by :mod:`qlabs_catalog_sync.selection`'s evaluator, against
+one :class:`~qlabs_catalog_sync.selection.rules.SelectionRuleSet` compiled once when the
+loop is constructed (:func:`rule_set_for_pair`, or supplied by the caller). Decision C4:
+the console's preview and this cycle must reach the same answer for the same rule set, and
+they do so by being the same function, not by two implementations that agree today.
+
+That replaced a filter which, when it could not read an object's name, **included** it.
+The reasoning was that an object with no dotted path is "not something these patterns can
+describe", so leaving it to the pair's other scoping was the least presumptuous answer.
+The evaluator's answer is the opposite one — no name means no glob rule can be evaluated,
+every one of them is reported undetermined, and the default decision (exclude) applies —
+and that is a real, live behaviour change for any source whose keys are opaque:
+
+    **An object whose qualified name cannot be read is now filtered out, where before it
+    was synced.**
+
+This is deliberate, and it is the safer direction. Failing *open* is exactly what caused
+the defect this design exists for: Databricks keys schemas on a ``schema_id`` UUID and
+carries the dotted name in ``secondary_keys["full_name"]``, a filter matching ``native_key``
+alone found no dot in any change, and a pair scoped to one catalog silently synced every
+catalog in the metastore. v1 never deletes in Qlik (D4), so an over-broad run is not
+undoable, whereas a run that synced nothing is noticed immediately and costs nothing to
+repeat. :data:`~qlabs_catalog_sync.selection.rules.DEFAULT_DECISION` records the same
+reasoning at the other end.
+
+The cost is that an unreadable name now looks, from the outside, like an object somebody
+excluded on purpose. It must not, so :meth:`SyncLoop._refusal` says which of the two
+happened in the record's ``detail`` before it quotes the evaluator — see
+:data:`_NO_READABLE_NAME_DETAIL`.
+
 Decisions this loop enforces
 ----------------------------
 
@@ -92,8 +125,10 @@ Decisions this loop enforces
   Activation makes a product discoverable tenant-wide, so it never happens as a side effect
   of syncing. This is applied unconditionally, *before* any injected policy, so a policy
   cannot weaken it.
-* **D1 — the pair's selector decides scope.** A candidate whose native key is a Unity
-  Catalog path outside the pair's ``catalog.schema`` patterns is filtered out and reported.
+* **C3/C4/C5 — the selection rule set decides scope, through the one shared evaluator.** A
+  candidate the rule set does not include is filtered out and reported, with the deciding
+  rule named. See "Selection fails closed" below; RM-01's D1 glob list is now the
+  degenerate case of that rule set, not a second code path.
 * **Identity is never invented.** A confirmed binding at the target is the only licence to
   write to an existing object. An unconfirmed binding is not. A missing one is not: with
   ``create_missing`` off (the default) the record is skipped and reported, and with it on
@@ -182,6 +217,18 @@ from qlabs_catalog_sync.observability import (
     bind_sync_context,
     get_logger,
 )
+from qlabs_catalog_sync.selection import (
+    UNKNOWN,
+    RuleScope,
+    SelectionCandidate,
+    SelectionRuleSet,
+    evaluate,
+    object_rules_from_catalog_schema_patterns,
+)
+from qlabs_catalog_sync.selection.source_tree import (
+    candidate_for_change,
+    select_dataset_change,
+)
 from qlabs_catalog_sync.state.store import StateStore, UnitOfWork
 from qlabs_catalog_sync_sdk.config import MetricsHandle
 from qlabs_catalog_sync_sdk.contract import (
@@ -223,6 +270,7 @@ __all__ = [
     "WithheldField",
     "WritePolicy",
     "WriteReview",
+    "rule_set_for_pair",
 ]
 
 _LOG = get_logger("qlabs.catalog_sync.sync.loop")
@@ -236,6 +284,90 @@ ACTIVATION_FIELD: Final[str] = "status"
 ACTIVATION_WITHHELD_REASON: Final[str] = "activation_not_opted_in"
 
 _T = TypeVar("_T")
+
+
+# ------------------------------------------------------------------------------------------
+# Selection (C3, C4, C5) — which candidates this pair is even asked about
+# ------------------------------------------------------------------------------------------
+
+#: Which selection scope decides each neutral entity type (decision C5). Object scope
+#: decides which ``catalog.schema`` become data products; dataset scope decides which
+#: tables and views inside a selected schema become that product's members. An entity type
+#: absent from this map has **no** scope a rule can be written in — see
+#: :data:`_NO_SELECTION_SCOPE_DETAIL` and :meth:`SyncLoop._not_selected_reason`.
+_SCOPE_BY_ENTITY_TYPE: Final[Mapping[EntityType, RuleScope]] = {
+    EntityType.DATA_PRODUCT: RuleScope.OBJECT,
+    EntityType.DATASET: RuleScope.DATASET,
+}
+
+#: The dotted shape a candidate of each scope is named by, for the operator-facing detail.
+_NAME_SHAPE_BY_SCOPE: Final[Mapping[RuleScope, str]] = {
+    RuleScope.OBJECT: "catalog.schema",
+    RuleScope.DATASET: "catalog.schema.table",
+}
+
+#: Detail recorded when the *name* is what excluded an object, not a rule anybody wrote.
+#:
+#: This is the operator-facing half of the deliberate behaviour change described in the
+#: module docstring's "Selection fails closed" section: an object whose qualified name
+#: cannot be read is excluded, where the superseded D1 filter included it. Somebody
+#: watching objects disappear from a sync has to be able to tell that apart from a rule
+#: they wrote, so the detail says which it was before it quotes the evaluator.
+_NO_READABLE_NAME_DETAIL: Final[str] = (
+    "excluded because this object has no readable {shape} name: the source reported no "
+    "secondary_keys['full_name'] and its native key is not a dotted {shape}, so no "
+    "selection rule could be evaluated against it. The name is what excluded it, not a "
+    "rule — {explanation}"
+)
+
+#: Detail recorded for an entity type selection has no rule scope for (decision C5).
+_NO_SELECTION_SCOPE_DETAIL: Final[str] = (
+    "excluded because selection has no rule scope for {entity_type!r}: rules describe "
+    "schemas (catalog.schema) and the datasets inside them (catalog.schema.table), and "
+    "nothing else, so no rule can select a {entity_type!r}. Remove it from this pair's "
+    "entity_types."
+)
+
+
+class _Explains(Protocol):
+    """Anything the selection engine hands back that can say why, in one line.
+
+    Both :class:`~qlabs_catalog_sync.selection.evaluator.SelectionResult` (object scope) and
+    :class:`~qlabs_catalog_sync.selection.source_tree.DatasetSelection` (the C5 composition)
+    satisfy it. Structural rather than a union so that
+    :meth:`SyncLoop._refusal` needs the explanation *only* when it is actually recording a
+    refusal — building the sentence for every included candidate would be per-change work
+    nobody reads.
+    """
+
+    def explain(self) -> str:
+        """A one-line, human-readable reason for this decision."""
+        ...
+
+
+def rule_set_for_pair(pair: SyncPairConfig) -> SelectionRuleSet:
+    """The rule set a pair configured the RM-01 way (decision D1) selects through.
+
+    Decision C3 defines D1's flat ``catalog_schema_patterns`` list as the *degenerate case*
+    of an ordered rule set — one object-scope include rule per pattern — so this is a
+    translation, not a reinterpretation:
+    :func:`~qlabs_catalog_sync.selection.rules.object_rules_from_catalog_schema_patterns`
+    is the single place that translation is written, shared with T10.4's bootstrap import,
+    and ``tests/selection/test_evaluator.py`` pins that it decides exactly what
+    :meth:`~qlabs_catalog_sync.config.SyncPairConfig.matches` decides.
+
+    **This is the seam.** The configuration store (T10.1) already holds ordered rules and
+    overrides per pair, and :meth:`~qlabs_catalog_sync.selection.rules.SelectionRuleSet
+    .from_rows` already builds a rule set from them; wiring the loop to *load* them is the
+    API and scheduler work, not this function's. When that lands, the change is that the
+    caller constructing a :class:`SyncLoop` passes ``selection_rules=...`` built from the
+    database instead of leaving it to default here. Nothing inside the loop changes,
+    because the loop only ever sees a :class:`~qlabs_catalog_sync.selection.rules
+    .SelectionRuleSet`.
+    """
+    return SelectionRuleSet.build(
+        object_rules_from_catalog_schema_patterns(pair.catalog_schema_patterns)
+    )
 
 
 def _utc_now() -> datetime:
@@ -281,7 +413,9 @@ class RecordOutcome(StrEnum):
     target (decision D4)."""
 
     FILTERED = "filtered"
-    """Outside this pair's ``catalog.schema`` selector, so it is not this pair's business."""
+    """Not included by this pair's selection rule set, so it is not this pair's business.
+    :attr:`RecordReport.detail` names the rule that decided — or says the object's own name
+    could not be read, which is the other way this happens."""
 
     FAILED = "failed"
     """The cycle could not finish this record. A failed record fails the whole cycle."""
@@ -321,7 +455,13 @@ class SkipReason(StrEnum):
     nothing to diff. A connector bug, surfaced rather than read as "in sync"."""
 
     NOT_SELECTED = "not_selected"
-    """Filtered out by the pair's ``catalog.schema`` patterns (decision D1)."""
+    """Not included by the pair's selection rule set (decision C3, which supersedes D1's
+    flat ``catalog.schema`` glob list and keeps it as the degenerate case).
+
+    Deliberately one code, not three: T2.8's dry run and T8.1's pilot assert on this string,
+    and an object that is out of scope is out of scope whether a rule excluded it, no rule
+    included it, or its name could not be read at all. Which of those it was is in
+    :attr:`RecordReport.detail`, in words, where it does not become a contract."""
 
 
 #: Skip reasons that leave no work outstanding, and therefore do not hold the watermark
@@ -749,9 +889,15 @@ class SyncLoop:
     does exactly that). The loop holds no per-cycle state of its own: everything durable
     lives in the state store, and everything ephemeral lives in the cycle's report.
 
-    :param pair: The pair being synced. Supplies the ``catalog.schema`` selector (D1), the
-        target space, the activation opt-in (D7), and the pair name every log line, metric
-        and watermark row is keyed by.
+    :param pair: The pair being synced. Supplies the entity types, the target space, the
+        activation opt-in (D7), the pair name every log line, metric and watermark row is
+        keyed by, and — unless ``selection_rules`` is given — the ``catalog.schema``
+        patterns the default rule set is derived from (D1, via :func:`rule_set_for_pair`).
+    :param selection_rules: The ordered selection rule set this pair syncs through (C3),
+        **compiled once here and reused for every change of every cycle**. Omitted, it is
+        derived from the pair's ``catalog_schema_patterns`` by :func:`rule_set_for_pair`.
+        This is the seam for loading rules from the configuration store: that is a
+        different argument, not different logic. See :meth:`_not_selected_reason`.
     :param source: The source connector. Only ever read from.
     :param target: The Qlik connector — the sole write target in v1.
     :param store: The state store. The watermark, the last-known target envelopes, the
@@ -790,6 +936,7 @@ class SyncLoop:
         target: Connector,
         store: StateStore,
         resolver: IdentityResolver,
+        selection_rules: SelectionRuleSet | None = None,
         metrics: MetricsHandle | None = None,
         health: HealthRegistry | None = None,
         write_policy: WritePolicy | None = None,
@@ -813,6 +960,11 @@ class SyncLoop:
         self._target = target
         self._store = store
         self._resolver = resolver
+        # Compiled once, here, and never again: SelectionRuleSet.build compiles every
+        # pattern into a matcher, and a cycle may process thousands of changes.
+        self._selection_rules = (
+            selection_rules if selection_rules is not None else rule_set_for_pair(pair)
+        )
         self._metrics = metrics
         self._health = health
         self._write_policy = write_policy
@@ -834,6 +986,11 @@ class SyncLoop:
     def pair(self) -> SyncPairConfig:
         """The pair this loop syncs."""
         return self._pair
+
+    @property
+    def selection_rules(self) -> SelectionRuleSet:
+        """The compiled rule set every candidate of every cycle is decided against (C3)."""
+        return self._selection_rules
 
     @property
     def source_endpoint(self) -> str:
@@ -1028,17 +1185,15 @@ class SyncLoop:
         """Plan (and, unless this is a dry run, apply) one candidate change."""
         native_key = change.ref.native_key
 
-        if not self._selects(change):
+        not_selected = self._not_selected_reason(change, entity_type)
+        if not_selected is not None:
             return RecordReport(
                 native_key=native_key,
                 entity_type=entity_type,
                 outcome=RecordOutcome.FILTERED,
                 display_name=change.display_name,
                 reason=SkipReason.NOT_SELECTED,
-                detail=(
-                    "outside this pair's catalog.schema selector "
-                    f"({', '.join(self._pair.catalog_schema_patterns)})"
-                ),
+                detail=not_selected,
             )
 
         known_id = await self._source_neutral_id(change, mutations)
@@ -1925,33 +2080,73 @@ class SyncLoop:
             return False
         return any(manifest.is_writable(entity_type, field) for field in declared.fields)
 
-    def _selects(self, change: ChangeRef) -> bool:
-        """Decision D1: is this object inside the pair's ``catalog.schema`` selector?
+    def _not_selected_reason(self, change: ChangeRef, entity_type: EntityType) -> str | None:
+        """Why this pair does not sync ``change``, or ``None`` when it does (C3, C4, C5).
 
-        The selector speaks Unity Catalog, so it is applied to whichever key is shaped like
-        one: ``catalog.schema`` for a schema-as-data-product, ``catalog.schema.table`` for a
-        dataset.
+        Every scope decision goes through
+        :func:`~qlabs_catalog_sync.selection.evaluator.evaluate` and this loop's one
+        compiled :attr:`selection_rules`. Nothing about matching, ordering, overrides or
+        the ``full_name``-versus-``native_key`` question is decided here, deliberately:
+        decision C4 says the console's preview and this cycle must reach the same answer
+        for the same rule set, and the only way to guarantee that is to have one
+        implementation. ``tests/selection/test_preview_sync_agreement.py`` certifies it.
 
-        ``native_key`` is **not** that key for the MVP's only source. Databricks keys on the
-        stable ``schema_id``/``table_id`` — a UUID, because names are renameable and a
-        rename must not break identity — and carries the dotted name in
-        ``secondary_keys["full_name"]``. Matching ``native_key`` alone therefore found no dot
-        in any Databricks change and selected everything, so a pair scoped to one catalog
-        silently synced every catalog in the metastore. The dotted name is preferred here and
-        ``native_key`` is the fallback, so a connector that does key on the qualified name
-        still works.
+        Which scope a change belongs to comes from its entity type
+        (:data:`_SCOPE_BY_ENTITY_TYPE`, decision C5), which the pair's own ``entity_types``
+        already gates:
 
-        A key with no dotted path anywhere — a Qlik id, an opaque handle — is not something
-        these patterns can describe, and inventing a match or a refusal for it would be worse
-        than leaving it to the pair's other scoping (its endpoints and entity types).
+        * ``DATA_PRODUCT`` is object scope — one ``catalog.schema``, evaluated directly;
+        * ``DATASET`` is dataset scope, and goes through
+          :func:`~qlabs_catalog_sync.selection.source_tree.select_dataset_change`, which
+          composes the parent schema's decision with the dataset's own. That composition is
+          C5's, it is shared with the preview's tree walk, and it is *not* re-derived here;
+        * any other entity type has no scope a rule could be written in at all, so no rule
+          can select it and it is excluded with :data:`_NO_SELECTION_SCOPE_DETAIL` saying
+          exactly that. It is neither quietly included (which would sync objects no rule
+          describes) nor reported as though a rule had refused it.
+
+        Tags and owners are always :data:`~qlabs_catalog_sync.selection.rules.UNKNOWN` from
+        here. Resolving them costs one ``read()`` per candidate, and issuing reads to decide
+        a *filter* would turn scoping into I/O over the whole source; a tag or owner rule
+        this loop cannot evaluate is reported undetermined in the record's detail, honestly,
+        rather than guessed at.
         """
-        for candidate in (change.ref.secondary_keys.get("full_name"), change.ref.native_key):
-            if not candidate:
-                continue
-            parts = candidate.split(".")
-            if len(parts) >= 2:
-                return self._pair.matches(parts[0], parts[1])
-        return True
+        scope = _SCOPE_BY_ENTITY_TYPE.get(entity_type)
+        if scope is None:
+            return _NO_SELECTION_SCOPE_DETAIL.format(entity_type=entity_type.value)
+
+        if scope is RuleScope.DATASET:
+            selection = select_dataset_change(self._selection_rules, change)
+            return self._refusal(selection.included, selection.dataset.candidate, selection)
+
+        candidate = candidate_for_change(change, scope=RuleScope.OBJECT)
+        result = evaluate(self._selection_rules, candidate)
+        return self._refusal(result.included, candidate, result)
+
+    @staticmethod
+    def _refusal(
+        included: bool, candidate: SelectionCandidate, explained: _Explains
+    ) -> str | None:
+        """``None`` when included; otherwise the operator-facing reason it was not.
+
+        The explanation always comes from the evaluator's own
+        :meth:`~qlabs_catalog_sync.selection.evaluator.SelectionResult.explain`, which names
+        the deciding rule (or override, or the default) and lists every rule that could not
+        be evaluated — so a record filtered while a tag rule was undetermined says so.
+
+        The one thing it adds is the distinction the module docstring's "Selection fails
+        closed" section exists for: an object with no readable qualified name is excluded by
+        its *name*, not by any rule, and an operator watching objects vanish from a sync
+        needs to be told which of the two happened before they go looking for the wrong bug.
+        """
+        if included:
+            return None
+        if candidate.qualified_name is UNKNOWN:
+            return _NO_READABLE_NAME_DETAIL.format(
+                shape=_NAME_SHAPE_BY_SCOPE[candidate.scope],
+                explanation=explained.explain(),
+            )
+        return explained.explain()
 
     async def _open_orphan_ids(self, entity_type: EntityType) -> set[uuid.UUID]:
         """Neutral ids currently recorded missing at the source, so a reappearance resolves."""

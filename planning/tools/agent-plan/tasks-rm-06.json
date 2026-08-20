@@ -149,7 +149,7 @@
       ],
       "dod": "A cycle syncs exactly the objects the evaluator includes; the preview API and the cycle agree object for object on the same rule set; transactional and idempotency guarantees from T2.4 still hold; the full engine suite passes.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T11.4",
@@ -172,7 +172,7 @@
       ],
       "dod": "Every cycle produces exactly one run row; a crashed cycle leaves the run marked failed rather than open forever; counts reconcile with what the loop actually wrote; unresolved references and orphans are queryable per run.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/runs",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.1",
@@ -195,7 +195,7 @@
       ],
       "dod": "/healthz and /metrics behave exactly as before; an unknown API path returns the error model, an unknown non-API path returns the SPA shell; the app boots with no static assets present.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.2",
