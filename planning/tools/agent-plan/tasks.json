@@ -730,7 +730,7 @@
       ],
       "dod": "activate/deactivate/move/delete execute against the documented endpoints and are covered by tests; each destructive call requires an explicit opt-in flag that is off by default.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/lifecycle -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.8",
