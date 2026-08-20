@@ -86,13 +86,25 @@ DEFAULT_REFRESH_MARGIN = timedelta(seconds=60)
 class TokenTransport(Protocol):
     """Structural seam for the HTTP client used to call a token endpoint.
 
-    Deliberately duck-typed and minimal (one method, ``**kwargs``) rather than
-    pinned to ``http.py``'s not-yet-built ``HttpEndpoint``. A plain
-    ``httpx.AsyncClient`` already satisfies this protocol, which is what tests
-    and callers pass today.
+    Deliberately minimal and duck-typed rather than pinned to ``http.py``'s
+    :class:`~qlabs_catalog_sync_sdk.http.HttpEndpoint`, so a caller can pass a plain
+    ``httpx.AsyncClient`` — which satisfies this protocol, **including under strict
+    mypy**. That last part is why the keyword arguments are spelled out instead of
+    collapsed into ``**kwargs``: ``httpx.AsyncClient.post`` declares named keywords, and
+    a protocol promising arbitrary ``**kwargs`` is a wider contract than that method
+    honors, so mypy rejects the assignment. Only the three keywords this module actually
+    sends are declared; ``auth`` is typed ``Any`` because ``httpx``'s own overload does not
+    admit ``None``, and narrowing it here would put the protocol back out of reach.
     """
 
-    async def post(self, url: str, **kwargs: Any) -> httpx.Response: ...
+    async def post(
+        self,
+        url: str,
+        *,
+        json: Any = None,
+        data: Mapping[str, str] | None = None,
+        auth: Any = None,
+    ) -> httpx.Response: ...
 
 
 class TokenRequestEncoding(StrEnum):
@@ -194,6 +206,16 @@ class AuthProvider(ABC):
         token = await self._token()
         value = f"{self._scheme} {token}" if self._scheme else token
         return {self._header_name: value}
+
+    async def get_headers(self) -> Mapping[str, str]:
+        """Alias of :meth:`headers` under the name
+        :class:`~qlabs_catalog_sync_sdk.http.AuthHeaderProvider` declares.
+
+        ``HttpEndpoint`` takes any object exposing ``get_headers()``, so every provider
+        here can be handed straight to it — ``HttpEndpoint(base_url, auth=provider)`` —
+        with no per-connector adapter. Both names are public and return the same thing.
+        """
+        return await self.headers()
 
     async def _token(self) -> str:
         async with self._lock:

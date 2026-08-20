@@ -8,25 +8,6 @@ POST ``<base_url>/oauth/token`` — and wires it into an SDK
 its own: caching, refresh-before-expiry and single-flight concurrency are entirely the
 SDK provider's job.
 
-Two SDK modules were built independently and their auth-injection shapes do not quite
-match: ``auth.py``'s :class:`~qlabs_catalog_sync_sdk.auth.AuthProvider` exposes
-``async def headers() -> dict[str, str]``, while ``http.py``'s ``AuthHeaderProvider``
-protocol — what ``HttpEndpoint(auth=...)`` structurally expects — requires
-``async def get_headers() -> Mapping[str, str]``. :class:`_AuthProviderHeaders` below is
-a one-method adapter that bridges the naming mismatch; it forwards to the provider and
-adds nothing of its own.
-
-A second, narrower mismatch exists between the SDK's ``TokenTransport`` protocol
-(``async def post(self, url: str, **kwargs: Any) -> httpx.Response``) and
-``httpx.AsyncClient.post``'s actual typed signature, which spells out its keyword
-arguments (``content``, ``json``, ``params``, ...) rather than collecting them through a
-literal ``**kwargs``. A plain ``httpx.AsyncClient`` satisfies ``TokenTransport``
-structurally at runtime (every keyword the provider ever passes — ``json``, ``data``,
-``auth`` — is one httpx already supports) but strict mypy's protocol check does not see
-it that way, since it cannot prove an arbitrary keyword name is accepted. :class:`_TokenPost`
-below is a one-method, literally-``**kwargs``-typed wrapper that closes that gap without
-touching the SDK.
-
 Also provides :func:`classify_response_error` / :func:`classify_transport_error`, which
 turn the raw ``httpx`` errors ``HttpEndpoint`` raises (its own docstring: T1.7's typed
 exceptions "can be layered on top later by catching ``httpx.HTTPStatusError`` ... at the
@@ -39,9 +20,6 @@ tasks (T3.3-T3.7) are free to reuse the same classification at their own call si
 """
 
 from __future__ import annotations
-
-from collections.abc import Mapping
-from typing import Any
 
 import httpx
 
@@ -60,40 +38,6 @@ __all__ = [
     "classify_response_error",
     "classify_transport_error",
 ]
-
-
-class _AuthProviderHeaders:
-    """Adapts an SDK ``AuthProvider`` (``.headers()``) to ``http.py``'s
-    ``AuthHeaderProvider`` structural protocol (``.get_headers()``).
-
-    Pure forwarding, no caching or retry logic of its own — all of that already lives in
-    the wrapped provider.
-    """
-
-    def __init__(self, provider: OAuth2ClientCredentialsProvider) -> None:
-        self._provider = provider
-
-    async def get_headers(self) -> Mapping[str, str]:
-        return await self._provider.headers()
-
-    def __repr__(self) -> str:
-        # Never include the provider's own repr verbatim beyond what it already redacts
-        # (token_url, client_id, encoding — never the secret); see AuthProvider.__repr__.
-        return f"{type(self).__name__}({self._provider!r})"
-
-    __str__ = __repr__
-
-
-class _TokenPost:
-    """Adapts ``httpx.AsyncClient`` to the SDK's ``TokenTransport`` protocol exactly
-    (``post(url: str, **kwargs: Any) -> httpx.Response``) — see the module docstring.
-    Pure forwarding; adds no behavior of its own."""
-
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._client = client
-
-    async def post(self, url: str, **kwargs: Any) -> httpx.Response:
-        return await self._client.post(url, **kwargs)
 
 
 def build_http_endpoint(
@@ -132,14 +76,14 @@ def build_http_endpoint(
         token_url=config.token_url,
         client_id=config.client_id,
         client_secret=config.client_secret.get_secret_value(),
-        transport=_TokenPost(token_client),
+        transport=token_client,
         scope=config.scope,
         encoding=TokenRequestEncoding.JSON,
         clock=clock,
     )
     http = HttpEndpoint(
         config.base_url,
-        auth=_AuthProviderHeaders(oauth_provider),
+        auth=oauth_provider,
         **http_kwargs,  # type: ignore[arg-type]
     )
     return http, oauth_provider, token_client
