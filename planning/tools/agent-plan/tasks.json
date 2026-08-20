@@ -803,7 +803,7 @@
       ],
       "dod": "Manifest declares read-only entities, full_name+object_id identity, glossary na, concurrency none, and tags conditional on a configured SQL warehouse.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/manifest -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.3",
