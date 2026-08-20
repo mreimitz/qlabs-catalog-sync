@@ -296,7 +296,7 @@
       ],
       "dod": "A dry-run over a configured pair returns the plan and writes nothing; run-now on a pair already running is refused with a clear code; a paused pair does not fire on its cadence and resumes cleanly.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_run_control.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T12.7",
@@ -356,7 +356,7 @@
       ],
       "dod": "A pair created through the API starts running without a restart; deleting or pausing one stops it; a reconcile during an in-flight cycle neither cancels it nor changes its configuration mid-run; no pair ever runs twice concurrently.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_reconcile.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T13.1",
