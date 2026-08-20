@@ -19,7 +19,7 @@ Three things live here:
   space, which entity types to sync, the poll cadence, the manual-edit policy, and
   the activation opt-in flag (decision D7, off by default).
 * :class:`EngineConfig` — the ``pydantic-settings`` root: ``endpoints`` plus
-  ``pairs``, loadable from a JSON file and/or environment variables, with
+  ``pairs``, loadable from a YAML (or JSON) file and/or environment variables, with
   cross-referential validation (a pair's ``source``/``target`` must name a real
   endpoint) and the v1 direction guardrails (Qlik is the only write target and can
   never be a source) enforced at load time.
@@ -63,7 +63,6 @@ path.
 from __future__ import annotations
 
 import fnmatch
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -71,6 +70,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+import yaml
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -445,10 +445,13 @@ class EngineConfig(BaseSettings):
 
     @classmethod
     def load(cls, config_file: str | Path | None = None, **overrides: Any) -> EngineConfig:
-        """Build a validated :class:`EngineConfig` from a JSON file, env, and overrides.
+        """Build a validated :class:`EngineConfig` from a config file, env, and overrides.
 
-        ``config_file``, when given, is a JSON file whose top-level keys are this
-        model's fields (``endpoints``, ``pairs``); its values are treated as explicit
+        ``config_file``, when given, is a YAML or JSON file whose top-level keys are this
+        model's fields (``endpoints``, ``pairs``). YAML is the format the shipped
+        templates and the runbook use, because an operations config wants comments;
+        JSON is a strict subset of YAML, so a ``.json`` file keeps working unchanged.
+        Its values are treated as explicit
         constructor kwargs, so they take precedence over any matching environment
         variable — the same "explicit beats environment" precedence
         ``pydantic-settings`` already applies to ordinary init kwargs. ``overrides``
@@ -459,7 +462,16 @@ class EngineConfig(BaseSettings):
         """
         data: dict[str, Any] = {}
         if config_file is not None:
-            data = json.loads(Path(config_file).read_text())
+            path = Path(config_file)
+            loaded = yaml.safe_load(path.read_text())
+            if loaded is None:
+                loaded = {}
+            if not isinstance(loaded, dict):
+                raise ValueError(
+                    f"config file {str(path)!r} must contain a mapping at the top level, "
+                    f"got {type(loaded).__name__}"
+                )
+            data = loaded
         data.update(overrides)
         return cls(**data)
 

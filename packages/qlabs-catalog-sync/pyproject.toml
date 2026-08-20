@@ -13,6 +13,7 @@ dependencies = [
     "structlog>=24.1,<27",
     "prometheus-client>=0.20,<1",
     "click>=8.1,<9",
+    "pyyaml>=6.0,<7",
 ]
 
 [project.scripts]

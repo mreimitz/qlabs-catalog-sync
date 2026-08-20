@@ -28,6 +28,7 @@ dev = [
     "pytest-asyncio",
     "respx",
     "vcrpy",
+    "types-PyYAML",
 ]
 
 [tool.ruff]
