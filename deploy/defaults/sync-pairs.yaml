@@ -1,0 +1,90 @@
+# Cadence defaults for a Databricks -> Qlik sync tenant (T9.3, WP9).
+#
+# This file is a loadable EngineConfig fragment (see
+# qlabs_catalog_sync.config.EngineConfig.load) demonstrating the recommended default
+# shape and cadence numbers. It is NOT a complete per-tenant config: real endpoint
+# base URLs, client ids, warehouse/space ids and secret references belong in the
+# tenant template that T9.2 ships under deploy/config/. Copy the two `pairs` entries
+# below into that template (or your own config file) and replace the endpoint
+# placeholders; the `cadence_seconds` values and the two-pair split are what this
+# file exists to hand you.
+#
+# THE ONE THING THIS FILE CANNOT EXPRESS: SyncPairConfig has exactly one
+# `cadence_seconds` per pair, and one pair syncs one list of `entity_types` on that
+# single cadence (packages/qlabs-catalog-sync/src/qlabs_catalog_sync/config.py). Data
+# products and datasets want different cadences (see ../README.md for the arithmetic
+# that derives each number), so this file uses TWO pairs over the SAME source/target
+# endpoints and the SAME catalog.schema selector -- one restricted to
+# `entity_types: [data_product]` at the fast cadence, one restricted to
+# `entity_types: [dataset]` at the slow cadence. Nothing about this needs a code
+# change: EngineConfig only requires pair *names* to be unique, not the
+# (source, target, catalog_schema_patterns) tuple, so two pairs may legitimately point
+# at the same endpoints and selector and differ only in entity_types + cadence_seconds.
+#
+# Jitter is NOT a field here. It is applied automatically by SyncScheduler
+# (packages/qlabs-catalog-sync/src/qlabs_catalog_sync/scheduler.py,
+# DEFAULT_JITTER_FRACTION=0.10, DEFAULT_JITTER_CAP_SECONDS=60.0) to every pair's
+# IntervalTrigger -- there is nothing to configure per pair. See ../README.md,
+# "What's enforced by code vs advisory only", for the one gap this cadence config
+# does NOT close: SyncScheduler is not yet wired into any running CLI command
+# (that wiring is T9.1's job), so today these cadences apply the moment a caller
+# builds a SyncScheduler from these pairs' SyncLoop runners, not automatically on
+# `qlabs-catalog-sync run`.
+
+endpoints:
+  databricks_prod:
+    connector: databricks
+    settings:
+      host: "https://<workspace>.cloud.databricks.com"
+      client_id: "<databricks-service-principal-client-id>"
+      sql_warehouse_id: "<sql-warehouse-id>"
+      # Full tenant secret/endpoint wiring (client_secret reference, etc.) lives in
+      # T9.2's per-tenant template under deploy/config/ -- this file only demonstrates
+      # cadence, so a minimal `secrets` block is included for EngineConfig.load() to
+      # accept the fragment on its own.
+    secrets:
+      client_secret: CLIENT_SECRET
+
+  qlik_prod:
+    connector: qlik
+    settings:
+      base_url: "https://<tenant>.<region>.qlikcloud.com"
+      client_id: "<qlik-oauth-client-id>"
+      space_id: "REPLACE_WITH_QLIK_SPACE_ID"
+    secrets:
+      client_secret: CLIENT_SECRET
+
+pairs:
+  # --- Data products (Unity Catalog schemas -> Qlik data products) ---
+  # Fast cadence: cheap per-cycle read cost and negligible Qlik Tier-2 write pressure
+  # even under a large simultaneous-change burst. See ../README.md section
+  # "Data-product cadence" for the arithmetic behind 900s, and for when a tenant can
+  # safely tighten to the 5-minute end of the 5-15 minute band instead.
+  - name: databricks_to_qlik_data_products
+    source: databricks_prod
+    target: qlik_prod
+    catalog_schema_patterns:
+      - "*.*" # replace with your own catalog.schema selectors (decision D1)
+    target_space: "REPLACE_WITH_QLIK_SPACE_ID" # must match the qlik_prod endpoint's space_id
+    entity_types:
+      - data_product
+    cadence_seconds: 900 # 15 minutes -- see ../README.md
+
+  # --- Datasets (Unity Catalog tables/views -- read-only in the Qlik connector's
+  # hands, decision D2; membership rides on the data product's next update) ---
+  # Slow cadence: the full catalogs -> schemas -> tables traversal and the
+  # per-changed-object SQL tag reads (Statement Execution API) are the expensive,
+  # latency-heavy part of a cycle, not Qlik's write budget -- datasets never get
+  # their own Qlik write. See ../README.md section "Dataset cadence".
+  - name: databricks_to_qlik_datasets
+    source: databricks_prod
+    target: qlik_prod
+    catalog_schema_patterns:
+      - "*.*" # keep identical to the data-product pair unless you deliberately want
+               # a narrower dataset scope
+    target_space: "REPLACE_WITH_QLIK_SPACE_ID"
+    entity_types:
+      - dataset
+    cadence_seconds: 1800 # 30 minutes -- see ../README.md; widen to 3600 (60 min)
+                           # for multi-thousand-table catalogs or several pairs
+                           # sharing one Databricks workspace/SQL warehouse
