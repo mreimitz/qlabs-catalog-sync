@@ -1,9 +1,9 @@
 ---
 type: "Agent Instruction"
 title: "Coding Agent Guide — QLabs Catalog Sync v1 Build"
-description: "Conventions, task-board usage, how-to-add-a-connector checklist, and PR/ownership rules for coding agents building the v1 upstream sync."
+description: "Conventions, task-board usage, worktree and ownership rules, how-to-add-a-connector checklist, and PR rules for coding agents building the Databricks-to-Qlik MVP and the RM-01 upstream sync."
 tags: ["agent", "instruction", "RM-01", "build-guide"]
-timestamp: "2026-08-06T13:00:00Z"
+timestamp: "2026-08-20T10:00:00Z"
 status: "active"
 ---
 
@@ -42,15 +42,38 @@ Rules for the board:
 - Respect parallelism: tasks flagged parallel within a wave have no ordering constraints and may be
   claimed by different agents at the same time.
 
+## What you are building right now
+
+RM-01 ships in two tracks, and only one of them is open.
+
+- **Track A — the MVP: a one-way Databricks-to-Qlik metadata sync.** One source (Databricks Unity
+  Catalog), one target (Qlik Cloud), upstream only. Work packages WP0, WP1, WP2, WP3, WP4, WP7, WP8,
+  WP9. This is everything that ships in v0.1.
+- **Track B — Collibra, Snowflake, and the Qlik glossary write path.** Real RM-01 deliverables, but
+  they start only after v0.1 is tagged. Their tasks sit on the board with status `blocked` and never
+  appear in the ready queue. Do not pick one up, and do not "helpfully" implement one alongside a
+  Track A task.
+
+The mappings the MVP depends on are locked in
+[decision-databricks-to-qlik-mvp.md](decision-databricks-to-qlik-mvp.md) (D1-D8). Read it before
+touching a connector: it decides that a Unity Catalog schema is the data product, that the connector
+never creates Qlik datasets, how owners resolve to Qlik user ids, that v1 never deletes, that
+glossary is out, how tags are read, how status maps to activation, and that the contract is async
+with a watermark-returning `list_changed`.
+
+There are **no live Databricks or Qlik tenants** for this build. Everything is tested against respx
+mocks, the SDK's `FakeConnector`, and hand-authored cassettes. Behavior only a real tenant can
+confirm goes into the `TENANT_UNVERIFIED` registry (T8.6), never into an assumption.
+
 ## v1 scope guardrails
 
 v1 is deliberately narrow. See [decision.md](decision.md) for the full rationale. The hard limits:
 
-- **Upstream-only.** Metadata flows from source catalogs (Databricks, Collibra, Snowflake) *into*
-  Qlik. There is no reverse flow in v1.
+- **Upstream-only.** Metadata flows from source catalogs (Databricks in the MVP; Collibra and
+  Snowflake in Track B) *into* Qlik. There is no reverse flow in v1.
 - **Qlik is the ONLY write target.** Exactly one write connector is built (`qlabs-connector-qlik`).
-- **Source connectors are read-only.** Databricks, Collibra, and Snowflake connectors implement
-  read paths only. **Do not implement `create`/`update`/`delete` write paths in a source connector.**
+- **Source connectors are read-only.** The Databricks connector — and later the Collibra and
+  Snowflake connectors — implement read paths only. **Do not implement `create`/`update`/`delete` write paths in a source connector.**
   Declare their writable fields as `ro` (read-only) or `na` (not applicable) in the manifest.
 - **No two-way sync.** Bidirectional reconciliation and the full conflict engine are deferred to
   RM-02. The only Qlik-side conflict handling in v1 is the manual-edit policy (source-wins overwrite,
@@ -185,17 +208,33 @@ example = "qlabs_connector_example:ExampleConnector"
 
 Installing the package is all it takes for the engine to discover and use `example`.
 
-## PR, branch & ownership rules
+## Worktree, branch & ownership rules
 
-- **One package per agent where possible.** Keep a task's changes inside the package it owns. This
-  keeps the parallel streams (engine, Qlik writer, and the three source connectors) independent.
-- **Branch naming:** `wp<N>/<task-id>-<slug>` — for example `wp4/t4-4-databricks-read`.
-- **PR gate:** a PR must pass the work package's acceptance gate — `ruff` lint, `mypy` (strict) type
-  check, and `pytest` — plus any WP-specific criteria, before it can merge.
-- **Reference the task id** (e.g. `T4.4`) in the PR title or description so it maps back to the board.
-- **Do not edit another task's `owns_paths`.** If your work needs a change in a path another task
-  owns, coordinate or open a dependency rather than editing it directly. When your task lands, update
-  its status to `done` in `tasks.json`.
+- **One task, one worktree, one branch.** Work is dispatched into isolated git worktrees so parallel
+  agents never share a working tree. Branch naming: `wp<N>/<task-id>-<slug>` — for example
+  `wp4/t4-4-databricks-read`.
+- **`owns_paths` is a hard boundary.** Every task on the board owns its source files *and* its test
+  directory. Create, edit, and delete only inside those paths. If your task genuinely needs a change
+  elsewhere, stop and report it — never edit another task's files, not even a one-line import fix.
+- **Never touch packaging metadata.** All runtime dependencies are pinned up front by T0.6. If you
+  believe you need a new dependency, stop and report it; editing `pyproject.toml` or `uv.lock` in a
+  worktree is what makes parallel merges fail.
+- **`planning/` is off limits from code tasks.** The only exception is flipping your own task's
+  `status` in `tasks.json`, and even that is the orchestrator's job when running under one.
+- **The gate, in full**, run from the repository root before you claim anything is done:
+
+  ```bash
+  uv sync --all-packages
+  uv run ruff check packages     # NOT `ruff check .` — planning/ is out of scope for this tooling
+  uv run mypy
+  uv run pytest -q
+  ```
+
+  Plus your task's own `verify` command. All four must pass, and you must have seen the output.
+- **Reference the task id** (e.g. `T4.4`) in the branch, commit subject, and PR description so the
+  work maps back to the board.
+- **Report honestly.** If something does not pass, say so with the failing output. A task whose gate
+  is red is not done, no matter how complete the code looks.
 
 ## Escalation
 

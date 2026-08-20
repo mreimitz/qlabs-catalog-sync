@@ -31,13 +31,29 @@ qlabs-connector-snowflake    # read-only source connector                       
 ## Build / test / lint
 
 ```bash
-uv sync              # install workspace packages + dev group
-uv run pytest        # tests (pytest-asyncio; respx for unit, vcrpy for recorded)
-uv run ruff check    # lint (also `uv run ruff format` to format)
-uv run mypy          # strict type-check
+uv sync --all-packages         # install every workspace member + dev group (plain `uv sync` does NOT)
+uv run pytest -q               # tests (pytest-asyncio; respx for unit, vcrpy for recorded)
+uv run ruff check packages     # lint — never `ruff check .`, that would lint planning/
+uv run mypy                    # strict type-check (scoped to packages/*/src)
 ```
 
 A change is not done while `ruff`, `mypy` (strict), or `pytest` fails.
+
+**A work package is not done until the root `README.md` matches it.** When the last task of
+a work package lands (check with
+`python3 planning/tools/agent-plan/ready_queue.py --all --wp WP<N>`), update `README.md` in
+the same PR: its status table, the "What works today" and "What does not exist yet" lists,
+and any part of the *What it will do* section the WP made real or changed — packages, CLI
+commands, config keys, supported entities, capability behavior. The root `README.md` is the
+only README in this repository; never create one under `planning/`.
+
+## What ships first
+
+**The MVP is a one-way Databricks-to-Qlik metadata sync** (Track A: WP0-WP4, WP7-WP9). Collibra,
+Snowflake, and the Qlik glossary write path are Track B and start only after v0.1 is tagged; their
+tasks sit on the board as `blocked`. The mappings the MVP depends on are locked in
+`planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` — read it before
+touching a connector.
 
 ## v1 scope guardrails (upstream-only)
 

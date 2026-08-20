@@ -56,6 +56,10 @@ Nothing imports a connector directly. See `CLAUDE.md`.
 - **Reference the task id** (e.g. `T4.4`) in the PR title/description.
 - **Do not edit another task's `owns_paths`.** Coordinate or open a dependency instead.
 - **PR gate:** ruff + mypy (strict) + pytest, plus the WP's acceptance criteria.
+- **WP completion:** if your task is the last one open in its work package, refresh the
+  root `README.md` in the same PR — status table, what works today, and any planned
+  behavior the WP made real. Confirm with
+  `python3 planning/tools/agent-plan/ready_queue.py --all --wp WP<N>`.
 
 ## 7. Scope
 
