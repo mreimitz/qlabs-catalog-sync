@@ -207,7 +207,8 @@ python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01
   — so the discovery mechanism is real even though nothing consumes it yet.
 - The SDK exports its two contract constants: `CONTRACT_VERSION = "0.1.0"` and the
   entry-point group name `qlabs_catalog_sync.connectors`.
-- `uv run ruff check packages` passes.
+- The build gate is green: `uv run ruff check packages`, `uv run mypy` (strict) and
+  `uv run pytest -q` all pass from a clean checkout.
 
 That is the complete list.
 
@@ -223,12 +224,6 @@ That is the complete list.
 - **No usable CLI.** The `qlabs-catalog-sync` console script installs and then raises
   `NotImplementedError`.
 - **No real tests.** Six import smoke tests, no conformance suite, no cassettes.
-
-### The build gate is currently red
-
-`ruff` passes, but `mypy` and `pytest` both fail on duplicate `test_smoke` module
-basenames across packages. Repairing the gate is the first task on the board (`T0.5`); no
-implementation work starts before it is green.
 
 ### Known-unverified behavior
 
@@ -278,8 +273,6 @@ uv run ruff check packages     # lint
 uv run mypy                    # strict type-check
 uv run pytest -q               # tests
 ```
-
-Note that `mypy` and `pytest` currently fail — see [above](#the-build-gate-is-currently-red).
 
 ## Working on it
 
