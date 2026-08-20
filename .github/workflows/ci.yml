@@ -20,13 +20,23 @@ jobs:
           python-version: "3.11"
 
       - name: Sync workspace
-        run: uv sync
+        run: uv sync --all-packages
 
       - name: Lint (ruff)
-        run: uv run ruff check .
+        run: uv run ruff check packages
 
       - name: Type-check (mypy, strict)
         run: uv run mypy
 
       - name: Test (pytest)
-        run: uv run pytest
+        run: uv run pytest -q
+
+      - name: Build wheels (one per package)
+        run: uv build --all-packages --wheel -o dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: dist/*.whl
+          if-no-files-found: error
