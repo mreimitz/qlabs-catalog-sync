@@ -15,7 +15,7 @@ from qlabs_catalog_sync_sdk.exceptions import AuthError, CapabilityError
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 from qlabs_connector_databricks.changes import list_changed
 
-from .conftest import BASE_URL, CATALOGS_PATH, ENDPOINT, TENANT_ID, catalog, mock_single_page
+from .conftest import BASE_URL, CATALOGS_PATH, ENDPOINT, catalog, mock_single_page
 
 
 async def test_401_raises_auth_error(respx_mock, http: HttpEndpoint) -> None:
@@ -29,7 +29,6 @@ async def test_401_raises_auth_error(respx_mock, http: HttpEndpoint) -> None:
             EntityType.DATA_PRODUCT,
             Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
         )
 
 
@@ -44,7 +43,6 @@ async def test_403_also_raises_auth_error(respx_mock, http: HttpEndpoint) -> Non
             EntityType.DATA_PRODUCT,
             Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
         )
 
 
@@ -71,7 +69,6 @@ async def test_429_is_retried_then_succeeds(
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert route.call_count == 2
@@ -87,7 +84,6 @@ async def test_unsupported_glossary_term_entity_type_raises_capability_error(
             EntityType.GLOSSARY_TERM,
             Watermark.initial(ENDPOINT, EntityType.GLOSSARY_TERM),
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
         )
 
 
@@ -100,5 +96,4 @@ async def test_unsupported_category_entity_type_raises_capability_error(
             EntityType.CATEGORY,
             Watermark.initial(ENDPOINT, EntityType.CATEGORY),
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
         )

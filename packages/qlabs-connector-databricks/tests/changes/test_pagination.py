@@ -26,8 +26,8 @@ from .conftest import (
     ENDPOINT,
     SCHEMAS_PATH,
     TABLES_PATH,
-    TENANT_ID,
     catalog,
+    default_schema_id,
     mock_infinite_list,
     mock_list,
     mock_single_page,
@@ -72,11 +72,10 @@ async def test_multi_page_catalog_listing_is_fully_drained(
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert route.call_count == 2
-    assert {c.ref.native_key for c in result.changes} == {"main.sales"}
+    assert {c.ref.native_key for c in result.changes} == {default_schema_id("main", "sales")}
     assert result.has_more is False
 
 
@@ -109,7 +108,6 @@ async def test_runaway_pagination_raises_instead_of_hanging(
             EntityType.DATA_PRODUCT,
             Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
             max_pages_per_listing=3,
         )
 
@@ -135,7 +133,12 @@ async def test_runaway_pagination_on_tables_also_raises(respx_mock, http: HttpEn
         TABLES_PATH,
         params={"catalog_name": "main", "schema_name": "sales"},
         items_key="tables",
-        item={"full_name": "main.sales.orders", "name": "orders"},
+        item={
+            "full_name": "main.sales.orders",
+            "name": "orders",
+            "table_id": "tbl-orders",
+            "metastore_id": "ms-1",
+        },
     )
 
     with pytest.raises(TransientError, match="did not terminate pagination"):
@@ -144,7 +147,6 @@ async def test_runaway_pagination_on_tables_also_raises(respx_mock, http: HttpEn
             EntityType.DATASET,
             Watermark.initial(ENDPOINT, EntityType.DATASET),
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
             max_pages_per_listing=2,
         )
 

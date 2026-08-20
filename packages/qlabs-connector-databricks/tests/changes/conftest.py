@@ -7,6 +7,15 @@ shaped exactly like ``databricks-sdk``'s own ``CatalogInfo``/``SchemaInfo``/``Ta
 dataclasses (confirmed by reading the installed package — field names, epoch-millisecond
 timestamps, ``full_name`` composition), and route-registration helpers for respx that
 speak Databricks' ``max_results``/``next_page_token`` pagination shape.
+
+Identity in these payloads matters now, not just their content: ``schema_id``/
+``table_id`` are the native key ``changes.py`` diffs on (via ``read.py``'s identity
+builders — see ``changes.py``'s module docstring), so every distinct object in a test
+needs a distinct stable id, the same way it would in a real workspace. The builders
+default each id to a deterministic, ``full_name``-derived value
+(:func:`default_schema_id`/:func:`default_table_id`) so ordinary tests never collide by
+accident; a rename test passes the *same* explicit id across two calls with a different
+``name`` to prove a rename is one change, not a delete-plus-create.
 """
 
 from __future__ import annotations
@@ -22,7 +31,11 @@ from qlabs_catalog_sync_sdk.http import HttpEndpoint
 
 BASE_URL = "https://acme.cloud.databricks.com"
 ENDPOINT = "databricks"
-TENANT_ID = "acme.cloud.databricks.com"
+
+#: The default ``metastore_id`` every builder below stamps onto its payload, and
+#: therefore the ``IdentityRef.tenant_id`` every object built from one carries (see
+#: ``read.py``'s ``build_schema_identity_ref``/``build_table_identity_ref``).
+METASTORE_ID = "ms-1"
 
 CATALOGS_PATH = "/api/2.1/unity-catalog/catalogs"
 SCHEMAS_PATH = "/api/2.1/unity-catalog/schemas"
@@ -90,6 +103,19 @@ def http(make_http: Callable[..., HttpEndpoint]) -> HttpEndpoint:
 # ------------------------------------------------------------------------------------
 
 
+def default_schema_id(catalog_name: str, name: str) -> str:
+    """The stable id a test uses for a schema by default: deterministic from
+    ``catalog.schema`` so distinct schemas across a test never collide by accident, but
+    distinct from the schema's own ``full_name`` string (a real ``schema_id`` is an
+    opaque id, never the qualified name)."""
+    return f"sch-id::{catalog_name}.{name}"
+
+
+def default_table_id(catalog_name: str, schema_name: str, name: str) -> str:
+    """The stable id a test uses for a table by default — see :func:`default_schema_id`."""
+    return f"tbl-id::{catalog_name}.{schema_name}.{name}"
+
+
 def catalog(
     name: str,
     *,
@@ -103,7 +129,7 @@ def catalog(
         "full_name": name,
         "comment": comment,
         "owner": owner,
-        "metastore_id": "ms-1",
+        "metastore_id": METASTORE_ID,
         "created_at": updated_at,
         "created_by": owner,
         "updated_at": updated_at,
@@ -118,10 +144,16 @@ def schema(
     comment: str = "",
     owner: str = "data-eng-sp",
     properties: dict[str, str] | None = None,
-    schema_id: str = "sch-1",
+    schema_id: str | None = None,
+    metastore_id: str = METASTORE_ID,
     updated_at: int = DEFAULT_TS,
 ) -> dict[str, Any]:
-    """Shaped like ``databricks.sdk.service.catalog.SchemaInfo.as_dict()``."""
+    """Shaped like ``databricks.sdk.service.catalog.SchemaInfo.as_dict()``.
+
+    ``schema_id`` defaults to :func:`default_schema_id` — pass it explicitly (holding it
+    fixed while ``name``/``comment``/etc. change between two calls) to simulate a rename
+    or any other in-place edit of the *same* schema across polls.
+    """
     return {
         "catalog_name": catalog_name,
         "name": name,
@@ -129,8 +161,8 @@ def schema(
         "comment": comment,
         "owner": owner,
         "properties": properties or {},
-        "schema_id": schema_id,
-        "metastore_id": "ms-1",
+        "schema_id": schema_id or default_schema_id(catalog_name, name),
+        "metastore_id": metastore_id,
         "created_at": updated_at,
         "created_by": owner,
         "updated_at": updated_at,
@@ -146,11 +178,16 @@ def table(
     comment: str = "",
     owner: str = "data-eng-sp",
     table_type: str = "MANAGED",
-    table_id: str = "tbl-1",
+    table_id: str | None = None,
+    metastore_id: str = METASTORE_ID,
     columns: list[dict[str, Any]] | None = None,
     updated_at: int = DEFAULT_TS,
 ) -> dict[str, Any]:
-    """Shaped like ``databricks.sdk.service.catalog.TableInfo.as_dict()``."""
+    """Shaped like ``databricks.sdk.service.catalog.TableInfo.as_dict()``.
+
+    ``table_id`` defaults to :func:`default_table_id` — see :func:`schema` for why a
+    rename test passes it explicitly instead.
+    """
     return {
         "catalog_name": catalog_name,
         "schema_name": schema_name,
@@ -160,11 +197,11 @@ def table(
         "owner": owner,
         "table_type": table_type,
         "data_source_format": "DELTA",
-        "table_id": table_id,
+        "table_id": table_id or default_table_id(catalog_name, schema_name, name),
         "columns": columns
         or [{"name": "id", "type_name": "LONG", "nullable": False, "position": 0}],
         "properties": {},
-        "metastore_id": "ms-1",
+        "metastore_id": metastore_id,
         "created_at": updated_at,
         "created_by": owner,
         "updated_at": updated_at,

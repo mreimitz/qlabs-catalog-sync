@@ -29,7 +29,7 @@ from qlabs_catalog_sync_sdk.contract import (
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 from qlabs_connector_databricks.changes import list_changed
 
-from .conftest import CATALOGS_PATH, ENDPOINT, TENANT_ID, catalog, mock_single_page
+from .conftest import CATALOGS_PATH, ENDPOINT, METASTORE_ID, catalog, mock_single_page
 
 
 async def test_since_for_a_different_endpoint_is_rejected(http: HttpEndpoint) -> None:
@@ -41,7 +41,6 @@ async def test_since_for_a_different_endpoint_is_rejected(http: HttpEndpoint) ->
             EntityType.DATA_PRODUCT,
             mismatched,
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
         )
 
 
@@ -54,7 +53,6 @@ async def test_since_for_a_different_entity_type_is_rejected(http: HttpEndpoint)
             EntityType.DATA_PRODUCT,
             mismatched,
             endpoint=ENDPOINT,
-            tenant_id=TENANT_ID,
         )
 
 
@@ -75,7 +73,6 @@ async def test_next_watermark_is_on_the_requested_stream(respx_mock, http: HttpE
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert result.next_watermark.endpoint == ENDPOINT
@@ -92,8 +89,8 @@ def test_a_change_ref_on_the_wrong_stream_is_rejected_by_the_contract() -> None:
         ref=IdentityRef(
             endpoint=ENDPOINT,
             entity_type=EntityType.DATASET,  # disagrees with the watermark above
-            native_key="main.sales.orders",
-            tenant_id=TENANT_ID,
+            native_key="tbl-id::main.sales.orders",
+            tenant_id=METASTORE_ID,
         ),
         kind=ChangeKind.UPSERT,
     )

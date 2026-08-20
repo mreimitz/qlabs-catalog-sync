@@ -17,10 +17,12 @@ from qlabs_connector_databricks.changes import list_changed
 from .conftest import (
     CATALOGS_PATH,
     ENDPOINT,
+    METASTORE_ID,
     SCHEMAS_PATH,
     TABLES_PATH,
-    TENANT_ID,
     catalog,
+    default_schema_id,
+    default_table_id,
     mock_single_page,
     schema,
     table,
@@ -58,20 +60,26 @@ async def test_initial_watermark_returns_every_schema(respx_mock, http: HttpEndp
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
-    assert {c.ref.native_key for c in result.changes} == {"main.sales", "main.hr"}
+    assert {c.ref.native_key for c in result.changes} == {
+        default_schema_id("main", "sales"),
+        default_schema_id("main", "hr"),
+    }
+    assert {c.ref.secondary_keys["full_name"] for c in result.changes} == {"main.sales", "main.hr"}
     assert all(c.kind is ChangeKind.UPSERT for c in result.changes)
     assert all(c.ref.entity_type is EntityType.DATA_PRODUCT for c in result.changes)
-    assert all(c.ref.tenant_id == TENANT_ID for c in result.changes)
+    assert all(c.ref.tenant_id == METASTORE_ID for c in result.changes)
     assert result.has_more is False
     assert result.next_watermark.kind is WatermarkKind.CURSOR
     assert result.next_watermark.endpoint == ENDPOINT
     assert result.next_watermark.entity_type is EntityType.DATA_PRODUCT
 
     snapshot = json.loads(result.next_watermark.cursor or "{}")
-    assert set(snapshot["checksums"]) == {"main.sales", "main.hr"}
+    assert set(snapshot["objects"]) == {
+        default_schema_id("main", "sales"),
+        default_schema_id("main", "hr"),
+    }
 
 
 async def test_initial_watermark_returns_every_table(respx_mock, http: HttpEndpoint) -> None:
@@ -98,15 +106,19 @@ async def test_initial_watermark_returns_every_table(respx_mock, http: HttpEndpo
         EntityType.DATASET,
         Watermark.initial(ENDPOINT, EntityType.DATASET),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert {c.ref.native_key for c in result.changes} == {
+        default_table_id("main", "sales", "orders"),
+        default_table_id("main", "sales", "line_items"),
+    }
+    assert {c.ref.secondary_keys["full_name"] for c in result.changes} == {
         "main.sales.orders",
         "main.sales.line_items",
     }
     assert all(c.kind is ChangeKind.UPSERT for c in result.changes)
     assert all(c.ref.entity_type is EntityType.DATASET for c in result.changes)
+    assert all(c.ref.tenant_id == METASTORE_ID for c in result.changes)
     assert result.next_watermark.entity_type is EntityType.DATASET
     assert result.has_more is False
 
@@ -119,7 +131,6 @@ async def test_empty_workspace_returns_no_candidates(respx_mock, http: HttpEndpo
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert result.is_empty
