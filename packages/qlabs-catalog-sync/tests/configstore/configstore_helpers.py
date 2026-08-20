@@ -1,4 +1,5 @@
-"""Row factories and the credential-shaped-column scanner shared by configstore tests.
+"""Row factories, the credential scanner, and the model/migration parity checker shared
+by configstore tests.
 
 Named ``configstore_helpers`` rather than ``helpers``/``conftest_utils`` -- this repo
 collects tests with pytest's ``importlib`` import mode over one flat module namespace,
@@ -7,9 +8,11 @@ and both of those basenames have already collided across packages.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy.engine import Inspector
+from sqlalchemy import CheckConstraint, MetaData, UniqueConstraint
+from sqlalchemy.engine import Dialect, Inspector
 
 from qlabs_catalog_sync.config import ManualEditMode, ManualEditPolicy
 from qlabs_catalog_sync.configstore.models import EndpointRow, SyncPairRow
@@ -136,6 +139,120 @@ def credential_shaped_columns(
     return hits
 
 
+# --------------------------------------------------------------------------------------
+# Model <-> migration schema parity. A hand-written Alembic migration and the ORM models
+# it is supposed to match are two independent descriptions of one schema; nothing stops
+# them drifting apart except a test that actually diffs them. The ORM round-trip tests
+# exercise the columns they happen to touch and no more -- a column added to
+# ``configstore/models.py`` and forgotten in ``0002_config_store.py`` (or the reverse)
+# would pass every one of them silently. This is the check that catches it, table by
+# table: every column name (both directions), nullability, and the column's *dialect-
+# compiled* type string (``Column.type.compile(dialect=...)``, which unwraps a
+# ``TypeDecorator`` to what SQLite actually stores -- e.g. ``StrEnumType`` compiles to
+# ``VARCHAR(n)``, ``Uuid`` to ``CHAR(32)`` -- rather than the generic, dialect-less
+# ``str(type)``, which does not match what ``sqlalchemy.inspect`` reports back), plus
+# every unique/check constraint name.
+# --------------------------------------------------------------------------------------
+
+
+def schema_parity_report(
+    model_metadata: MetaData,
+    inspector: Inspector,
+    table_names: Iterable[str],
+) -> list[str]:
+    """Human-readable mismatches between ``model_metadata``'s tables and what
+    ``inspector`` reflects from a real, migrated database, restricted to
+    ``table_names``. An empty list means the two agree exactly; see the module-level
+    comment above for exactly what "agree" checks.
+    """
+    problems: list[str] = []
+    reflected_table_names = set(inspector.get_table_names())
+    dialect: Dialect = inspector.dialect
+
+    for table_name in table_names:
+        model_table = model_metadata.tables.get(table_name)
+        if model_table is None:
+            problems.append(f"{table_name}: expected in model_metadata, not found there")
+            continue
+        if table_name not in reflected_table_names:
+            problems.append(f"{table_name}: expected in the reflected database, not found there")
+            continue
+
+        model_columns = {column.name: column for column in model_table.columns}
+        reflected_columns = {
+            str(column["name"]): column for column in inspector.get_columns(table_name)
+        }
+
+        for missing in sorted(set(model_columns) - set(reflected_columns)):
+            problems.append(
+                f"{table_name}.{missing}: declared in the ORM model, missing from the migration"
+            )
+        for extra in sorted(set(reflected_columns) - set(model_columns)):
+            problems.append(
+                f"{table_name}.{extra}: created by the migration, missing from the ORM model"
+            )
+
+        for name in sorted(set(model_columns) & set(reflected_columns)):
+            model_column = model_columns[name]
+            reflected_column = reflected_columns[name]
+
+            model_nullable = bool(model_column.nullable)
+            reflected_nullable = bool(reflected_column["nullable"])
+            if model_nullable != reflected_nullable:
+                problems.append(
+                    f"{table_name}.{name}: nullable mismatch "
+                    f"(model={model_nullable!r}, migration={reflected_nullable!r})"
+                )
+
+            model_type = model_column.type.compile(dialect=dialect)
+            reflected_type = str(reflected_column["type"])
+            if model_type != reflected_type:
+                problems.append(
+                    f"{table_name}.{name}: type mismatch "
+                    f"(model={model_type!r}, migration={reflected_type!r})"
+                )
+
+        model_unique_names = {
+            constraint.name
+            for constraint in model_table.constraints
+            if isinstance(constraint, UniqueConstraint)
+        }
+        reflected_unique_names = {
+            str(uc["name"]) for uc in inspector.get_unique_constraints(table_name)
+        }
+        for missing in sorted(model_unique_names - reflected_unique_names):
+            problems.append(
+                f"{table_name}: unique constraint {missing!r} in the model, "
+                "missing from the migration"
+            )
+        for extra in sorted(reflected_unique_names - model_unique_names):
+            problems.append(
+                f"{table_name}: unique constraint {extra!r} in the migration, "
+                "missing from the model"
+            )
+
+        model_check_names = {
+            constraint.name
+            for constraint in model_table.constraints
+            if isinstance(constraint, CheckConstraint)
+        }
+        reflected_check_names = {
+            str(ck["name"]) for ck in inspector.get_check_constraints(table_name)
+        }
+        for missing in sorted(model_check_names - reflected_check_names):
+            problems.append(
+                f"{table_name}: check constraint {missing!r} in the model, "
+                "missing from the migration"
+            )
+        for extra in sorted(reflected_check_names - model_check_names):
+            problems.append(
+                f"{table_name}: check constraint {extra!r} in the migration, "
+                "missing from the model"
+            )
+
+    return problems
+
+
 __all__ = [
     "CREDENTIAL_NAME_MARKERS",
     "LATER",
@@ -144,4 +261,5 @@ __all__ = [
     "make_endpoint",
     "make_sync_pair",
     "sample_manual_edit_policy",
+    "schema_parity_report",
 ]
