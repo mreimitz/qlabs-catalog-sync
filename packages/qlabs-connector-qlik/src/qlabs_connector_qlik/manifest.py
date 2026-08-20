@@ -105,18 +105,34 @@ def _data_product_capability() -> EntityCapability:
             #    replace (-> /name, /description, /readMe respectively). ------------
             "name": FieldCapability.rw(writable_via="rest-patch"),
             "description": FieldCapability.rw(writable_via="rest-patch"),
-            "documentation": FieldCapability.rw(writable_via="rest-patch"),  # -> readMe
-            # -- rw: lifecycle action, not the field-level PATCH path enum -----------
-            # Neutral `active` status maps to Qlik activation (decision D7) via the
-            # activate/deactivate actions (RS-02 section 2's "lifecycle actions");
-            # Qlik has no `/status` PATCH path for this at all.
-            "status": FieldCapability.rw(writable_via="lifecycle-action"),
+            # -> readMe. Qlik has no plain-vs-markdown concept, so the neutral
+            # TextField.format cannot survive the round trip; the text itself does.
+            "documentation": FieldCapability.rw(
+                writable_via="rest-patch", normalized_by_target=True
+            ),
+            # -- ro: activation is opt-in and off in v1 ------------------------------
+            # Neutral `active` maps to Qlik activation via the activate/deactivate
+            # actions (RS-02 section 2), never a PATCH path — Qlik has no `/status`
+            # path at all. Decision D7 makes activation opt-in per pair and off by
+            # default, and nothing in v1 enables it (the connector's destructive-action
+            # opt-in is empty by construction), so this endpoint genuinely cannot write
+            # status today. Declaring it `rw` would be the manifest promising a write
+            # the engine would then plan and the connector would refuse.
+            "status": FieldCapability.ro(),
             # -- rw: arrays, full-replace only — Qlik never accepts a delta here
             #    (RS-02 section 2: "Array paths are full-replace"). -------------------
+            # -> keyContacts. Qlik stores only {userId, role}: the email that resolved
+            # the contact (decision D3) and the display name are not kept, so a read-back
+            # carries the Qlik user id alone.
             "owners": FieldCapability.rw(
-                writable_via="rest-patch", partial_update=False
+                writable_via="rest-patch", partial_update=False, normalized_by_target=True
             ),  # -> keyContacts
-            "tags": FieldCapability.rw(writable_via="rest-patch", partial_update=False),
+            # Qlik tags are a flat string[]; the neutral Tag is key/value, flattened
+            # to "key=value" on write. Reading back cannot recover the split without
+            # inventing structure in any tag a human typed with an "=" in it.
+            "tags": FieldCapability.rw(
+                writable_via="rest-patch", partial_update=False, normalized_by_target=True
+            ),
             "dataset_refs": FieldCapability.rw(
                 writable_via="rest-patch", partial_update=False
             ),  # -> datasetIds

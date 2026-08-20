@@ -60,6 +60,19 @@ async def _no_identity_binding(neutral_id: uuid.UUID) -> str | None:
     return None
 
 
+async def _no_dataset_ref_binding(native_id: str) -> uuid.UUID | None:
+    """Default *reverse* dataset identity seam: no answer.
+
+    The mirror of :func:`_no_identity_binding`, for the read direction (``read.py``,
+    module docstring point 4): Qlik's native ``datasetIds`` back to the neutral ids the
+    engine minted. Same ownership story, same honest default — with no binding known,
+    ``read()`` does not report ``dataset_refs`` at all rather than reporting it empty,
+    and the raw ids stay in ``custom_attributes``.
+    """
+    del native_id
+    return None
+
+
 class Connector(ConnectorABC):
     """The Qlik connector — sole write target in v1.
 
@@ -83,6 +96,10 @@ class Connector(ConnectorABC):
         self.enabled_destructive_actions: frozenset[lifecycle.DestructiveAction] = frozenset()
         self.dataset_identity_lookup: DatasetIdentityLookup = _no_identity_binding
         self.dataset_name_lookup: write.DatasetNameLookup = write.no_dataset_names
+        #: The read-direction counterpart of ``dataset_identity_lookup`` — see
+        #: ``read.py``'s ``DatasetRefLookup``. Injected by the orchestrator before
+        #: ``setup()``, exactly like the other two seams.
+        self.dataset_ref_lookup: read.DatasetRefLookup = _no_dataset_ref_binding
         self._oauth_provider: OAuth2ClientCredentialsProvider | None = None
         self._token_client: httpx.AsyncClient | None = None
 
@@ -224,10 +241,19 @@ class Connector(ConnectorABC):
         )
 
     async def read(self, ref: IdentityRef) -> NeutralEntity:
-        """The current state of ``ref`` as a neutral entity with field envelopes."""
+        """The current state of ``ref`` as a neutral entity with field envelopes.
+
+        A data product's ``dataset_refs`` comes back through
+        :attr:`dataset_ref_lookup` — the manifest declares that field ``rw``, so a read
+        after a write must be able to show the membership the write placed. With no
+        lookup wired the field is not reported at all rather than reported empty
+        (``read.py``, module docstring point 4).
+        """
         if self.http is None:
             raise RuntimeError("setup() must be called before read()")
-        return await read.read(self.http, ref, endpoint=self.name)
+        return await read.read(
+            self.http, ref, endpoint=self.name, dataset_ref_lookup=self.dataset_ref_lookup
+        )
 
     def _tenant_id(self) -> str:
         """The tenant every ``IdentityRef`` is scoped by.

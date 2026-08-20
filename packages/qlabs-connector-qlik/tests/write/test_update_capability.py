@@ -50,6 +50,7 @@ from .conftest import (
     mock_users,
     owner,
     patch_body,
+    patch_calls,
     product_ref,
     refs,
 )
@@ -432,8 +433,10 @@ async def test_a_403_raises_auth_error(
 
     assert excinfo.value.entity_type == EntityType.DATA_PRODUCT.value
     assert excinfo.value.retryable is False
-    # A permission problem is never retried by HttpEndpoint — exactly one attempt.
-    assert len(respx_mock.calls) == 1
+    # A permission problem is never retried by HttpEndpoint — exactly one PATCH attempt.
+    # Counted as PATCHes, not as total calls: update() also issues the idempotency
+    # pre-read (write.py point 12a), and a read is not a write attempt.
+    assert len(patch_calls(respx_mock)) == 1
 
 
 async def test_a_429_is_retried_and_then_succeeds(
@@ -450,10 +453,10 @@ async def test_a_429_is_retried_and_then_succeeds(
 
     result = await writer.update(product_ref(), diff(change("name", "Renamed")))
 
-    assert len(respx_mock.calls) == 3
+    assert len(patch_calls(respx_mock)) == 3
     assert result.outcome is WriteOutcome.UPDATED
     # Every attempt carried the same precondition — a retry is not an unguarded resend.
-    assert all(call.request.headers["if-match"] for call in respx_mock.calls)
+    assert all(request.headers["if-match"] for request in patch_calls(respx_mock))
 
 
 async def test_a_5xx_that_outlives_the_retries_raises_transient_error(
@@ -465,7 +468,7 @@ async def test_a_5xx_that_outlives_the_retries_raises_transient_error(
     with pytest.raises(TransientError):
         await writer.update(product_ref(), diff(change("name", "Renamed")))
 
-    assert len(respx_mock.calls) == 3
+    assert len(patch_calls(respx_mock)) == 3
 
 
 async def test_a_404_raises_not_found_rather_than_a_conflict(

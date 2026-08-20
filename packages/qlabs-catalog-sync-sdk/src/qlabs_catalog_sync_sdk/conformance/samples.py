@@ -98,8 +98,23 @@ def sample_value(entity_type: EntityType, field: str, *, variant: int = 0) -> ob
         "documentation": TextField.plain(f"Conformance documentation v{variant}."),
         "definition": TextField.plain(f"Conformance definition v{variant}."),
         "status": _status_value(entity_type, variant),
-        "owners": [Party(display_name=f"Conformance Owner {variant}", role=PartyRole.OWNER)],
-        "stewards": [Party(display_name=f"Conformance Steward {variant}", role=PartyRole.STEWARD)],
+        "owners": [
+            Party(
+                display_name=f"Conformance Owner {variant}",
+                # An owner without an email cannot exercise a target that resolves
+                # owners by email (decision D3), so the sample would silently skip
+                # the very path it exists to certify.
+                email=f"conformance-owner-{variant}@example.invalid",
+                role=PartyRole.OWNER,
+            )
+        ],
+        "stewards": [
+            Party(
+                display_name=f"Conformance Steward {variant}",
+                email=f"conformance-steward-{variant}@example.invalid",
+                role=PartyRole.STEWARD,
+            )
+        ],
         "tags": [Tag(key="conformance", value=f"v{variant}")],
         "dataset_refs": [uuid4()],
         "glossary_term_refs": [uuid4()],

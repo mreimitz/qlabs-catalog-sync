@@ -58,7 +58,7 @@ def test_ensure_writable_raises_for_an_undeclared_field(
     assert exc_info.value.field == "no_such_field"
 
 
-@pytest.mark.parametrize("field", ["name", "description", "documentation", "status", "tags"])
+@pytest.mark.parametrize("field", ["name", "description", "documentation", "tags"])
 def test_ensure_writable_passes_for_every_rw_field(
     qlik_connector: FakeManifestConnector, field: str
 ) -> None:
