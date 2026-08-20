@@ -1219,7 +1219,7 @@
       ],
       "dod": "The runbook covers deploy, configure, dry-run, confirm, and troubleshoot; the capability matrix is generated from the live manifests; v0.1 is tagged.",
       "verify": "uv run python scripts/gen_capability_matrix.py --check",
-      "status": "pending"
+      "status": "in_progress"
     }
   ]
 }
