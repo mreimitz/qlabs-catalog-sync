@@ -136,6 +136,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/endpoints/{name}/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What this configured endpoint's connector supports (C6)
+         * @description The capability manifest for a *configured* endpoint.
+         *
+         *     Real I/O against the tenant, exactly like ``/healthcheck`` -- ``setup()`` runs, so
+         *     this is a deliberate action an operator takes, never something a list screen fires
+         *     for every row.
+         */
+        get: operations["read_manifest_api_endpoints__name__manifest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/endpoints/{name}/secret-resolve": {
         parameters: {
             query?: never;
@@ -740,6 +764,29 @@ export interface components {
             /** Reason */
             reason: string | null;
             state: components["schemas"]["HealthState"];
+        };
+        /**
+         * EndpointManifestOut
+         * @description What this endpoint's connector reports it supports, once configured (C6).
+         *
+         *     ``GET /connectors`` lists connector *classes*, which have no configuration, and a
+         *     connector whose manifest depends on its resolved config is entitled to refuse there
+         *     (see ``routes/connectors.py``'s module docstring -- the Databricks connector does
+         *     exactly that, because D6 makes ``tags`` readable only when a SQL warehouse is
+         *     configured). This route is the other half: a *configured* endpoint can always be
+         *     asked, because ``setup()`` has run.
+         *
+         *     Always a 200, exactly like a red healthcheck is: ``manifest`` is set when the
+         *     connector answered, ``unavailable_reason`` when it could not. An unreachable tenant is
+         *     a fact about the endpoint, not an error in the request that asked. Never both, never
+         *     neither.
+         */
+        EndpointManifestOut: {
+            /** Endpoint */
+            endpoint: string;
+            manifest?: components["schemas"]["CapabilityManifestOut"] | null;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
         };
         /**
          * EndpointOut
@@ -2320,6 +2367,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointHealthOut"];
+                };
+            };
+            /** @description Every error this API returns shares this shape. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    read_manifest_api_endpoints__name__manifest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointManifestOut"];
                 };
             };
             /** @description Every error this API returns shares this shape. */

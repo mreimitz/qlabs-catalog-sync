@@ -61,7 +61,7 @@ from qlabs_catalog_sync_sdk.models import EntityType
 
 from ..errors import API_ERROR_RESPONSES
 
-__all__ = ["build_connectors_router"]
+__all__ = ["CapabilityManifestOut", "build_connectors_router", "capability_manifest_out"]
 
 
 # --------------------------------------------------------------------------------------
@@ -137,8 +137,12 @@ class ConnectorInfo(BaseModel):
     """Set only when not ``available`` -- human-readable, safe to render as-is."""
 
 
-def _capability_manifest_out(manifest: CapabilityManifestBase) -> CapabilityManifestOut:
+def capability_manifest_out(manifest: CapabilityManifestBase) -> CapabilityManifestOut:
     """Serialize ``manifest`` in ``gen_capability_matrix.py``'s own shape.
+
+    Public because ``routes/endpoints.py``'s ``/{name}/manifest`` serializes the same
+    manifest for a *configured* endpoint -- one serializer, so the two routes can never
+    describe one manifest two different ways.
 
     Every connector in this codebase declares the SDK's concrete
     :class:`~qlabs_catalog_sync_sdk.manifest.CapabilityManifest` (T1.3) -- the only
@@ -200,7 +204,7 @@ def _describe_available(registry: ConnectorRegistry, name: str) -> ConnectorInfo
                 f"configuration. Register an endpoint to see its manifest. ({exc})"
             ),
         )
-    return ConnectorInfo(name=name, available=True, manifest=_capability_manifest_out(manifest))
+    return ConnectorInfo(name=name, available=True, manifest=capability_manifest_out(manifest))
 
 
 def build_connectors_router(registry: ConnectorRegistry) -> APIRouter:

@@ -533,6 +533,41 @@
         "title": "EndpointHealthOut",
         "type": "object"
       },
+      "EndpointManifestOut": {
+        "description": "What this endpoint's connector reports it supports, once configured (C6).\n\n``GET /connectors`` lists connector *classes*, which have no configuration, and a\nconnector whose manifest depends on its resolved config is entitled to refuse there\n(see ``routes/connectors.py``'s module docstring -- the Databricks connector does\nexactly that, because D6 makes ``tags`` readable only when a SQL warehouse is\nconfigured). This route is the other half: a *configured* endpoint can always be\nasked, because ``setup()`` has run.\n\nAlways a 200, exactly like a red healthcheck is: ``manifest`` is set when the\nconnector answered, ``unavailable_reason`` when it could not. An unreachable tenant is\na fact about the endpoint, not an error in the request that asked. Never both, never\nneither.",
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapabilityManifestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "title": "EndpointManifestOut",
+        "type": "object"
+      },
       "EndpointOut": {
         "description": "One registered endpoint. Carries ``secret_ref`` (a reference, C2) and non-secret\n``settings`` -- never a secret value; there is no field here capable of holding one.",
         "properties": {
@@ -3892,6 +3927,49 @@
           }
         },
         "summary": "Run this endpoint's connector healthcheck() (C6)",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/endpoints/{name}/manifest": {
+      "get": {
+        "description": "The capability manifest for a *configured* endpoint.\n\nReal I/O against the tenant, exactly like ``/healthcheck`` -- ``setup()`` runs, so\nthis is a deliberate action an operator takes, never something a list screen fires\nfor every row.",
+        "operationId": "read_manifest_api_endpoints__name__manifest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointManifestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "What this configured endpoint's connector supports (C6)",
         "tags": [
           "endpoints"
         ]
