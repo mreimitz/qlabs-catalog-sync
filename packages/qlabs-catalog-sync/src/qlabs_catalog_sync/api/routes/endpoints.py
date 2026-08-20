@@ -75,6 +75,7 @@ from qlabs_catalog_sync_sdk.exceptions import ConnectorError
 
 from ..auth import require_session
 from ..errors import API_ERROR_RESPONSES
+from .connectors import CapabilityManifestOut, capability_manifest_out
 
 __all__ = ["build_endpoints_router"]
 
@@ -189,10 +190,67 @@ class EndpointHealthOut(BaseModel):
     details: dict[str, JsonValue]
 
 
+class EndpointManifestOut(BaseModel):
+    """What this endpoint's connector reports it supports, once configured (C6).
+
+    ``GET /connectors`` lists connector *classes*, which have no configuration, and a
+    connector whose manifest depends on its resolved config is entitled to refuse there
+    (see ``routes/connectors.py``'s module docstring -- the Databricks connector does
+    exactly that, because D6 makes ``tags`` readable only when a SQL warehouse is
+    configured). This route is the other half: a *configured* endpoint can always be
+    asked, because ``setup()`` has run.
+
+    Always a 200, exactly like a red healthcheck is: ``manifest`` is set when the
+    connector answered, ``unavailable_reason`` when it could not. An unreachable tenant is
+    a fact about the endpoint, not an error in the request that asked. Never both, never
+    neither.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    endpoint: str
+    manifest: CapabilityManifestOut | None = None
+    unavailable_reason: str | None = None
+    """Human-readable and safe to render as-is -- never carries credential material; see
+    :func:`_read_connector_manifest` for how each failure class is narrowed."""
+
+
 # --------------------------------------------------------------------------------------
 # Healthcheck: build a throwaway connector instance, run setup()+healthcheck(), and
 # always return a HealthStatus -- never let an exception escape (see module docstring).
 # --------------------------------------------------------------------------------------
+
+
+def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> ConnectorConfig:
+    """Resolve ``row``'s credential reference and build its connector's own
+    ``ConnectorConfig``. Shared by every route that needs a live connector instance --
+    :func:`_run_connector_healthcheck` and :func:`_read_connector_manifest` -- because
+    this is the security-sensitive step and a second copy of it is a second chance to get
+    credential handling subtly wrong.
+
+    Credential resolution follows ``configstore.secrets``'s own documented pattern exactly
+    (see that module's docstring): ``resolve_connector_kwargs(ref,
+    connector_cls.ConfigModel, settings=row.settings)`` keyed on ``ref.locator``, the
+    secret reference's own addressing -- decoupled from ``row.name`` on purpose, so
+    renaming an endpoint or pointing two endpoints at one shared credential never touches
+    an environment variable. An endpoint with no ``secret_ref`` bound yet (C6: naming and
+    settings can be registered before a credential is) has nothing to resolve, so its own
+    ``name`` is used as the (irrelevant, since no secret-typed field is required to have a
+    value) environment prefix instead.
+
+    Raises whatever resolution or validation raises -- each caller maps those to its own
+    surface, and neither ever lets one reach the client carrying a resolved value.
+    """
+    config_model_cls = cast(type[ConnectorConfig], connector_cls.ConfigModel)
+    kwargs: dict[str, Any]
+    if row.secret_ref is not None:
+        ref = SecretRef.parse(row.secret_ref)
+        kwargs = resolve_connector_kwargs(ref, config_model_cls, settings=row.settings)
+        locator = ref.locator
+    else:
+        kwargs = dict(row.settings)
+        locator = row.name
+    return config_model_cls.for_endpoint(locator, **kwargs)
 
 
 async def _run_connector_healthcheck(
@@ -219,18 +277,9 @@ async def _run_connector_healthcheck(
     a value) environment prefix instead.
     """
     now = datetime.now(UTC)
-    config_model_cls = cast(type[ConnectorConfig], connector_cls.ConfigModel)
     connector: Connector | None = None
     try:
-        kwargs: dict[str, Any]
-        if row.secret_ref is not None:
-            ref = SecretRef.parse(row.secret_ref)
-            kwargs = resolve_connector_kwargs(ref, config_model_cls, settings=row.settings)
-            locator = ref.locator
-        else:
-            kwargs = dict(row.settings)
-            locator = row.name
-        connector_config = config_model_cls.for_endpoint(locator, **kwargs)
+        connector_config = _connector_config_for(row, connector_cls)
 
         connector = connector_cls()
         ctx = ConnectorContext.build(config=connector_config, endpoint=row.name)
@@ -278,6 +327,57 @@ async def _run_connector_healthcheck(
         if connector is not None:
             with contextlib.suppress(Exception):
                 await connector.close()
+
+
+async def _read_connector_manifest(
+    row: EndpointRow, connector_cls: type[Connector]
+) -> tuple[CapabilityManifestOut | None, str | None]:
+    """``setup()`` a throwaway instance of ``connector_cls`` for ``row`` and return its
+    ``capabilities()``, or ``(None, reason)`` -- never raising.
+
+    The failure taxonomy is deliberately identical to
+    :func:`_run_connector_healthcheck`'s, and for the same reasons, which are spelled out
+    there: ``ConnectorError.message`` and the two secret-reference errors are documented
+    safe to surface, while **anything else gets a generic, value-free reason** and a
+    correlation id, because e.g. a pydantic ``ValidationError`` over a ``SecretStr`` field
+    can echo its raw input. Reproducing that taxonomy rather than simplifying it is the
+    point: this route resolves the same credentials the healthcheck does, so it needs the
+    same care.
+    """
+    connector: Connector | None = None
+    try:
+        connector_config = _connector_config_for(row, connector_cls)
+        connector = connector_cls()
+        ctx = ConnectorContext.build(config=connector_config, endpoint=row.name)
+        async with asyncio.timeout(HEALTHCHECK_TIMEOUT_SECONDS):
+            await connector.setup(ctx)
+            return capability_manifest_out(connector.capabilities()), None
+    except TimeoutError:
+        return None, (
+            f"connector did not respond within {HEALTHCHECK_TIMEOUT_SECONDS:.0f}s"
+        )
+    except ConnectorError as exc:
+        return None, exc.message
+    except (SecretNotFoundError, SecretRefFormatError) as exc:
+        return None, str(exc)
+    except Exception as exc:
+        correlation_id = str(uuid.uuid4())
+        _LOG.error(
+            "endpoint.manifest.unexpected_error",
+            endpoint=row.name,
+            connector=row.connector,
+            correlation_id=correlation_id,
+            error_type=type(exc).__name__,
+        )
+        return None, (
+            f"reading the capability manifest failed unexpectedly ({type(exc).__name__}); "
+            f"see server logs (correlation id {correlation_id})"
+        )
+    finally:
+        if connector is not None:
+            with contextlib.suppress(Exception):
+                await connector.close()
+
 
 
 # --------------------------------------------------------------------------------------
@@ -424,5 +524,27 @@ def build_endpoints_router(config_service: ConfigService, registry: ConnectorReg
             checked_at=result.checked_at or datetime.now(UTC),
             details=result.details,
         )
+
+    @router.get(
+        "/{name}/manifest",
+        response_model=EndpointManifestOut,
+        responses=API_ERROR_RESPONSES,
+        summary="What this configured endpoint's connector supports (C6)",
+    )
+    async def read_manifest(name: str) -> EndpointManifestOut:
+        """The capability manifest for a *configured* endpoint.
+
+        Real I/O against the tenant, exactly like ``/healthcheck`` -- ``setup()`` runs, so
+        this is a deliberate action an operator takes, never something a list screen fires
+        for every row.
+        """
+        row = await config_service.get_endpoint(name)
+        if row is None:
+            raise EndpointNotFoundError(name)
+        # Same reasoning as the healthcheck route: an endpoint naming a connector that is
+        # not installed is a registration problem, not a manifest result.
+        connector_cls = registry.get_connector(row.connector)
+        manifest, reason = await _read_connector_manifest(row, connector_cls)
+        return EndpointManifestOut(endpoint=row.name, manifest=manifest, unavailable_reason=reason)
 
     return router
