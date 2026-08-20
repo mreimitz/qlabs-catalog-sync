@@ -161,7 +161,8 @@ from __future__ import annotations
 
 import asyncio
 import random
-from collections.abc import Sequence
+import uuid
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -177,6 +178,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from qlabs_catalog_sync.config import SyncPairConfig
 from qlabs_catalog_sync.observability import HealthRegistry, bind_sync_context, get_logger
+from qlabs_catalog_sync.runs.recorder import RunRecorder
 from qlabs_catalog_sync.sync.loop import RunStatus, SyncRunReport
 from qlabs_catalog_sync_sdk.models import EntityType
 
@@ -192,6 +194,11 @@ __all__ = [
 ]
 
 _LOG = get_logger("qlabs.catalog_sync.scheduler")
+
+
+def _utc_now() -> datetime:
+    """The wall clock, injectable so tests can pin run-history timestamps."""
+    return datetime.now(UTC)
 
 #: Jitter as a fraction of a pair's cadence — see the module docstring for the magnitude's
 #: justification against Qlik's 100 req/min write tier (RS-02 section 3.4).
@@ -304,6 +311,8 @@ class SyncScheduler:
         misfire_grace_seconds: int = DEFAULT_MISFIRE_GRACE_SECONDS,
         run_immediately: bool = False,
         scheduler: AsyncIOScheduler | None = None,
+        recorder: RunRecorder | None = None,
+        clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         if not runners:
             raise ValueError("SyncScheduler needs at least one pair runner")
@@ -321,6 +330,8 @@ class SyncScheduler:
         self._degraded_after = degraded_after
         self._misfire_grace_seconds = misfire_grace_seconds
         self._run_immediately = run_immediately
+        self._recorder = recorder
+        self._clock = clock
         self._scheduler: AsyncIOScheduler = (
             scheduler if scheduler is not None else AsyncIOScheduler()
         )
@@ -479,7 +490,17 @@ class SyncScheduler:
             failed = False
             try:
                 for entity_type in pair.entity_types:
-                    report = await runner.run_cycle(entity_type)
+                    run_id = await self._begin_run(pair, entity_type)
+                    try:
+                        report = await runner.run_cycle(entity_type)
+                    except Exception as exc:
+                        # run_cycle is documented never to raise, but it can: it loads the
+                        # stored watermark before entering its own try block, so a state
+                        # store failure there escapes. Closing the run out here is what
+                        # stops a crashed cycle leaving a row stuck at RUNNING forever.
+                        await self._fail_run(run_id, exc)
+                        raise
+                    await self._finish_run(run_id, report)
                     reports.append(report)
                     if report.status is RunStatus.FAILED:
                         failed = True
@@ -492,6 +513,48 @@ class SyncScheduler:
                 failed = True
                 _LOG.exception("scheduler.pair.crashed", pair=pair.name)
             self._record_outcome(pair.name, failed=failed, reports=reports)
+
+    async def _begin_run(self, pair: SyncPairConfig, entity_type: EntityType) -> uuid.UUID | None:
+        """Open a run-history row for one cycle, or ``None`` when history is not configured.
+
+        Run history is optional so ``tests/scheduler`` can keep exercising scheduling
+        behaviour against a scripted double with no database at all, and so an operator
+        running without it loses reporting rather than the ability to sync.
+        """
+        if self._recorder is None:
+            return None
+        return await self._recorder.start(
+            pair=pair.name,
+            source_endpoint=pair.source,
+            target_endpoint=pair.target,
+            entity_type=entity_type,
+            dry_run=False,
+            started_at=self._clock(),
+        )
+
+    async def _finish_run(self, run_id: uuid.UUID | None, report: SyncRunReport) -> None:
+        """Close a run out from the report the cycle actually produced."""
+        if self._recorder is None or run_id is None:
+            return
+        await self._recorder.finish(run_id, report)
+
+    async def _fail_run(self, run_id: uuid.UUID | None, exc: BaseException) -> None:
+        """Close a run out as failed when the cycle raised instead of returning a report.
+
+        Never raises: a run-history write that fails must not turn a recoverable cycle
+        crash into a scheduler crash, and the original exception is the one worth
+        propagating.
+        """
+        if self._recorder is None or run_id is None:
+            return
+        try:
+            await self._recorder.fail(
+                run_id,
+                message=f"{type(exc).__name__}: {exc}",
+                finished_at=self._clock(),
+            )
+        except Exception:
+            _LOG.exception("scheduler.run_history.fail_write_failed", run_id=str(run_id))
 
     def _record_outcome(
         self, pair_name: str, *, failed: bool, reports: Sequence[SyncRunReport]

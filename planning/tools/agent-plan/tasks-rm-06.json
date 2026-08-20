@@ -172,7 +172,7 @@
       ],
       "dod": "Every cycle produces exactly one run row; a crashed cycle leaves the run marked failed rather than open forever; counts reconcile with what the loop actually wrote; unresolved references and orphans are queryable per run.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/runs",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T12.1",
@@ -214,7 +214,7 @@
       ],
       "dod": "Unauthenticated access to every route except the health surface and the sign-in route is refused; a mutating request without a valid CSRF token is refused; no credential configured means the console does not serve; the credential never appears in a log record.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_auth.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.3",

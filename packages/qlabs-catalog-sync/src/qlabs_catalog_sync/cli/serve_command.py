@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -45,6 +46,7 @@ from qlabs_catalog_sync.observability import (
     PrometheusMetrics,
     get_logger,
 )
+from qlabs_catalog_sync.runs.recorder import RunRecorder
 from qlabs_catalog_sync.scheduler import SyncScheduler
 
 from .config_loading import load_engine_config, resolve_credentials
@@ -113,7 +115,11 @@ async def _serve(
         host=host,
         port=port,
     )
+    # Run history (T11.4). Built here rather than inside the scheduler so a deployment
+    # without it degrades to "no reporting", never to "no sync".
+    recorder = RunRecorder.from_store(store)
     scheduler = SyncScheduler(
+        recorder=recorder,
         runners=[
             build_sync_loop(
                 pair=pair,
@@ -136,6 +142,12 @@ async def _serve(
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, waiter.set)
+
+    # A process killed mid-cycle leaves its run row at RUNNING; nothing else can close
+    # those out, so the next start does it before scheduling anything new.
+    reaped = await recorder.reap_stale(now=datetime.now(UTC))
+    if reaped:
+        _LOG.info("serve.run_history.reaped_stale", count=len(reaped))
 
     await api.start()
     scheduler.start()
