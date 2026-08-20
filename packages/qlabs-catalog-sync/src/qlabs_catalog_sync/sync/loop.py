@@ -1396,6 +1396,25 @@ class SyncLoop:
                     WithheldField(field=ACTIVATION_FIELD, reason=ACTIVATION_WITHHELD_REASON),
                 )
 
+        # Ask the manifest whether the target would accept this create *before* planning it.
+        # A dry run exists so an operator can trust the plan; one that promises creates the
+        # apply then refuses is the exact failure it is meant to prevent. Note the test is
+        # not "is the entity type supported" — Qlik supports datasets, it simply declares
+        # every dataset field read-only (D2: datasets are resolved, never created). So the
+        # rule is the connector's own: an entity with no writable field cannot be created.
+        if not self._target_can_create(entity_type):
+            # Phrased to match what the connector's own gate says on the apply path, so an
+            # operator reading a dry-run plan and an apply report sees one explanation.
+            refusal = CapabilityError(
+                f"connector {self._target.name!r} declares every {entity_type.value!r} field "
+                "read-only, so it can never create one",
+                endpoint=self._target.name,
+                entity_type=entity_type.value,
+                capability_mode="ro",
+                operation="create",
+            )
+            return self._capability_skip(change, entity_type, neutral_id, refusal, errors, None)
+
         self._count_planned(entity_type)
         if self._dry_run:
             return RecordReport(
@@ -1888,19 +1907,51 @@ class SyncLoop:
                 )
         return None
 
+    def _target_can_create(self, entity_type: EntityType) -> bool:
+        """Whether the target's manifest declares any writable field for ``entity_type``.
+
+        Mirrors the rule the Qlik writer applies in its own capability gate, so the plan a
+        dry run emits and the writes an apply makes agree. An entity the manifest does not
+        support at all is also not creatable.
+        """
+        manifest = self._target.capabilities()
+        if not manifest.supports(entity_type):
+            return False
+        capability = getattr(manifest, "entity_capability", None)
+        if capability is None:  # a bespoke manifest: fall back to the contract's own guard
+            return True
+        declared = capability(entity_type)
+        if declared is None:
+            return False
+        return any(manifest.is_writable(entity_type, field) for field in declared.fields)
+
     def _selects(self, change: ChangeRef) -> bool:
         """Decision D1: is this object inside the pair's ``catalog.schema`` selector?
 
-        The selector speaks Unity Catalog, so it is applied to native keys shaped like one
-        (``catalog.schema`` for a schema-as-data-product, ``catalog.schema.table`` for a
-        dataset). A key with no dotted path — a Qlik id, an opaque handle — is not something
-        these patterns can describe, and inventing a match or a refusal for it would be
-        worse than leaving it to the pair's other scoping (its endpoints and entity types).
+        The selector speaks Unity Catalog, so it is applied to whichever key is shaped like
+        one: ``catalog.schema`` for a schema-as-data-product, ``catalog.schema.table`` for a
+        dataset.
+
+        ``native_key`` is **not** that key for the MVP's only source. Databricks keys on the
+        stable ``schema_id``/``table_id`` — a UUID, because names are renameable and a
+        rename must not break identity — and carries the dotted name in
+        ``secondary_keys["full_name"]``. Matching ``native_key`` alone therefore found no dot
+        in any Databricks change and selected everything, so a pair scoped to one catalog
+        silently synced every catalog in the metastore. The dotted name is preferred here and
+        ``native_key`` is the fallback, so a connector that does key on the qualified name
+        still works.
+
+        A key with no dotted path anywhere — a Qlik id, an opaque handle — is not something
+        these patterns can describe, and inventing a match or a refusal for it would be worse
+        than leaving it to the pair's other scoping (its endpoints and entity types).
         """
-        parts = change.ref.native_key.split(".")
-        if len(parts) < 2:
-            return True
-        return self._pair.matches(parts[0], parts[1])
+        for candidate in (change.ref.secondary_keys.get("full_name"), change.ref.native_key):
+            if not candidate:
+                continue
+            parts = candidate.split(".")
+            if len(parts) >= 2:
+                return self._pair.matches(parts[0], parts[1])
+        return True
 
     async def _open_orphan_ids(self, entity_type: EntityType) -> set[uuid.UUID]:
         """Neutral ids currently recorded missing at the source, so a reappearance resolves."""
