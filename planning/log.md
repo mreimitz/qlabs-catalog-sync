@@ -1,5 +1,12 @@
 # Project Knowledge Update Log
 
+## 2026-08-20
+
+* **Structure**: Added `Docu/` as a fourth knowledge domain, organized by subject with `DC-NN` tags, and `Roadmap/completed/` as the home for finished roadmap items.
+* **Lifecycle**: Made the implementation path a hard rule — build what the roadmap specifies, record what shipped in `Docu/`, then retire the item — enforced by PROFILE032 and PROFILE035 through PROFILE039, with the first two blocking at the pre-write hook.
+* **Automation**: Added the `new-docu` and `complete-roadmap` generators and the read-only `check-references` scan. Completion refuses unless the bundle validates, every task on the item's board is done, and a documentation subject is named to receive the delivery.
+* **Fixes**: `sync-indexes` wrote parent indexes before their children existed, so a newly created subdirectory was never listed; the tag registry raised on any domain it predated.
+
 ## 2026-08-06
 
 * **Rebrand**: Repurposed the scaffold into the QLabs Catalog Sync project — a two-way data product metadata bridge (Databricks ↔ Qlik, future Snowflake/Collibra endpoints).

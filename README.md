@@ -304,6 +304,13 @@ Start here:
   the v1 scope decision, the Databricks-to-Qlik mapping decisions, the implementation plan
   and the agent guide.
 - [`planning/Roadmap/roadmap.md`](planning/Roadmap/roadmap.md) — RM-01 through RM-04.
+- [`planning/Docu/`](planning/Docu/) — what has actually been built, one subject per part
+  of the system. Empty until the first roadmap item completes.
+
+Roadmap items are retired, not deleted: when one finishes, its delivery is recorded in
+`planning/Docu/` and the item moves to `planning/Roadmap/completed/`. That is the only
+sanctioned way to finish work — see the implementation lifecycle in
+[`CLAUDE.md`](CLAUDE.md).
 
 The API and design research behind it:
 

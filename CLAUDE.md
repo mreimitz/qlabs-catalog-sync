@@ -82,11 +82,37 @@ All under `planning/` (read them; execute against the board):
 - Task board: `planning/tools/agent-plan/tasks.json`
   (ready queue: `python3 planning/tools/agent-plan/ready_queue.py`)
 
+## Implementation lifecycle (HARD RULE)
+
+Every piece of implementation work follows the same path, and an item is not finished
+until all four steps have happened:
+
+1. **It is on the roadmap.** Work that is not an `RM-NN` roadmap item does not get
+   built. Create it with the bundle's `/new-roadmap`.
+2. **It gets built** against that item's task board, `planning/tools/agent-plan/tasks.json`.
+   A task is `done` only after its `verify` command passes.
+3. **Its delivery is documented** in `planning/Docu/`, which is organized by subject
+   (one folder per part of the system, e.g. the SDK, the Qlik connector, the engine) and
+   records **what shipped versus what was planned**: the delivery, how it differed from
+   the plan, where the code lives, what was deliberately left out. Create a missing
+   subject with the bundle's `/new-docu`.
+4. **The roadmap item is retired** with the bundle's `/complete-roadmap`, which moves it
+   into `planning/Roadmap/completed/` in the same transaction that records the increment.
+
+Never mark a roadmap item done by hand and never move its folder yourself — the bundle's
+pre-write hook rejects both. `complete-roadmap` refuses while any task on the item's
+board is unfinished, so keeping `tasks.json` honest is what makes completion possible.
+
+Completing an item moves its folder, which invalidates paths in this file, `README.md`,
+`AGENTS.md` and the board's `inputs` entries. The command prints exactly what to fix and
+never edits outside the bundle; apply the edits, then confirm with
+`python3 planning/.claude/scripts/okf.py --root planning check-references --tag RM-NN`.
+
 ## `planning/` is a strict OKF bundle — do not hand-edit it
 
 `planning/` is a separately-governed Open Knowledge Format bundle with its own hooks,
 generators, and conformance tooling. **Never hand-edit its concepts.** Change it only
-through its own commands (e.g. its `/new-research`, `/new-roadmap` skills and its
-`planning/.claude/scripts/okf.py`). This root code project's tooling (ruff, mypy,
-pytest, the root `.claude` hooks) must not touch `planning/`, and OKF validation is
-scoped to the bundle.
+through its own commands (e.g. its `/new-research`, `/new-roadmap`, `/new-docu` and
+`/complete-roadmap` skills and its `planning/.claude/scripts/okf.py`). This root code
+project's tooling (ruff, mypy, pytest, the root `.claude` hooks) must not touch
+`planning/`, and OKF validation is scoped to the bundle.

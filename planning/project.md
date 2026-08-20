@@ -3,7 +3,7 @@ type: "Project"
 title: "QLabs Catalog Sync"
 description: "A two-way bridge that synchronizes data product metadata across data catalogs, starting with Databricks and Qlik."
 tags: ["project", "data-catalog", "metadata-sync", "databricks", "qlik"]
-timestamp: "2026-08-06T07:14:25Z"
+timestamp: "2026-08-20T10:45:00Z"
 status: "active"
 ---
 
@@ -31,6 +31,9 @@ is organized as research and planning; it will grow into a code project as the d
 - [Research](/Research/) contains tagged investigations — catalog APIs, the metadata model,
   and sync/conflict strategy — with their sources, notes, and outputs.
 - [Roadmap](/Roadmap/) contains the master plan and tagged initiatives that sequence the build.
+  Finished initiatives move to `Roadmap/completed/`.
+- [Documentation](/Docu/) records what has actually been built, one tagged subject per part of
+  the system.
 - [Claude controls](/.claude/) contains the commands, skills, hooks, templates, and profile that
   keep the knowledge tree valid.
 
@@ -39,14 +42,18 @@ is organized as research and planning; it will grow into a code project as the d
 - Use `/new-research` to scope and create an `RS-NN` research topic.
 - Use `/doc-intake` to convert a local file or directory into a new `RS-NN` topic.
 - Use `/new-roadmap` to create an `RM-NN` roadmap item.
+- Use `/new-docu` to create a `DC-NN` documentation subject.
+- Use `/complete-roadmap` to retire a finished roadmap item: it records the delivery in `Docu/`
+  and moves the item into `Roadmap/completed/`.
 - Use `/research-status` to inspect current work.
 - Use `/validate-okf` to validate official OKF and the strict local profile.
 - Use `/sync-okf` to regenerate managed indexes and the master roadmap view.
 
 ## Stable tags
 
-Research folders use `RS-NN-short-slug`; roadmap folders use `RM-NN-short-slug`. Numbers are
-zero-padded, allocated atomically, and never reused.
+Research folders use `RS-NN-short-slug`, roadmap folders `RM-NN-short-slug`, and documentation
+folders `DC-NN-short-slug`. Numbers are zero-padded, allocated atomically, and never reused — a
+completed roadmap item keeps its number after moving to `Roadmap/completed/`.
 
 ## Project tooling
 

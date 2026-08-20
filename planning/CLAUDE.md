@@ -3,7 +3,7 @@ type: "Agent Instruction"
 title: "QLabs Catalog Sync Operating Rules"
 description: "Mandatory structure, OKF conformance, research, and roadmap rules for agents on the QLabs Catalog Sync project."
 tags: ["agent", "instruction", "okf"]
-timestamp: "2026-08-06T07:14:25Z"
+timestamp: "2026-08-20T10:45:00Z"
 status: "active"
 ---
 
@@ -21,12 +21,19 @@ This repository is the knowledge bundle for **QLabs Catalog Sync** — a two-way
 synchronizes data product metadata across data catalogs, starting with Databricks and Qlik and
 extending later to Snowflake, Collibra, and other endpoints.
 
-It is one Open Knowledge Format v0.1 bundle. Three knowledge domains exist:
+It is one Open Knowledge Format v0.1 bundle. Four knowledge domains exist:
 
 - **`Research/`** — where investigation happens (catalog APIs, the metadata model, sync and
   conflict strategy). One subfolder per research topic.
 - **`Roadmap/`** — where plans, sequencing, and intent for building the bridge are documented.
+  Finished items move to `Roadmap/completed/`.
+- **`Docu/`** — what has actually been built, organized by subject. One subfolder per part of
+  the system.
 - **`.claude/`** — agent controls, generation templates, and conformance tooling.
+
+Work flows one way through them: research informs a roadmap item, the roadmap item is built,
+and on completion the delivery is recorded in `Docu/` and the item is retired to
+`Roadmap/completed/`. Section 5 makes that a hard rule.
 
 While the design is being worked out, this bundle stays research- and planning-shaped. It will
 later grow a code project for the sync engine and its catalog endpoints.
@@ -41,16 +48,19 @@ and tests only. Markdown is forbidden under `tools/`, and the root knowledge ind
 
 ## 2. Tagging convention (MANDATORY)
 
-Every research topic and every roadmap item gets a stable, zero-padded tag.
+Every research topic, roadmap item, and documentation subject gets a stable, zero-padded tag.
 
-| Domain   | Tag prefix | Example  | Meaning          |
-| -------- | ---------- | -------- | ---------------- |
-| Research | `RS`       | `RS-01`  | Research item 1  |
-| Roadmap  | `RM`       | `RM-01`  | Roadmap item 1   |
+| Domain        | Tag prefix | Example  | Meaning                |
+| ------------- | ---------- | -------- | ---------------------- |
+| Research      | `RS`       | `RS-01`  | Research item 1        |
+| Roadmap       | `RM`       | `RM-01`  | Roadmap item 1         |
+| Documentation | `DC`       | `DC-01`  | Documentation subject 1|
 
 Rules:
-- Folder names are `RS-NN-short-slug` / `RM-NN-short-slug` (e.g. `RS-04-token-pricing-models`).
-- `NN` is two digits, zero-padded, **never reused** even after a topic is archived.
+- Folder names are `RS-NN-short-slug` / `RM-NN-short-slug` / `DC-NN-short-slug`
+  (e.g. `RS-04-token-pricing-models`).
+- `NN` is two digits, zero-padded, **never reused** even after a topic is archived. A completed
+  roadmap item keeps its number forever; moving it to `Roadmap/completed/` does not free it.
 - The tag is the primary key. Reference items by tag in notes, commits, and roadmap entries
   (e.g. "blocked by RS-03", "feeds RM-02").
 - Tags are allocated by `.claude/scripts/okf.py`; do not create or reuse them manually.
@@ -84,10 +94,51 @@ violations. Fix violations rather than bypassing either layer.
 - Detailed planning for any item goes in its own `Roadmap/RM-NN-<slug>/` subfolder, never loose in `Roadmap/`.
 - `index.md` and `roadmap.md` are the only Markdown files allowed directly in `Roadmap/`.
 - Each roadmap item links to the research it depends on or produces (by `RS-NN` tag).
+- `Roadmap/` holds only unfinished work. Completed items live in `Roadmap/completed/RM-NN-<slug>/`
+  and are put there by the generator, never by hand.
 
 ---
 
-## 5. Workflow for a new research topic
+## 5. Implementation lifecycle (HARD RULE — enforced by hook and validator)
+
+> **Every piece of implementation work follows the same path: it is on the roadmap, it gets
+> built, its delivery is documented in `Docu/`, and the roadmap item moves to
+> `Roadmap/completed/`. An item is not finished until all four have happened.**
+
+1. **Plan it.** Work that is not an `RM-NN` roadmap item does not get built. Create it with
+   `/new-roadmap`.
+2. **Build it.** Execute against the item's task board in `tools/agent-plan/tasks.json`. A task
+   is done only after its `verify` command passes.
+3. **Document it.** `Docu/` is organized by subject, not by roadmap item — one folder per part
+   of the system, created with `/new-docu`. A documentation concept records **what shipped
+   versus what was planned**: the delivery, how it differed from the plan, where the code lives,
+   and what was deliberately left out. One roadmap item usually writes into several subjects.
+4. **Retire it.** Run `/complete-roadmap`. In one transaction it moves the item folder to
+   `Roadmap/completed/`, sets its status to `done`, ticks its milestones, writes a
+   `### RM-NN` increment into each named documentation subject, and revalidates the bundle.
+
+The generator refuses to complete an item while the bundle is invalid, while any task on its
+board is unfinished, or without at least one documentation subject to record the delivery.
+
+Enforcement is mechanical, not advisory:
+
+- `PROFILE032` — a roadmap item with status `done` outside `Roadmap/completed/`.
+- `PROFILE035` — an item under `Roadmap/completed/` whose status is not `done`.
+- `PROFILE036` — a completed item that no documentation subject records.
+- `PROFILE037` / `PROFILE039` — documentation missing or not filling its
+  `## Delivered increments` section.
+- `PROFILE038` — an increment that does not link the item it claims to document.
+
+The first two reach the pre-write hook, so flipping a status by hand is blocked at the moment
+of the edit rather than discovered later.
+
+After completing an item, apply the stale-reference report the generator prints — it lists the
+repository-root guides and task-board `inputs` entries that still point at the old path — and
+confirm with `check-references` that none remain.
+
+---
+
+## 6. Workflow for a new research topic
 
 When the user wants to start research, **run the intake** rather than guessing scope.
 
@@ -104,7 +155,7 @@ directory recursively, and creates the complete RS topic only after every visibl
 
 ---
 
-## 6. Working style
+## 7. Working style
 
 - Capture sources before synthesizing; keep a provenance trail in `sources/` so claims are traceable.
 - Distinguish raw capture (`sources/`), thinking (`notes/`), and deliverables (`outputs/`).
@@ -116,7 +167,7 @@ directory recursively, and creates the complete RS topic only after every visibl
 
 ---
 
-## 7. What NOT to do
+## 8. What NOT to do
 
 - ❌ Do not write loose files into `Research/` or `Roadmap/` roots.
 - ❌ Do not create `README.md`; use reserved `index.md` for navigation.
@@ -124,5 +175,9 @@ directory recursively, and creates the complete RS topic only after every visibl
 - ❌ Do not create Markdown under `tools/`; tooling is outside the OKF knowledge graph.
 - ❌ Do not reuse a retired tag number.
 - ❌ Do not start a topic without objective and scope recorded in `topic.md`.
+- ❌ Do not hand-move a roadmap item into `Roadmap/completed/`; use `/complete-roadmap`.
+- ❌ Do not set a roadmap item's status to `done` by hand; the hook rejects it.
+- ❌ Do not complete a roadmap item without recording what shipped in a `Docu/DC-NN-*/doc.md`.
+- ❌ Do not write loose files into `Docu/`; every document belongs to a `DC-NN` subject.
 - ❌ Do not bypass a hook block by renaming a path to dodge the check — fix the structure instead.
 - ❌ Do not finish work while either conformance layer reports a violation.

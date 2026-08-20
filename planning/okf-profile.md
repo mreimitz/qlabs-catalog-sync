@@ -3,7 +3,7 @@ type: "Standard Profile"
 title: "Research Scaffold OKF Profile"
 description: "The strict metadata, lifecycle, evidence, and validation rules for this scaffold."
 tags: ["okf", "standard", "validation"]
-timestamp: "2026-07-24T12:20:07Z"
+timestamp: "2026-08-20T10:45:00Z"
 status: "active"
 ---
 
@@ -36,6 +36,15 @@ ignoring Markdown there would violate the root bundle's official whole-tree conf
 - `index.md` provides progressive disclosure and contains no frontmatter, except the bundle-root
   index, which declares `okf_version: "0.1"`.
 - `log.md` records changes under newest-first ISO 8601 date headings and contains no frontmatter.
+
+## Delivery lifecycle
+
+Roadmap items and their documentation are validated as a pair. A `Roadmap Item` with status
+`done` must live under `Roadmap/completed/`, and every item there must be `done`. Each completed
+item must be recorded as a `### RM-NN` increment inside a `Documentation` concept under
+`Docu/DC-NN-slug/`, and that increment must link back to the item it documents. `Documentation`
+concepts carry a `## Delivered increments` section, and may only leave `draft` once it holds at
+least one increment.
 
 ## Evidence
 

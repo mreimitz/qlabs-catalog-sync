@@ -67,7 +67,24 @@ v1 is upstream-only, Qlik is the sole writer, source connectors are read-only, n
 two-way sync, no access-control sync. If a task seems to need a source-connector write
 path or any access sync, stop and flag it — it is out of scope.
 
-## 8. `planning/` is off-limits to hand-edits
+## 8. Implementation lifecycle (hard rule)
+
+Work is built from the roadmap, documented on delivery, and only then retired:
+
+1. It is an `RM-NN` roadmap item. Anything else does not get built.
+2. It gets built against that item's board; a task is `done` only after `verify` passes.
+3. Its delivery is recorded in `planning/Docu/`, which is organized by subject — one
+   folder per part of the system — as what shipped versus what was planned.
+4. The item is retired with the bundle's `/complete-roadmap`, which moves it into
+   `planning/Roadmap/completed/` in the same transaction.
+
+Never flip a roadmap item to `done` and never move its folder by hand; the bundle's
+pre-write hook rejects both. `complete-roadmap` refuses while any task on the board is
+unfinished — so marking your task `done` honestly is what eventually unblocks the
+release. Completing an item moves paths that this file and `README.md` reference; the
+command prints the exact edits to apply.
+
+## 9. `planning/` is off-limits to hand-edits
 
 `planning/` is a strict OKF bundle with its own tooling. Edit it only via its own
 commands; never hand-edit its concepts. The only routine change is claiming/completing
