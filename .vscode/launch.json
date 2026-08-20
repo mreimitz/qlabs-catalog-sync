@@ -1,0 +1,234 @@
+{
+  // QLabs Catalog Sync — debug profile.
+  //
+  // Every configuration runs the workspace virtualenv at .venv/ (create it with
+  // `uv sync --all-packages`) and sets justMyCode:false, so you can step into SQLAlchemy,
+  // FastAPI, APScheduler and the SDK rather than stopping at the edge of your own code.
+  //
+  // "type": "debugpy" needs the current Microsoft Python extension. On an older extension
+  // change every "debugpy" below to "python".
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // START HERE if you want to see the whole system work without a live tenant.
+      // This drives the real service — the same _serve() the `serve` command runs — over
+      // real HTTP: it signs in, registers endpoints, defines a pair, adds a selection
+      // rule, runs a cycle and waits for the scheduler to pick the pair up on its own.
+      // Breakpoints in api/, scheduler.py, configstore/ and sync/loop.py all get hit.
+      "name": "Probe: console configures a running engine",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-s",
+        "-vv",
+        "packages/qlabs-catalog-sync/tests/api/test_console_configures_a_running_engine.py"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // The other end-to-end probes: one port serving everything, and run history really
+      // being written by a real cycle.
+      "name": "Probe: single origin + run history",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-s",
+        "-vv",
+        "packages/qlabs-catalog-sync/tests/api/test_serve_single_origin.py",
+        "packages/qlabs-catalog-sync/tests/runs/test_run_history_is_reachable.py"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-s", "-vv", "${file}"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Debug one test by name. VS Code prompts for the substring; it becomes `pytest -k`.
+      "name": "Pytest: pick a test (-k)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-s", "-vv", "-k", "${input:testFilter}"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Re-run only what failed last time. The fastest loop when you are fixing a break.
+      "name": "Pytest: last failures (--lf)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-s", "-vv", "--lf"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Pytest: everything",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // The long-running service: REST API, console assets, /healthz and /metrics on one
+      // port (decision C8).
+      //
+      // REQUIRES an administrator credential, or it refuses to start — that is deliberate
+      // (C7: never serve an unauthenticated console). Set one up first:
+      //
+      //   uv run python scripts/make_admin_hash.py
+      //
+      // and put the line it prints in a `.env` file at the repository root (already
+      // gitignored). It also needs a real engine config; copy deploy/config/tenant.example.yaml
+      // and fill it in. Both connectors will try to reach a real tenant at startup.
+      "name": "CLI: serve (API + console)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/qlabs-catalog-sync",
+      "args": [
+        "--log-level",
+        "DEBUG",
+        "--state-db",
+        "sqlite:///debug-state.db",
+        "serve",
+        "--config",
+        "${input:configFile}",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8080"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Plan a cycle and apply nothing. The safest thing to point at a real tenant.
+      "name": "CLI: dry-run",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/qlabs-catalog-sync",
+      "args": [
+        "--log-level",
+        "DEBUG",
+        "--state-db",
+        "sqlite:///debug-state.db",
+        "dry-run",
+        "--config",
+        "${input:configFile}"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // One real cycle per pair, then exit. THIS WRITES to the configured Qlik tenant.
+      "name": "CLI: run (writes to the target)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/qlabs-catalog-sync",
+      "args": [
+        "--log-level",
+        "DEBUG",
+        "--state-db",
+        "sqlite:///debug-state.db",
+        "run",
+        "--config",
+        "${input:configFile}"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "CLI: identity-confirm",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/qlabs-catalog-sync",
+      "args": [
+        "--log-level",
+        "DEBUG",
+        "--state-db",
+        "sqlite:///debug-state.db",
+        "identity-confirm",
+        "--help"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Generate the administrator password hash `serve` needs. Prompts; echoes nothing.
+      "name": "Tool: make admin password hash",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/make_admin_hash.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Attach to a service already running elsewhere (a container, another terminal).
+      // Start that process with debugpy listening. debugpy is not a dependency of this
+      // workspace (VS Code ships its own for the launch configs above), so pull it in
+      // just for the run:
+      //   uv run --with debugpy python -m debugpy --listen 5678 --wait-for-client \
+      //     .venv/bin/qlabs-catalog-sync serve --config <file>
+      "name": "Attach to a running service (port 5678)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}", "remoteRoot": "${workspaceFolder}" }
+      ],
+      "justMyCode": false
+    }
+  ],
+  "compounds": [],
+  "inputs": [
+    {
+      "id": "configFile",
+      "type": "promptString",
+      "description": "Engine config file (copy deploy/config/tenant.example.yaml and fill it in)",
+      "default": "deploy/config/tenant.example.yaml"
+    },
+    {
+      "id": "testFilter",
+      "type": "promptString",
+      "description": "pytest -k filter, e.g. preview_and_sync_agree"
+    }
+  ]
+}

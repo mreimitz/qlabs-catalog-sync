@@ -1,0 +1,28 @@
+{
+  // Minimal, deliberately: only what the debug profile in launch.json needs to work on a
+  // fresh checkout. Nothing here overrides editor or formatting preferences.
+  //
+  // The interpreter is the uv workspace virtualenv. Create it with:
+  //   uv sync --all-packages
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+
+  // Test discovery in the Testing panel, matching pyproject.toml's own pytest settings
+  // (testpaths = ["packages"], importlib import mode).
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["packages"],
+
+  // planning/ is a separately governed OKF bundle with its own tooling; this repository's
+  // ruff/mypy/pytest never touch it, so keep it out of search and file watching too.
+  "search.exclude": {
+    "**/.venv": true,
+    "**/__pycache__": true,
+    "planning/tools/.venv": true
+  },
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.ruff_cache/**": true,
+    "**/.pytest_cache/**": true
+  }
+}
