@@ -203,7 +203,7 @@
       ],
       "dod": "Manifest model expresses per-entity/field rw/ro/na, partial_update, allowed_update_paths and concurrency; validates.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/manifest -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T1.4",
@@ -360,7 +360,7 @@
       ],
       "dod": "Contract version constant is exported, the compatibility gate rejects a mismatched major with a clear message, and the public surface imports cleanly.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/version -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.1",
@@ -428,7 +428,7 @@
       ],
       "dod": "Engine loads endpoint config, resolves secrets from a configured backend, and validates a sync-pair definition including UC selector patterns and the target space; invalid config fails at startup with a precise message.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/config -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.4",
@@ -591,7 +591,7 @@
       ],
       "dod": "Connector authenticates to a Qlik tenant via OAuth2 M2M against the configured base URL and healthcheck reports status; unit tested with respx.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/auth -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.2",
@@ -780,7 +780,7 @@
       ],
       "dod": "Connector authenticates to Databricks via OAuth M2M with a configured workspace client and healthcheck reports status.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/auth -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T4.2",
@@ -940,7 +940,7 @@
       ],
       "dod": "Bootstrap proposes matches by natural key and binds none without confirmation; confirmed matches persist and are reused; an ambiguous match is reported rather than guessed.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/identity -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T7.2",
