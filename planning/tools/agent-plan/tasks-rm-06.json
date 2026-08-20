@@ -44,7 +44,7 @@
       ],
       "dod": "A reference resolves to a live credential for connector setup; resolve-status returns only a boolean and a reason; a test asserts no secret value appears in any log record or serialized response.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_secrets.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T10.3",
@@ -66,7 +66,7 @@
       ],
       "dod": "Every mutating operation writes exactly one audit row and one generation bump; a validation failure or a mid-transaction error commits neither; secret values are rejected if submitted inline rather than as a reference.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_service.py packages/qlabs-catalog-sync/tests/configstore/test_audit.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T10.4",
