@@ -114,7 +114,7 @@
       ],
       "dod": "CI runs the corrected gate commands and builds a wheel per package on push; the workflow is green.",
       "verify": "uv sync --all-packages && uv run ruff check packages && uv run mypy && uv run pytest -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T0.4",
@@ -136,7 +136,7 @@
       ],
       "dod": "Contributor guide states the package boundaries and the connector->SDK-only dependency rule and points to the ADR location.",
       "verify": "uv run python -c \"import pathlib,sys; sys.exit(0 if pathlib.Path('CONTRIBUTING.md').is_file() else 1)\"",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T1.1",
@@ -158,7 +158,7 @@
       ],
       "dod": "All neutral entities are defined, validate, and serialize round-trip; mypy strict clean.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/models -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T1.2",
