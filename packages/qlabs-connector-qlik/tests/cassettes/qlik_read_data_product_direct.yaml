@@ -1,0 +1,25 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant -- see
+# qlik_connector_setup_and_read_data_product.yaml's header comment for the conventions
+# this follows. No OAuth interaction here: this cassette backs a test that calls
+# qlabs_connector_qlik.read.read_data_product() directly against a plain HttpEndpoint
+# with a static bearer token (no auth provider attached), exactly like
+# tests/read/*.py's own respx-based tests do -- the same read() the connector calls at
+# runtime, exercised without the connector's OAuth wiring around it.
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://acme-conformance.eu.qlikcloud.example/api/data-governance/data-products/8894f0d9c3a4446edd5f3e48
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer test-token"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+        etag: ['W/"rev-9"']
+      body:
+        string: '{"id": "8894f0d9c3a4446edd5f3e48", "qri": "qri:data-product://8894f0d9c3a4446edd5f3e48", "mainId": "8894f0d9c3a4446edd5f3e48-main", "name": "Sales Analytics Data Product", "description": "Curated sales datasets", "readMe": "# Sales\nCurated sales datasets.", "spaceId": "610a2f3b4c5d6e7f8a9b0c1d", "tags": ["sales", "revenue"], "ownerId": "6909d8524392dbbab822c7f7", "tenantId": "acme-conformance-tenant", "activated": true, "activatedOn": ["2026-08-15T12:00:00Z"], "datasetIds": ["ds-orders-1", "ds-customers-1"], "apiConsumableDatasetIds": ["ds-orders-1"], "glossaryIds": [], "keyContacts": [{"userId": "6909d8524392dbbab822c7f7", "role": "owner"}, {"userId": "7a1b2c3d4e5f60718293a4b5", "role": "steward"}], "pendingChangesCount": 0, "createdAt": "2026-08-10T09:00:00Z", "createdBy": "6909d8524392dbbab822c7f7", "updatedAt": "2026-08-15T12:00:00Z", "updatedBy": "6909d8524392dbbab822c7f7"}'

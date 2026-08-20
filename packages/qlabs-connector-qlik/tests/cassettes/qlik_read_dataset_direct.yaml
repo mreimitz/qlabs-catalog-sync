@@ -1,0 +1,24 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant -- see
+# qlik_connector_setup_and_read_data_product.yaml's header comment for the conventions
+# this follows. Backs a direct call to qlabs_connector_qlik.read.read_dataset() against
+# a plain HttpEndpoint (no OAuth), for a single Items API item -- the payload shape is
+# RS-02 qlik-catalog-api-reference.md section 1.1 ("Key item fields ... GET
+# /api/v1/items/{itemId}"), including resourceAttributes.secureQri, the forward-looking
+# durable dataset key read.py looks for (two-way-sync-readiness.md section 3).
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://acme-conformance.eu.qlikcloud.example/api/v1/items/item-conformance-orders-1
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer test-token"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"id": "item-conformance-orders-1", "resourceId": "ds-orders-1", "resourceType": "dataset", "resourceSubType": "qix-df", "name": "orders", "description": "One row per customer order.", "spaceId": "610a2f3b4c5d6e7f8a9b0c1d", "ownerId": "6909d8524392dbbab822c7f7", "meta": {"tags": [{"id": "tag-1", "name": "finance"}, {"id": "tag-2", "name": "orders"}]}, "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-10T00:00:00Z", "resourceAttributes": {"secureQri": "qdf-secure:acme-conformance-tenant:610a2f3b4c5d6e7f8a9b0c1d:ds-orders-1", "qri": "qdf:acme-conformance-tenant:610a2f3b4c5d6e7f8a9b0c1d:ds-orders-1"}}'

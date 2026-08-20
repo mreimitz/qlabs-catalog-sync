@@ -1,0 +1,44 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant -- see this package's
+# tests/conformance/test_read_cassettes.py module docstring for the RM-01 "no live
+# tenants" convention this follows and the RS-02 sections these payloads mirror
+# (qlik-two-way-sync-readiness.md section 2 for the data-product fields;
+# qlik-catalog-api-reference.md section 3.2 for the OAuth2 client-credentials grant).
+#
+# Backs Connector.setup() (no I/O of its own) followed by Connector.read() on a
+# DATA_PRODUCT ref -- the token POST below is triggered by read()'s first real request,
+# not by setup(). vcr_config's match_on is (method, scheme, host, port, path, query) --
+# it deliberately excludes the request body, so the "body" values below are realistic
+# documentation of what each call sends, not a byte-exact match requirement.
+version: 1
+interactions:
+  - request:
+      method: POST
+      uri: https://acme-conformance.eu.qlikcloud.example/oauth/token
+      body: '{"grant_type": "client_credentials", "client_id": "client-conformance", "client_secret": "secret-conformance", "scope": "user_default"}'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"access_token": "cassette-token-1", "token_type": "bearer", "expires_in": 3600}'
+  - request:
+      method: GET
+      uri: https://acme-conformance.eu.qlikcloud.example/api/data-governance/data-products/8894f0d9c3a4446edd5f3e48
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer cassette-token-1"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+        etag: ['W/"rev-9"']
+      body:
+        string: '{"id": "8894f0d9c3a4446edd5f3e48", "qri": "qri:data-product://8894f0d9c3a4446edd5f3e48", "mainId": "8894f0d9c3a4446edd5f3e48-main", "name": "Sales Analytics Data Product", "description": "Curated sales datasets", "readMe": "# Sales\nCurated sales datasets.", "spaceId": "610a2f3b4c5d6e7f8a9b0c1d", "tags": ["sales", "revenue"], "ownerId": "6909d8524392dbbab822c7f7", "tenantId": "acme-conformance-tenant", "activated": true, "activatedOn": ["2026-08-15T12:00:00Z"], "datasetIds": ["ds-orders-1", "ds-customers-1"], "apiConsumableDatasetIds": ["ds-orders-1"], "glossaryIds": [], "keyContacts": [{"userId": "6909d8524392dbbab822c7f7", "role": "owner"}, {"userId": "7a1b2c3d4e5f60718293a4b5", "role": "steward"}], "pendingChangesCount": 0, "createdAt": "2026-08-10T09:00:00Z", "createdBy": "6909d8524392dbbab822c7f7", "updatedAt": "2026-08-15T12:00:00Z", "updatedBy": "6909d8524392dbbab822c7f7"}'
