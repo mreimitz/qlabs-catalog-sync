@@ -270,7 +270,7 @@
       ],
       "dod": "Checksum is stable across reordering, whitespace and timezone formatting; identical logical values produce identical checksums; differing values never collide in the test corpus.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/envelope -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.7",
