@@ -10,5 +10,12 @@ from __future__ import annotations
 
 from .connectors import build_connectors_router
 from .endpoints import build_endpoints_router
+from .pairs import build_pairs_router
+from .selection import build_selection_router
 
-__all__ = ["build_connectors_router", "build_endpoints_router"]
+__all__ = [
+    "build_connectors_router",
+    "build_endpoints_router",
+    "build_pairs_router",
+    "build_selection_router",
+]

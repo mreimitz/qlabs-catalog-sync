@@ -53,7 +53,12 @@ from qlabs_catalog_sync.observability import HealthRegistry, render_healthz, ren
 
 from .auth import ConsoleAuth, install_auth
 from .errors import API_ERROR_RESPONSES, install_error_handlers
-from .routes import build_connectors_router, build_endpoints_router
+from .routes import (
+    build_connectors_router,
+    build_endpoints_router,
+    build_pairs_router,
+    build_selection_router,
+)
 from .static import mount_static
 
 __all__ = ["API_PREFIX", "create_app"]
@@ -134,6 +139,8 @@ def create_app(
     if config_service is not None and registry is not None:
         app.include_router(build_connectors_router(registry), prefix=API_PREFIX)
         app.include_router(build_endpoints_router(config_service, registry), prefix=API_PREFIX)
+        app.include_router(build_pairs_router(config_service), prefix=API_PREFIX)
+        app.include_router(build_selection_router(config_service), prefix=API_PREFIX)
 
     mount_static(app, static_dir=static_dir, api_prefix=API_PREFIX)
 
