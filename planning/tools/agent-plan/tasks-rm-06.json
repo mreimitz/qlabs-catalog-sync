@@ -276,7 +276,7 @@
       ],
       "dod": "Preview results match a real cycle's selection object for object on the same rule set; a draft preview leaves the stored configuration untouched; a large source pages rather than timing out.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_preview.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.6",
@@ -296,7 +296,7 @@
       ],
       "dod": "A dry-run over a configured pair returns the plan and writes nothing; run-now on a pair already running is refused with a clear code; a paused pair does not fire on its cadence and resumes cleanly.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_run_control.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.7",
@@ -315,7 +315,7 @@
       ],
       "dod": "Run history pages deterministically under concurrent writes; issues are attributable to a specific run and object; the change log answers when a given schema entered or left scope.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_history.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.8",
@@ -356,7 +356,7 @@
       ],
       "dod": "A pair created through the API starts running without a restart; deleting or pausing one stops it; a reconcile during an in-flight cycle neither cancels it nor changes its configuration mid-run; no pair ever runs twice concurrently.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_reconcile.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T13.1",
