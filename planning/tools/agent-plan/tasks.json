@@ -756,7 +756,7 @@
       ],
       "dod": "The Qlik connector passes the SDK conformance kit in write mode against respx mocks and recorded cassettes.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.1",
