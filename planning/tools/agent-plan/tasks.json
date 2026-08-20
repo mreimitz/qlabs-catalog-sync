@@ -478,7 +478,7 @@
       ],
       "dod": "Policy resolves a manually edited target field per configuration: source-wins by default, preserve-local when set; both paths are covered by tests.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/policy -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.6",
