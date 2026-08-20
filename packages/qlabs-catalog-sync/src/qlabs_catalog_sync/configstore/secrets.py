@@ -67,6 +67,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from pydantic import SecretBytes, SecretStr
+from pydantic_settings import BaseSettings
 
 from qlabs_catalog_sync.config import (
     EnvironmentSecretBackend,
@@ -85,6 +86,7 @@ __all__ = [
     "SecretResolveStatus",
     "resolve_connector_kwargs",
     "resolve_status",
+    "secret_field_names",
 ]
 
 #: Schemes this module can resolve today. Decision C2 names ``"vault"`` as a later
@@ -188,7 +190,7 @@ class _SecretField:
     secret_type: type[SecretStr] | type[SecretBytes]
 
 
-def _secret_fields(config_model: type[ConnectorConfig]) -> list[_SecretField]:
+def _secret_fields(config_model: type[BaseSettings]) -> list[_SecretField]:
     """Every field on ``config_model`` typed ``SecretStr``/``SecretBytes``.
 
     This is how "one reference yields every credential field that endpoint's
@@ -213,6 +215,28 @@ def _secret_fields(config_model: type[ConnectorConfig]) -> list[_SecretField]:
                 _SecretField(name=name, required=field_info.is_required(), secret_type=secret_type)
             )
     return fields
+
+
+def secret_field_names(config_model: type[BaseSettings]) -> frozenset[str]:
+    """The names of every ``SecretStr``/``SecretBytes`` field ``config_model`` declares.
+
+    Public because two different questions need the *same* answer and must never be
+    able to disagree about it:
+
+    * **which fields this module resolves** from a :class:`SecretRef` (see
+      :func:`resolve_connector_kwargs` / :func:`resolve_status`), and
+    * **which keys the configuration service refuses** in an endpoint's plain
+      ``settings`` dict, because a credential smuggled in there would land in the one
+      column decision C2 promises can never hold one
+      (``configstore.service._validate_endpoint_settings``).
+
+    T10.3 originally carried its own copy of this reflection, since the version here
+    was private. Two implementations of "what counts as a secret field" drifting apart
+    would mean the set of fields rejected inline and the set actually resolved stop
+    matching — a credential could be accepted into ``settings`` for a field this module
+    would then also read from the environment. One implementation, exported.
+    """
+    return frozenset(field.name for field in _secret_fields(config_model))
 
 
 def _require_supported_scheme(ref: SecretRef) -> None:

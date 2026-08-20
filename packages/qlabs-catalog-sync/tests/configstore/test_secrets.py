@@ -37,6 +37,7 @@ from qlabs_catalog_sync.configstore.secrets import (
     SecretResolveStatus,
     resolve_connector_kwargs,
     resolve_status,
+    secret_field_names,
 )
 from qlabs_catalog_sync.observability import REDACTION_TEST_PROCESSORS, get_logger
 from qlabs_catalog_sync_sdk.config import ConnectorConfig
@@ -422,3 +423,51 @@ def test_secret_not_found_failure_path_never_appears_in_log_output(
     (entry,) = entries
     assert _SENTINEL not in str(entry)
     assert "QLIK_ACME__CLIENT_SECRET" in entry["status"].reason
+
+
+# --------------------------------------------------------------------------------------
+# secret_field_names is the ONE reflection both the resolver and the config service use
+# --------------------------------------------------------------------------------------
+
+
+def test_secret_field_names_matches_what_resolution_actually_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exported reflection names exactly the fields resolution populates.
+
+    T10.3's configuration service refuses an endpoint ``settings`` key that names a
+    connector secret field (a credential smuggled into the one column decision C2
+    promises can never hold one), and it decides *which* keys those are by calling
+    :func:`secret_field_names`. This module decides which fields to *resolve* from a
+    :class:`SecretRef` using the same function. The two answers must be the same set:
+    if resolution read a field the service did not refuse, a credential could be
+    accepted into ``settings`` for a field also read from the environment.
+
+    This test is the probe that keeps them joined. It fails if the reflection and the
+    resolver ever come apart -- which is exactly what happened while the reflection was
+    private and T10.3 carried its own copy.
+    """
+    monkeypatch.setenv("QLIK_ACME__CLIENT_SECRET", _SENTINEL)
+    monkeypatch.setenv("QLIK_ACME__REFRESH_TOKEN", _SIBLING_SENTINEL)
+
+    declared = secret_field_names(_ExampleConnectorConfig)
+    resolved = resolve_connector_kwargs(
+        SecretRef.parse("env:QLIK_ACME"),
+        _ExampleConnectorConfig,
+        settings={"base_url": "https://acme.example"},
+    )
+
+    # every declared secret field was populated by resolution ...
+    assert declared <= set(resolved)
+    # ... and resolution added nothing beyond the declared secrets and the settings.
+    assert set(resolved) - {"base_url"} == declared
+    # a plain, non-secret field is never mistaken for a secret one.
+    assert "base_url" not in declared
+
+
+def test_secret_field_names_ignores_plain_fields_and_finds_optional_ones() -> None:
+    """A field is secret because of its declared type, not its name or its required-ness."""
+    declared = secret_field_names(_ExampleConnectorConfig)
+    assert "client_secret" in declared  # required SecretStr
+    assert "refresh_token" in declared  # optional SecretBytes | None
+    assert "base_url" not in declared  # plain str, however credential-ish it looked

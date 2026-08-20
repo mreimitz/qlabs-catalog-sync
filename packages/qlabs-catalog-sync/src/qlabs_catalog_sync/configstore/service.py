@@ -56,15 +56,14 @@ Design points, stated once here rather than repeated on every method:
 from __future__ import annotations
 
 import asyncio
-import types as _types
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Final, Union, get_args, get_origin
+from typing import Final
 
 import structlog
-from pydantic import SecretBytes, SecretStr, ValidationError
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
@@ -80,7 +79,7 @@ from qlabs_catalog_sync.configstore.models import (
     SelectionRuleRow,
     SyncPairRow,
 )
-from qlabs_catalog_sync.configstore.secrets import SecretRef
+from qlabs_catalog_sync.configstore.secrets import SecretRef, secret_field_names
 from qlabs_catalog_sync.configstore.types import (
     ChangeEntityKind,
     EndpointRole,
@@ -281,35 +280,6 @@ class SelectionOverrideAlreadyExistsError(ConfigServiceError):
 _SETTINGS_VALIDATION_PLACEHOLDER: Final[str] = "t10-3-settings-validation-placeholder"
 
 
-def _is_secret_annotation(annotation: Any) -> bool:
-    """True when ``annotation`` is ``SecretStr``/``SecretBytes``, optionally wrapped in
-    a union with ``None`` (e.g. ``SecretBytes | None``).
-
-    A small, local re-implementation of the same check
-    ``configstore.secrets._secret_type_of`` makes (T10.2) -- that function is a private,
-    unexported helper of a module this task does not own, so it is not imported here.
-    See the final report for a note that ``configstore/secrets.py`` could usefully
-    export this reflection itself so it has exactly one implementation.
-    """
-    if annotation is SecretStr or annotation is SecretBytes:
-        return True
-    origin = get_origin(annotation)
-    if origin is Union or origin is _types.UnionType:
-        return any(
-            _is_secret_annotation(arg) for arg in get_args(annotation) if arg is not type(None)
-        )
-    return False
-
-
-def _secret_field_names(config_model: type[BaseSettings]) -> frozenset[str]:
-    """Every field on ``config_model`` typed ``SecretStr``/``SecretBytes``."""
-    return frozenset(
-        name
-        for name, field_info in config_model.model_fields.items()
-        if _is_secret_annotation(field_info.annotation)
-    )
-
-
 def _validate_endpoint_settings(
     connector: str, config_model: type[BaseSettings], settings: Mapping[str, object]
 ) -> None:
@@ -339,7 +309,7 @@ def _validate_endpoint_settings(
     rather than silently swallowed, so a connector with an unusually strict secret-field
     validator still gets an honest message instead of a confusing empty one).
     """
-    secret_fields = _secret_field_names(config_model)
+    secret_fields = secret_field_names(config_model)
     inline_secrets = secret_fields & settings.keys()
     if inline_secrets:
         raise InlineSecretRejectedError(connector, sorted(inline_secrets))
