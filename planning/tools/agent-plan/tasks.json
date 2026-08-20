@@ -248,7 +248,7 @@
       ],
       "dod": "API-key, OAuth2 M2M and JWT/key-pair providers issue and refresh cached tokens; unit tested; no token is written to disk.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/auth -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.6",
