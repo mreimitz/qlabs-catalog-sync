@@ -3,7 +3,7 @@ type: "Roadmap"
 title: "Master Roadmap"
 description: "The live project-level index of roadmap items and research topics."
 tags: ["roadmap", "planning"]
-timestamp: "2026-08-20T12:34:07Z"
+timestamp: "2026-08-20T16:30:02Z"
 status: "active"
 ---
 
@@ -38,7 +38,11 @@ No roadmap items have been completed yet.
 
 ## Documentation
 
-No documentation subjects have been created yet.
+* [DC-01-connector-sdk](../Docu/DC-01-connector-sdk/doc.md) — Connector SDK · `draft`
+* [DC-02-sync-engine](../Docu/DC-02-sync-engine/doc.md) — Sync Engine · `draft`
+* [DC-03-qlik-write-connector](../Docu/DC-03-qlik-write-connector/doc.md) — Qlik Write Connector · `draft`
+* [DC-04-databricks-read-connector](../Docu/DC-04-databricks-read-connector/doc.md) — Databricks Read Connector · `draft`
+* [DC-05-packaging-and-operations](../Docu/DC-05-packaging-and-operations/doc.md) — Packaging and Operations · `draft`
 
 ## Now / Next / Later
 

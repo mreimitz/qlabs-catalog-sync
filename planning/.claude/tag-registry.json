@@ -1,5 +1,11 @@
 {
-  "allocated_dc": [],
+  "allocated_dc": [
+    "DC-01",
+    "DC-02",
+    "DC-03",
+    "DC-04",
+    "DC-05"
+  ],
   "allocated_rm": [
     "RM-01",
     "RM-02",
@@ -19,7 +25,7 @@
     "RS-08",
     "RS-09"
   ],
-  "next_dc": 1,
+  "next_dc": 6,
   "next_rm": 7,
   "next_rs": 10
 }
