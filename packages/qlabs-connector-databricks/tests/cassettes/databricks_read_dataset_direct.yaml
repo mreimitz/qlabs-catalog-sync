@@ -1,0 +1,22 @@
+# Hand-authored, NOT captured from a live Databricks tenant -- see
+# databricks_connector_setup_and_read_schema.yaml's header comment for the RM-01
+# "no live tenants" convention and the RS-01 sections these payloads mirror.
+# Backs a test calling qlabs_connector_databricks.read.read_dataset() directly against a
+# plain HttpEndpoint for a single table fetch -- no listing, no OAuth, matching
+# read.py's own single-object GET (no pagination needed for an already-identified ref).
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://acme.cloud.databricks.com/api/2.1/unity-catalog/tables/prod.sales.orders
+      body: null
+      headers:
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"catalog_name": "prod", "schema_name": "sales", "name": "orders", "full_name": "prod.sales.orders", "table_type": "MANAGED", "columns": [{"name": "order_id", "type_name": "BIGINT", "nullable": false, "position": 0, "comment": "Primary key"}, {"name": "customer_id", "type_name": "BIGINT", "nullable": false, "position": 1}, {"name": "order_total", "type_name": "DECIMAL", "nullable": true, "position": 2}], "comment": "One row per customer order.", "owner": "data-eng@acme.com", "properties": {"delta.minReaderVersion": "1"}, "table_id": "c5d8e4f3-5f0b-4c2c-8b4a-3f7e0d9b8a21", "metastore_id": "11111111-2222-3333-4444-555555555555", "created_at": 1700000000000, "created_by": "admin@acme.com", "updated_at": 1700000000000, "updated_by": "data-eng@acme.com", "data_source_format": "DELTA"}'
