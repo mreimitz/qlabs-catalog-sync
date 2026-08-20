@@ -1,10 +1,14 @@
-// A genuine smoke test for the scaffolded shell, not a placeholder. It exists to make
-// `pnpm test` a real gate the moment T13.2 starts building on top of this scaffold —
-// see the T13.1 report for why this file, not a real screen, is what's under test here.
-import { render, screen } from "@testing-library/react";
+// A genuine smoke test for the REAL application shell (T13.2), not the T13.1 scaffold's
+// placeholder data table it used to cover -- see the T13.2 report for why this file, rather
+// than a screen-specific test, is what's under test here: it drives the real `App` through a
+// stubbed `fetch` at the network boundary (the boot sequence's `GET /api/auth/session`), the
+// same discipline every other new test in this task follows.
+import { render, screen, waitFor } from "@testing-library/react";
 import { ThemeProvider } from "@elabs-ai/components-tokens";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
+import { installFetchMock, jsonResponse, sessionInfoFixture } from "./apiFixtures";
+import { setSignedOut } from "../auth/sessionStore";
 import App from "../App";
 
 function renderApp() {
@@ -15,22 +19,46 @@ function renderApp() {
   );
 }
 
-describe("scaffolded application shell", () => {
-  it("renders the sidebar navigation and the placeholder data table", () => {
+describe("application shell", () => {
+  beforeEach(() => {
+    setSignedOut();
+    window.history.pushState({}, "", "/");
+  });
+
+  it("renders the sign-in screen first when there is no session", async () => {
+    const fetchMock = installFetchMock();
+    fetchMock.mockResolvedValueOnce(jsonResponse(401, { code: "unauthenticated", message: "sign in" }));
     renderApp();
 
-    // The four scaffold nav entries render as accessible buttons.
-    expect(screen.getByRole("button", { name: "Data" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tables" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
 
-    // The placeholder DataTable actually rendered its sample rows.
-    expect(screen.getByText("Customer import")).toBeInTheDocument();
-    expect(screen.getByText("Partner feed")).toBeInTheDocument();
+  it("renders the real nav, breadcrumb and sign-out control once signed in", async () => {
+    const fetchMock = installFetchMock();
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, sessionInfoFixture({ username: "admin" })));
+    renderApp();
 
-    // Exactly one <main> landmark (brand-ui issue 386, called out in App.tsx) —
-    // SidebarInset renders it; nesting a second one is the regression this guards.
-    expect(screen.getAllByRole("main")).toHaveLength(1);
+    // The five real WP13 destinations -- not the T13.1 scaffold's "Data"/"Tables"/"Home"/
+    // "Settings" placeholders.
+    for (const label of ["Endpoints", "Sync pairs", "Selection", "Dry run", "Runs"]) {
+      expect(await screen.findByRole("link", { name: new RegExp(label) })).toBeInTheDocument();
+    }
+
+    expect(screen.getByRole("button", { name: /Sign out/ })).toBeInTheDocument();
+    expect(screen.getByText("admin")).toBeInTheDocument();
+
+    // Exactly one <main> landmark (brand-ui issue 386, carried over from the T13.1 scaffold's
+    // own note): SidebarInset renders it, the content region beneath it is a plain <div>.
+    await waitFor(() => expect(screen.getAllByRole("main")).toHaveLength(1));
+  });
+
+  it("redirects the bare '/' path to the default (Endpoints) screen", async () => {
+    const fetchMock = installFetchMock();
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, sessionInfoFixture()));
+    renderApp();
+
+    await screen.findByRole("button", { name: /Sign out/ });
+    expect(window.location.pathname).toBe("/endpoints");
+    expect(screen.getByText(/This screen has not been built yet\. T13\.3 builds it\./)).toBeInTheDocument();
   });
 });

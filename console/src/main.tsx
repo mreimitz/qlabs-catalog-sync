@@ -6,7 +6,9 @@ import App from "./App";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="light">
+    {/* defaultDensity="compact" per app-spec.md's taste dial: "a dense, operator-facing
+        internal tool ... keeps more of that visible without scrolling". */}
+    <ThemeProvider defaultTheme="light" defaultDensity="compact">
       <App />
     </ThemeProvider>
   </StrictMode>,
