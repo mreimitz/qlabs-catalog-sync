@@ -780,7 +780,7 @@
       ],
       "dod": "Connector authenticates to Databricks via OAuth M2M with a configured workspace client and healthcheck reports status.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/auth -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.2",
