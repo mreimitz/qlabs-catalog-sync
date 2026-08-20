@@ -1,4 +1,4 @@
-"""Shared fixtures for the Qlik connector's write-path tests (``write.py``, T3.4).
+"""Shared fixtures for the Qlik connector's write-path tests (``write.py``, T3.4/T3.5).
 
 Same shape as ``tests/read/conftest.py`` and ``tests/resolve/conftest.py``: a plain
 ``HttpEndpoint`` with a static bearer token, because ``write.py`` never builds its own —
@@ -23,8 +23,19 @@ from typing import Any
 import httpx
 import pytest
 
+from qlabs_catalog_sync_sdk.contract import EntityType, IdentityRef
+from qlabs_catalog_sync_sdk.envelope import to_json_value
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
-from qlabs_catalog_sync_sdk.models import DataProduct, Party, PartyRole, Tag, TextField
+from qlabs_catalog_sync_sdk.models import (
+    DataProduct,
+    FieldChange,
+    FieldDiff,
+    FieldUpdateMode,
+    Party,
+    PartyRole,
+    Tag,
+    TextField,
+)
 from qlabs_connector_qlik.write import DatasetNameLookup, QlikWriter, build_writer
 
 TENANT_BASE_URL = "https://acme.eu.qlikcloud.example"
@@ -224,3 +235,83 @@ def sent_bodies(respx_mock: Any) -> list[dict[str, Any]]:
 
 def _json_of(request: httpx.Request) -> Any:
     return json.loads(request.content or b"{}")
+
+
+# --------------------------------------------------------------------------------------
+# update (T3.5): the PATCH endpoint, the diff, and what respx captured
+# --------------------------------------------------------------------------------------
+
+#: ``PATCH /api/data-governance/data-products/{id}`` — the same ``/v1``-less family.
+PRODUCT_URL = f"{DATA_PRODUCTS_URL}/{CREATED_ID}"
+
+#: The ETag the engine's diff was computed against, carried as ``FieldDiff.expected_revision``.
+ETAG = 'W/"rev-7"'
+
+#: The ETag a re-read returns after a concurrent change invalidated :data:`ETAG`.
+FRESH_ETAG = 'W/"rev-8"'
+
+
+def product_ref(**overrides: Any) -> IdentityRef:
+    """The :class:`IdentityRef` the engine hands ``update()`` for the RS-02 example product."""
+    values: dict[str, Any] = {
+        "endpoint": ENDPOINT,
+        "entity_type": EntityType.DATA_PRODUCT,
+        "native_key": CREATED_ID,
+        "tenant_id": TENANT_ID,
+        "secondary_keys": {"qri": CREATED_QRI},
+    }
+    values.update(overrides)
+    return IdentityRef(**values)
+
+
+def change(
+    field: str, value: Any, *, mode: FieldUpdateMode = FieldUpdateMode.REPLACE
+) -> FieldChange:
+    """One :class:`FieldChange` carrying the *JSON projection* of a neutral value.
+
+    Built through the SDK's own ``to_json_value`` — the exact function the engine's diff
+    engine (T7.2) uses — so these tests feed ``update()`` what the engine really emits
+    rather than a hand-shaped dict that happens to be convenient.
+    """
+    return FieldChange(field=field, mode=mode, value=to_json_value(value))
+
+
+def diff(*changes: FieldChange, expected_revision: str | None = ETAG) -> FieldDiff:
+    """A data-product :class:`FieldDiff` over ``changes``, guarded by ``expected_revision``."""
+    return FieldDiff(
+        entity_type=EntityType.DATA_PRODUCT,
+        changes=list(changes),
+        expected_revision=expected_revision,
+    )
+
+
+def mock_patch(respx_mock: Any, *, status_code: int = 204, headers: Any = None) -> Any:
+    """Mock the documented success: ``204 No Content``, no body."""
+    return respx_mock.patch(PRODUCT_URL).mock(
+        return_value=httpx.Response(status_code, headers=headers)
+    )
+
+
+def mock_read_product(respx_mock: Any, *, etag: str | None = FRESH_ETAG, **overrides: Any) -> Any:
+    """Mock the ``GET .../{id}`` re-read the 412 recovery path issues."""
+    headers = {} if etag is None else {"ETag": etag}
+    return respx_mock.get(PRODUCT_URL).mock(
+        return_value=httpx.Response(200, json=created_response(**overrides), headers=headers)
+    )
+
+
+def patch_calls(respx_mock: Any) -> list[Any]:
+    """Every captured PATCH request, in order."""
+    return [call.request for call in respx_mock.calls if call.request.method == "PATCH"]
+
+
+def patch_bodies(respx_mock: Any) -> list[list[dict[str, Any]]]:
+    """The JSON Patch array of every captured PATCH, in order."""
+    return [list(_json_of(request)) for request in patch_calls(respx_mock)]
+
+
+def patch_body(respx_mock: Any) -> list[dict[str, Any]]:
+    """The JSON Patch array of the single PATCH this test expected."""
+    bodies = patch_bodies(respx_mock)
+    assert len(bodies) == 1, f"expected exactly one PATCH, got {len(bodies)}"
+    return bodies[0]
