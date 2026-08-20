@@ -756,7 +756,7 @@
       ],
       "dod": "The Qlik connector passes the SDK conformance kit in write mode against respx mocks and recorded cassettes.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T4.1",
@@ -1008,7 +1008,7 @@
       ],
       "dod": "Neutral status maps to the correct Qlik lifecycle action; with activation opt-in off, no activate call is ever issued.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/status -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T8.1",
@@ -1120,7 +1120,7 @@
       ],
       "dod": "Every unverified behavior is listed in the registry with its call site, the probe script runs against a tenant from config, and the checklist maps each item to a pass/fail step.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T9.1",
