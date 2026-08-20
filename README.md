@@ -142,8 +142,9 @@ v1 is deliberately the smallest safe version of the idea:
 
 The **MVP (Track A)** is one source and one target: Databricks Unity Catalog → Qlik Cloud.
 A UC schema becomes one Qlik data product; its tables and views become that product's
-datasets. **Track B** — Collibra, Snowflake and the Qlik glossary write path — starts only
-after the MVP ships, and its tasks sit on the board as `blocked` until then.
+datasets. **Track B** — Collibra, Snowflake and the Qlik glossary write path — is a separate
+roadmap item (RM-05) on its own board; it starts only after the MVP ships, and its tasks sit as
+`blocked` until then.
 
 Two safety properties hold for v1, by design:
 
@@ -187,8 +188,8 @@ As of 2026-08-20 — 67 tasks on the board, 2 done.
 | WP2 | Engine — discovery, state store, sync loop, scheduler, CLI | 0 / 9 | Not started |
 | WP3 | Qlik write connector (sole writer) | 0 / 9 | Not started |
 | WP4 | Databricks read connector | 0 / 7 | Not started |
-| WP5 | Collibra read connector | 0 / 6 | Blocked (Track B) |
-| WP6 | Snowflake read connector | 0 / 6 | Blocked (Track B) |
+| WP5 | Collibra read connector | 0 / 6 | Blocked (Track B, RM-05) |
+| WP6 | Snowflake read connector | 0 / 6 | Blocked (Track B, RM-05) |
 | WP7 | Identity map, field diff, owner correlation | 0 / 4 | Not started |
 | WP8 | Integration, end-to-end pilot, release readiness | 0 / 6 | Not started |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 0 / 4 | Not started |
@@ -196,7 +197,7 @@ As of 2026-08-20 — 67 tasks on the board, 2 done.
 Regenerate this picture at any time:
 
 ```bash
-python3 planning/tools/agent-plan/ready_queue.py --all
+python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01
 ```
 
 ### What works today
@@ -257,8 +258,8 @@ packages/
   qlabs-catalog-sync/           # the engine: discovery, sync loop, state store, scheduler (WP2, WP7)
   qlabs-connector-qlik/         # sole WRITE connector                                       (WP3)
   qlabs-connector-databricks/   # read-only source connector                                 (WP4)
-  qlabs-connector-collibra/     # read-only source connector                       (WP5, Track B)
-  qlabs-connector-snowflake/    # read-only source connector                       (WP6, Track B)
+  qlabs-connector-collibra/     # read-only source connector                (WP5, Track B, RM-05)
+  qlabs-connector-snowflake/    # read-only source connector                (WP6, Track B, RM-05)
 planning/                       # design, research & plan — a separately-governed OKF bundle
 ```
 
@@ -286,7 +287,7 @@ The task board is machine-readable. To see everything ready to pick up right now
 dependencies `done`):
 
 ```bash
-python3 planning/tools/agent-plan/ready_queue.py
+python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01
 ```
 
 Then read [`AGENTS.md`](AGENTS.md) for how to claim and land a task, and
@@ -303,7 +304,7 @@ Start here:
 - [`planning/Roadmap/RM-01-one-way-sync-mvp/`](planning/Roadmap/RM-01-one-way-sync-mvp/) —
   the v1 scope decision, the Databricks-to-Qlik mapping decisions, the implementation plan
   and the agent guide.
-- [`planning/Roadmap/roadmap.md`](planning/Roadmap/roadmap.md) — RM-01 through RM-04.
+- [`planning/Roadmap/roadmap.md`](planning/Roadmap/roadmap.md) — RM-01 through RM-05.
 - [`planning/Docu/`](planning/Docu/) — what has actually been built, one subject per part
   of the system. Empty until the first roadmap item completes.
 

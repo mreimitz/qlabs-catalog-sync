@@ -1357,6 +1357,7 @@ class StaleReference:
 @dataclass(frozen=True)
 class CompletionResult:
     destination: Path
+    repointed: tuple[str, ...]
     documented: tuple[str, ...]
     milestones_ticked: int
     task_board_waived: bool
@@ -1581,7 +1582,8 @@ def discover_task_boards(root: Path, explicit: list[str]) -> list[Path]:
             candidate if candidate.is_absolute() else root / candidate
             for candidate in (Path(value) for value in explicit)
         ]
-    return sorted((root / "tools" / "agent-plan").rglob("tasks.json"))
+    # One board per roadmap item: tasks.json, tasks-rm-05.json, and so on.
+    return sorted((root / "tools" / "agent-plan").rglob("tasks*.json"))
 
 
 def task_gate(boards: list[Path], tag: str) -> tuple[list[str], bool]:
@@ -1671,6 +1673,71 @@ def dirty_tree_paths(root: Path) -> Optional[list[str]]:
     if result.returncode != 0:
         return None
     return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def split_link_target(raw: str) -> tuple[str, str]:
+    """Split a Markdown link target into its path and everything after it."""
+    stripped = raw.strip()
+    parts = stripped.split(maxsplit=1)
+    head = parts[0]
+    trailer = f" {parts[1]}" if len(parts) > 1 else ""
+    for separator in ("#", "?"):
+        index = head.find(separator)
+        if index != -1:
+            return head[:index], head[index:] + trailer
+    return head, trailer
+
+
+def project_link_rewrites(
+    root: Path, source: Path, destination: Path, projected: dict[Path, str]
+) -> dict[Path, str]:
+    """Re-point bundle Markdown links from a moved item folder to its new home.
+
+    The move is what breaks these links, so the same transaction repairs them.
+    index.md is skipped because sync_indexes regenerates it; log.md is rewritten
+    but carries no frontmatter, so it needs no timestamp bump.
+    """
+    merged = dict(projected)
+    for path in markdown_files(root):
+        if path == source or source in path.parents or path.name == "index.md":
+            continue
+        try:
+            text = merged.get(path) or read_text(path)
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        def repoint(match: "re.Match[str]") -> str:
+            raw = match.group(1)
+            head, trailer = split_link_target(raw)
+            target = resolve_link(root, path, head)
+            if target is None:
+                return match.group(0)
+            normalized = Path(os.path.normpath(target))
+            if normalized != source and source not in normalized.parents:
+                return match.group(0)
+            moved = destination / normalized.relative_to(source)
+            if head.startswith("/"):
+                replacement = "/" + relative(root, moved)
+            else:
+                replacement = os.path.relpath(moved, path.parent).replace(os.sep, "/")
+            return match.group(0).replace(raw, replacement + trailer, 1)
+
+        updated = LINK_RE.sub(repoint, text)
+        if updated == text:
+            continue
+        if path.name in RESERVED_NAMES:
+            merged[path] = updated
+            continue
+        metadata, body = parse_frontmatter(updated)
+        if metadata is None:
+            merged[path] = updated
+            continue
+        previous, _ = parse_frontmatter(read_text(path)) if path.is_file() else (None, "")
+        metadata["timestamp"] = advance_timestamp(
+            (previous or {}).get("timestamp") if previous else None
+        )
+        merged[path] = render_frontmatter(metadata, body)
+    return merged
 
 
 def complete_roadmap(root: Path, args: argparse.Namespace) -> CompletionResult:
@@ -1794,6 +1861,13 @@ def complete_roadmap(root: Path, args: argparse.Namespace) -> CompletionResult:
     )
     new_rm_log = append_log_entry(read_text(source / "log.md"), f"* **Completion**: {summary}")
 
+    projected = project_link_rewrites(root, source, destination, projected)
+    repointed = [
+        path
+        for path in projected
+        if path != destination / "item.md" and path not in doc_paths
+    ]
+
     profile = load_profile(root)
     for path, content in projected.items():
         if path.is_file():
@@ -1824,6 +1898,8 @@ def complete_roadmap(root: Path, args: argparse.Namespace) -> CompletionResult:
         for doc_path in doc_paths:
             restore.capture(doc_path)
             restore.capture(doc_path.parent / "log.md")
+        for path in repointed:
+            restore.capture(path)
 
         moved = False
         try:
@@ -1835,6 +1911,8 @@ def complete_roadmap(root: Path, args: argparse.Namespace) -> CompletionResult:
                 write_text_if_changed(doc_path, projected[doc_path])
             for log_path, content in doc_logs.items():
                 write_text_if_changed(log_path, content)
+            for path in repointed:
+                write_text_if_changed(path, projected[path])
             sync_master_roadmap(root)
             sync_indexes(root)
             issues = validate(root)
@@ -1865,6 +1943,7 @@ def complete_roadmap(root: Path, args: argparse.Namespace) -> CompletionResult:
         )
     return CompletionResult(
         destination=destination,
+        repointed=tuple(sorted(relative(root, path) for path in repointed)),
         documented=tuple(documented),
         milestones_ticked=ticked,
         task_board_waived=not matched,
@@ -2218,6 +2297,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                 f"Ticked {result.milestones_ticked} milestone(s)."
                 + (" Task board waived." if result.task_board_waived else "")
             )
+            if result.repointed:
+                print(
+                    f"Re-pointed {len(result.repointed)} bundle link(s): "
+                    + ", ".join(result.repointed)
+                )
             print_stale_references(
                 list(result.stale_references), normalize_tag(args.tag, "RM")
             )

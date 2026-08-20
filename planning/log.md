@@ -6,6 +6,8 @@
 * **Lifecycle**: Made the implementation path a hard rule — build what the roadmap specifies, record what shipped in `Docu/`, then retire the item — enforced by PROFILE032 and PROFILE035 through PROFILE039, with the first two blocking at the pre-write hook.
 * **Automation**: Added the `new-docu` and `complete-roadmap` generators and the read-only `check-references` scan. Completion refuses unless the bundle validates, every task on the item's board is done, and a documentation subject is named to receive the delivery.
 * **Fixes**: `sync-indexes` wrote parent indexes before their children existed, so a newly created subdirectory was never listed; the tag registry raised on any domain it predated.
+* **Scope split**: Split RM-01's Track B — Collibra, Snowflake, and the Qlik glossary write path — into RM-05 with its own task board, so RM-01 completes when v0.1 actually ships rather than waiting on work that starts afterwards.
+* **Tooling**: `complete-roadmap` now re-points bundle Markdown links to a moved item in the same transaction, so a later roadmap item may link an earlier one without blocking its completion. `ready_queue.py` now loads every `tasks*.json` board so cross-item dependencies resolve, and takes `--roadmap` to scope output to one item.
 
 ## 2026-08-06
 

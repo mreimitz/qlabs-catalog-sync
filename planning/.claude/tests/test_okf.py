@@ -466,6 +466,26 @@ class GeneratorIntegrationTests(unittest.TestCase):
         )
         self.assertEqual([], okf.validate(self.root))
 
+    def test_complete_roadmap_repoints_bundle_links_to_the_new_path(self) -> None:
+        """A later roadmap item links the MVP; the move must not break it."""
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        self.finish_task_board()
+        follow_on = self.root / "Roadmap" / "RM-05-track-b-connectors-glossary" / "item.md"
+        before = okf.concept_metadata(follow_on)["timestamp"]
+        self.assertIn("/Roadmap/RM-01-one-way-sync-mvp/item.md", follow_on.read_text())
+
+        result = okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
+
+        text = follow_on.read_text(encoding="utf-8")
+        self.assertIn("/Roadmap/completed/RM-01-one-way-sync-mvp/item.md", text)
+        self.assertNotIn("](/Roadmap/RM-01-one-way-sync-mvp/", text)
+        self.assertNotEqual(before, okf.concept_metadata(follow_on)["timestamp"])
+        self.assertIn(
+            "Roadmap/RM-05-track-b-connectors-glossary/item.md", result.repointed
+        )
+        self.assertEqual([], okf.validate(self.root))
+
     def test_complete_roadmap_refuses_while_tasks_pending(self) -> None:
         self.ensure_domains()
         docu_tag = self.make_docu()

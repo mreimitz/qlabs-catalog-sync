@@ -7,7 +7,8 @@
 ## Sections
 
 * [Completed Roadmap Items](completed/) - Browse completed roadmap items.
-* [Upstream metadata sync MVP (sources to Qlik)](RM-01-one-way-sync-mvp/) - Browse upstream metadata sync mvp (sources to qlik).
+* [Upstream metadata sync MVP (Databricks to Qlik)](RM-01-one-way-sync-mvp/) - Browse upstream metadata sync mvp (databricks to qlik).
 * [Two-way sync with conflict resolution](RM-02-two-way-sync/) - Browse two-way sync with conflict resolution.
 * [Pluggable endpoint framework for future catalogs](RM-03-pluggable-endpoints/) - Browse pluggable endpoint framework for future catalogs.
 * [Access observe and report (post-v1)](RM-04-access-observe-report/) - Browse access observe and report (post-v1).
+* [Track B source connectors and the Qlik glossary](RM-05-track-b-connectors-glossary/) - Browse track b source connectors and the qlik glossary.

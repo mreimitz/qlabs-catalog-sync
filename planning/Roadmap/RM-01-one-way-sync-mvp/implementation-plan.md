@@ -3,7 +3,7 @@ type: "Research Output"
 title: "v1 Implementation Plan — Work Packages, Tasks & Model Recommendations"
 description: "Executable build plan for the Databricks-to-Qlik upstream sync MVP, with locked mapping decisions, per-task dependencies and file ownership, parallelization waves, acceptance gates, and a recommended model per task."
 tags: ["roadmap", "RM-01", "implementation-plan", "work-packages", "v1"]
-timestamp: "2026-08-20T10:00:00Z"
+timestamp: "2026-08-20T11:05:00Z"
 status: "draft"
 ---
 
@@ -17,18 +17,22 @@ a runnable verify command, and a recommended model.
 
 **The MVP is a one-way Databricks-to-Qlik metadata sync.** One source (Databricks Unity Catalog),
 one target (Qlik Cloud), upstream only. Everything needed to ship that — and nothing else — is
-**Track A**. Collibra and Snowflake are real RM-01 deliverables but they are **Track B**: they start
-only after Track A has shipped v0.1, and they must not be staffed while Track A is open.
+**Track A**, and Track A *is* RM-01. Collibra and Snowflake are **Track B**: they start only after
+Track A has shipped v0.1, and they must not be staffed while Track A is open. Track B is now its own
+roadmap item, [RM-05](/Roadmap/RM-05-track-b-connectors-glossary/item.md), on its own board — so
+RM-01 completes at the moment the software ships rather than waiting on work that begins afterwards.
 
-| | Track A (the MVP, ships v0.1) | Track B (after v0.1, still RM-01) |
+| | Track A — RM-01 (the MVP, ships v0.1) | Track B — RM-05 (after v0.1) |
 | --- | --- | --- |
+| Board | `tools/agent-plan/tasks.json`, 52 tasks | `tools/agent-plan/tasks-rm-05.json`, 15 tasks |
 | Work packages | WP0, WP1, WP2, WP3, WP4, WP7, WP8, WP9 | WP5 (Collibra), WP6 (Snowflake), Qlik glossary write path |
 | Source connectors | Databricks (read-only) | Collibra, Snowflake (read-only) |
 | Entities | DataProduct, Dataset, Party, Tag | + GlossaryTerm, Category |
 | Pilots | T8.1 Databricks -> Qlik | T8.2 Collibra glossary, T8.3 Snowflake |
 
-Track B tasks are on the board with status `blocked`, so they never surface in the ready queue while
-Track A is in flight.
+Every task on the RM-05 board is `blocked`, so none of them surfaces in the ready queue while Track A
+is in flight. Their dependencies still point back into this board; the ready queue loads both and
+resolves across them. Scope the queue with `--roadmap RM-01` while building the MVP.
 
 The v1 scope guardrails from the [scope decision](decision.md) are unchanged and absolute: upstream
 only, Qlik is the sole writer, source connectors are read-only, no two-way sync, no access-control
@@ -120,8 +124,8 @@ qlabs-catalog-sync-sdk      # contract, neutral model, helpers, conformance kit 
 qlabs-catalog-sync          # engine: discovery, sync loop, state store, scheduler (WP2, WP7)
 qlabs-connector-qlik        # sole WRITE connector                                (WP3)
 qlabs-connector-databricks  # read-only source connector                          (WP4)
-qlabs-connector-collibra    # read-only source connector                    (WP5, Track B)
-qlabs-connector-snowflake   # read-only source connector                    (WP6, Track B)
+qlabs-connector-collibra    # read-only source connector             (WP5, RM-05 Track B)
+qlabs-connector-snowflake   # read-only source connector             (WP6, RM-05 Track B)
 ```
 
 ## Parallelization waves
@@ -132,8 +136,12 @@ qlabs-connector-snowflake   # read-only source connector                    (WP6
 | 1 | WP1 to the **contract freeze** (T1.1 -> T1.2 -> T1.3) plus the parallel helpers T1.4-T1.7 | 4-5 | fan-out |
 | 2 | WP1 remainder, WP2 engine, WP3 Qlik, WP4 Databricks, WP7 identity/diff — **all in parallel** | up to 9 | integration |
 | 3 | WP8 integration, conformance, idempotency, tenant checklist | 4-5 | release readiness |
-| 4 | WP9 packaging/deploy, v0.1 tag | 3 | v0.1 release |
-| 5 | Track B: WP5 Collibra, WP6 Snowflake, Qlik glossary | 4-6 | RM-01 complete |
+| 4 | WP9 packaging/deploy, v0.1 tag | 3 | **RM-01 complete** |
+| 5 | RM-05 Track B: WP5 Collibra, WP6 Snowflake, Qlik glossary | 4-6 | a separate roadmap item |
+
+Wave 4 is where RM-01 ends. Tagging v0.1 is not the last step: the delivery is recorded in `Docu/`
+and the item is retired to `Roadmap/completed/` with `complete-roadmap`, which refuses while any
+task on this board is unfinished.
 
 **Critical path:** T0.5 -> T1.1 -> T1.2 -> T1.3 (contract freeze) -> T2.4 sync loop + T3.5 Qlik
 update -> T8.1 pilot -> T9.4 release. Everything else hangs off that spine and should be staffed
@@ -228,14 +236,15 @@ in read mode; the manifest matches what the connector can actually do.
 | T4.6 | Conformance tests (respx + vcr) | T1.8, T4.3, T4.5, T4.7 | no | Sonnet |
 | T4.7 | **Tag read path (D6)**: `INFORMATION_SCHEMA.SCHEMA_TAGS` / `TABLE_TAGS` over the Statement Execution API, config-gated on `sql_warehouse_id`; absent warehouse means the manifest reports `tags` as `na` | T4.4 | no | Sonnet |
 
-## WP5 — Collibra read connector — **Track B, blocked until v0.1 ships**
+## WP5 — Collibra read connector — **RM-05, blocked until v0.1 ships**
 
 Goal: read data products + business terms as the clean glossary source for Qlik. Tasks T5.1-T5.6 are
-unchanged from the previous revision and stay on the board with status `blocked`.
+unchanged; they now live on the RM-05 board with status `blocked`.
 
-## WP6 — Snowflake read connector — **Track B, blocked until v0.1 ships**
+## WP6 — Snowflake read connector — **RM-05, blocked until v0.1 ships**
 
-Goal: read objects + listings/shares into neutral entities. Tasks T6.1-T6.6 stay `blocked`.
+Goal: read objects + listings/shares into neutral entities. Tasks T6.1-T6.6 are on the RM-05 board
+and stay `blocked`.
 
 ## WP7 — Identity & mapping (engine cross-cutting)
 
@@ -263,7 +272,8 @@ real tenant can confirm is registered, not assumed.
 | T8.5 | VCR contract tests for the Qlik and Databricks connectors against recorded responses | T8.1 | yes | Sonnet |
 | T8.6 | **Tenant-verification package** (replaces "resolve the open items"): a `TENANT_UNVERIFIED` registry in code marking each assumption, a runnable `scripts/tenant_probe.py` that exercises them against a real tenant, and a checklist doc a human runs before production | T3.5, T3.7 | yes | Sonnet |
 
-Track B pilots T8.2 (Collibra glossary) and T8.3 (Snowflake) stay on the board as `blocked`.
+Track B pilots T8.2 (Collibra glossary) and T8.3 (Snowflake) moved to the RM-05 board and stay
+`blocked`.
 
 ## WP9 — Packaging, deployment & ops
 
@@ -302,8 +312,8 @@ checklist. None of them blocks the build.
 Wave 0 and the T1.1-T1.3 contract chain are single-threaded by nature — do not try to parallelize
 them. Once the contract is frozen, run eight to ten agents concurrently: the SDK remainder, the
 engine, the Qlik writer (critical path), the Databricks reader, and the WP7 identity/diff pair, each
-in its own worktree confined to its `owns_paths`. Converge on WP8, then WP9. Start Track B only after
-v0.1 is tagged.
+in its own worktree confined to its `owns_paths`. Converge on WP8, then WP9. Finish by documenting
+the delivery and retiring RM-01. Start RM-05 only after v0.1 is tagged.
 
 # Citations
 

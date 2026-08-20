@@ -1,0 +1,322 @@
+{
+  "version": 1,
+  "roadmap_item": "RM-05",
+  "tasks": [
+    {
+      "id": "T3.6",
+      "wp": "WP3",
+      "title": "Glossary terms/categories + relations + change-status (Track B)",
+      "description": "TRACK B - blocked until v0.1 ships. Glossary term and category create/update, relatesTo and linksTo relations, and the change-status action. Deferred by decision D5 because Databricks has no glossary to source from; it lands with the Collibra connector.",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/glossary.py",
+        "packages/qlabs-connector-qlik/tests/glossary/"
+      ],
+      "inputs": [
+        "/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
+        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+      ],
+      "dod": "Glossary terms and categories are created and updated with relations and links and a working change-status action.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/glossary -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T8.2",
+      "wp": "WP8",
+      "title": "Collibra -> Qlik glossary end-to-end pilot (Track B)",
+      "description": "TRACK B - blocked until v0.1 ships. Collibra business terms and categories sync into the Qlik glossary with term relations preserved.",
+      "model": "sonnet",
+      "depends_on": [
+        "T8.1",
+        "T3.6",
+        "T5.6"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e_collibra/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+      ],
+      "dod": "Collibra glossary terms and categories sync into Qlik with relations preserved.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e_collibra -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T8.3",
+      "wp": "WP8",
+      "title": "Snowflake -> Qlik pilot (Track B)",
+      "description": "TRACK B - blocked until v0.1 ships. A Snowflake object or listing syncs into Qlik.",
+      "model": "sonnet",
+      "depends_on": [
+        "T8.1",
+        "T6.6"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e_snowflake/"
+      ],
+      "inputs": [
+        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+      ],
+      "dod": "A Snowflake data object syncs into Qlik matching the expected target state.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e_snowflake -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T5.1",
+      "wp": "WP5",
+      "title": "Collibra auth (Basic/JWT) + config",
+      "description": "TRACK B - blocked until v0.1 ships. Implement Collibra Basic/JWT auth and config.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/auth.py",
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/__init__.py"
+      ],
+      "inputs": [
+        "RS-05 collibra catalog API reference (auth)"
+      ],
+      "dod": "Connector authenticates to Collibra via Basic/JWT with configured endpoint.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/auth -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T5.2",
+      "wp": "WP5",
+      "title": "Collibra capability manifest",
+      "description": "TRACK B - blocked until v0.1 ships. Declare the Collibra capability manifest: ro; asset UUID keys; rich glossary + data product.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/manifest.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (identity keys, glossary richness)"
+      ],
+      "dod": "Manifest declares read-only entities, asset-UUID identity, and rich glossary/data product support.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/manifest -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T5.3",
+      "wp": "WP5",
+      "title": "Collibra list_changed",
+      "description": "TRACK B - blocked until v0.1 ships. Implement list_changed via lastModifiedOn / GraphQL reads.",
+      "model": "sonnet",
+      "depends_on": [
+        "T5.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/read.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (change detection, GraphQL)"
+      ],
+      "dod": "list_changed returns assets changed since watermark using lastModifiedOn via GraphQL.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/read -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T5.4",
+      "wp": "WP5",
+      "title": "Collibra read() assets, data products, business terms",
+      "description": "TRACK B - blocked until v0.1 ships. Implement read() for assets, data products, and business terms, producing neutral terms and categories.",
+      "model": "sonnet",
+      "depends_on": [
+        "T5.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/read.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (assets, data products, terms)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "read() returns assets, data products, and business terms as neutral terms/categories with envelopes.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/read -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T5.5",
+      "wp": "WP5",
+      "title": "Collibra source-to-neutral mapping incl. relation graph",
+      "description": "TRACK B - blocked until v0.1 ships. Map Collibra source to neutral including term relations/links (relation-graph mapping).",
+      "model": "opus",
+      "depends_on": [
+        "T5.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/mapping.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (relation graph, term links)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Term relations/links map into the neutral relation graph without loss; relations preserved.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/read -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T5.6",
+      "wp": "WP5",
+      "title": "Collibra conformance tests (respx + vcr)",
+      "description": "TRACK B - blocked until v0.1 ships. Write conformance tests (respx + vcr) for the Collibra read connector.",
+      "model": "sonnet",
+      "depends_on": [
+        "T5.5"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/tests/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit, read mode)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Collibra connector passes the SDK conformance kit in read mode with relations preserved.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T6.1",
+      "wp": "WP6",
+      "title": "Snowflake auth (key-pair JWT) + config",
+      "description": "TRACK B - blocked until v0.1 ships. Implement Snowflake key-pair JWT auth and connector-python / SQL REST config.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/auth.py",
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/__init__.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake catalog API reference (auth)"
+      ],
+      "dod": "Connector authenticates to Snowflake via key-pair JWT with configured client.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/auth -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T6.2",
+      "wp": "WP6",
+      "title": "Snowflake capability manifest",
+      "description": "TRACK B - blocked until v0.1 ships. Declare the Snowflake capability manifest: ro; FQN + listing global name; tags/comments.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/manifest.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (identity keys, capabilities)"
+      ],
+      "dod": "Manifest declares read-only entities, FQN + listing global name identity, and tags/comments support.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/manifest -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T6.3",
+      "wp": "WP6",
+      "title": "Snowflake list_changed",
+      "description": "TRACK B - blocked until v0.1 ships. Implement list_changed via SHOW / INFORMATION_SCHEMA / ACCOUNT_USAGE (note ~2h lag).",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/read.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (change detection, ACCOUNT_USAGE lag)"
+      ],
+      "dod": "list_changed returns changed objects using SHOW/INFORMATION_SCHEMA/ACCOUNT_USAGE, accounting for ~2h lag.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T6.4",
+      "wp": "WP6",
+      "title": "Snowflake read() objects + listings/shares",
+      "description": "TRACK B - blocked until v0.1 ships. Implement read() for objects plus listings/shares, producing neutral entities.",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/read.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (objects, listings/shares)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "read() returns objects and listings/shares as neutral entities with envelopes.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T6.5",
+      "wp": "WP6",
+      "title": "Snowflake source-to-neutral mapping",
+      "description": "TRACK B - blocked until v0.1 ships. Map Snowflake source to neutral: comments and tags.",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/mapping.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (field mapping)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Comments and tags map correctly into neutral fields.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
+      "status": "blocked"
+    },
+    {
+      "id": "T6.6",
+      "wp": "WP6",
+      "title": "Snowflake conformance tests (respx + vcr)",
+      "description": "TRACK B - blocked until v0.1 ships. Write conformance tests (respx + vcr) for the Snowflake read connector.",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.5"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/tests/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit, read mode)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Snowflake connector passes the SDK conformance kit in read mode.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests -q",
+      "status": "blocked"
+    }
+  ]
+}

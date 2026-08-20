@@ -1,19 +1,20 @@
 ---
 type: "Roadmap Item"
-title: "Upstream metadata sync MVP (sources to Qlik)"
-description: "Ship the v1 upstream-only metadata sync: read data product metadata from source catalogs and write it into Qlik through the neutral model. Qlik is the sole writer; no two-way sync and no access-control sync in v1."
+title: "Upstream metadata sync MVP (Databricks to Qlik)"
+description: "Ship the v1 upstream-only metadata sync: read data product metadata from Databricks and write it into Qlik through the neutral model. Qlik is the sole writer; no two-way sync and no access-control sync in v1."
 tags: ["roadmap", "RM-01"]
-timestamp: "2026-08-20T10:00:00Z"
+timestamp: "2026-08-20T11:06:00Z"
 status: "active"
 ---
 
-# Upstream metadata sync MVP (sources to Qlik)
+# Upstream metadata sync MVP (Databricks to Qlik)
 
 ## Goal
 
-Ship a working v1 that syncs data product metadata **upstream** from source catalogs (Databricks
-first, then Collibra and Snowflake) into **Qlik**, through the RS-03 neutral model and the RS-08
-connector SDK. Qlik is the only write target; source connectors are read-only.
+Ship a working v1 that syncs data product metadata **upstream** from **Databricks** into **Qlik**,
+through the RS-03 neutral model and the RS-08 connector SDK. Qlik is the only write target; source
+connectors are read-only. Further source connectors follow in
+[RM-05](/Roadmap/RM-05-track-b-connectors-glossary/item.md) on the same contract.
 
 ## Why it matters
 
@@ -24,14 +25,17 @@ access).
 
 ## Scope
 
-The MVP is the Databricks-to-Qlik flow; Collibra and Snowflake are Track B within this same item and
-start only once v0.1 is tagged. The full scope, sequencing, mapping decisions, and per-task model
-recommendations are in the implementation plan and the MVP decision. Access-control synchronization
-is explicitly deferred to RM-04.
+This item is exactly the Databricks-to-Qlik flow, ending at a tagged v0.1. The Collibra and
+Snowflake read connectors and the Qlik glossary write path were originally Track B inside this item;
+they are now [RM-05](/Roadmap/RM-05-track-b-connectors-glossary/item.md), so this one completes at
+the point the software actually ships. The full scope, sequencing, mapping decisions, and per-task
+model recommendations are in the implementation plan and the MVP decision. Access-control
+synchronization is explicitly deferred to RM-04.
+
+The executable board is [tools/agent-plan/tasks.json](/tools/agent-plan/tasks.json), 52 tasks
+across WP0-WP4 and WP7-WP9.
 
 ## Milestones
-
-**Track A — the MVP (Databricks to Qlik), ships v0.1:**
 
 - [ ] Repair the repository gate and pin every runtime dependency up front.
 - [ ] Extract the connector SDK (contract, neutral model, helpers, conformance kit, fake connector).
@@ -39,11 +43,7 @@ is explicitly deferred to RM-04.
 - [ ] Build the Qlik write connector (data products) and the Databricks read connector (UC schemas).
 - [ ] Pilot the Databricks-to-Qlik data-product sync, prove idempotency and restart safety.
 - [ ] Package, deploy, and release v0.1.
-
-**Track B — after v0.1:**
-
-- [ ] Qlik glossary write path plus the Collibra read connector and its glossary pilot.
-- [ ] Snowflake read connector and its pilot.
+- [ ] Record the delivery in `Docu/` and retire this item to `Roadmap/completed/`.
 
 ## Plan and decisions
 
@@ -56,7 +56,10 @@ is explicitly deferred to RM-04.
 - [RS-01 Databricks](/Research/RS-01-databricks-catalog-api/topic.md)
 - [RS-02 Qlik](/Research/RS-02-qlik-catalog-api/topic.md)
 - [RS-03 Neutral model](/Research/RS-03-neutral-metadata-model/topic.md)
-- [RS-05 Snowflake](/Research/RS-05-snowflake-catalog-api/topic.md)
-- [RS-06 Collibra](/Research/RS-06-collibra-catalog-api/topic.md)
 - [RS-07 Architecture](/Research/RS-07-architecture-techstack-references/topic.md)
 - [RS-08 Connector SDK](/Research/RS-08-connector-plugin-sdk/topic.md)
+
+## Follow-on
+
+- [RM-05 Track B source connectors and the Qlik glossary](/Roadmap/RM-05-track-b-connectors-glossary/item.md)
+  — Collibra, Snowflake, and the glossary write path, on the contract this item freezes.

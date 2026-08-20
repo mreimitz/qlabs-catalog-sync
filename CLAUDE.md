@@ -41,7 +41,7 @@ A change is not done while `ruff`, `mypy` (strict), or `pytest` fails.
 
 **A work package is not done until the root `README.md` matches it.** When the last task of
 a work package lands (check with
-`python3 planning/tools/agent-plan/ready_queue.py --all --wp WP<N>`), update `README.md` in
+`python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01 --wp WP<N>`), update `README.md` in
 the same PR: its status table, the "What works today" and "What does not exist yet" lists,
 and any part of the *What it will do* section the WP made real or changed — packages, CLI
 commands, config keys, supported entities, capability behavior. The root `README.md` is the
@@ -49,9 +49,11 @@ only README in this repository; never create one under `planning/`.
 
 ## What ships first
 
-**The MVP is a one-way Databricks-to-Qlik metadata sync** (Track A: WP0-WP4, WP7-WP9). Collibra,
-Snowflake, and the Qlik glossary write path are Track B and start only after v0.1 is tagged; their
-tasks sit on the board as `blocked`. The mappings the MVP depends on are locked in
+**The MVP is a one-way Databricks-to-Qlik metadata sync** — that is RM-01 in full (WP0-WP4,
+WP7-WP9), 52 tasks on `planning/tools/agent-plan/tasks.json`. Collibra, Snowflake, and the Qlik
+glossary write path are RM-05, on their own board `tasks-rm-05.json`, and start only after v0.1 is
+tagged; every task there sits as `blocked` until then. Scope the ready queue with
+`--roadmap RM-01` while building the MVP. The mappings the MVP depends on are locked in
 `planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` — read it before
 touching a connector.
 
@@ -80,7 +82,8 @@ All under `planning/` (read them; execute against the board):
 - Guide: `planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md`
 - Scope decision: `planning/Roadmap/RM-01-one-way-sync-mvp/decision.md`
 - Task board: `planning/tools/agent-plan/tasks.json`
-  (ready queue: `python3 planning/tools/agent-plan/ready_queue.py`)
+  (ready queue: `python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01`)
+- Track B board: `planning/tools/agent-plan/tasks-rm-05.json` (RM-05; blocked until v0.1)
 
 ## Implementation lifecycle (HARD RULE)
 

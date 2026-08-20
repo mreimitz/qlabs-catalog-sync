@@ -3,7 +3,7 @@ type: "Roadmap"
 title: "Master Roadmap"
 description: "The live project-level index of roadmap items and research topics."
 tags: ["roadmap", "planning"]
-timestamp: "2026-08-20T10:29:20Z"
+timestamp: "2026-08-20T10:41:58Z"
 status: "active"
 ---
 
@@ -13,10 +13,11 @@ This concept is the live project-level index of roadmap items and research topic
 
 ## Roadmap Items
 
-* [RM-01-one-way-sync-mvp](RM-01-one-way-sync-mvp/item.md) — Upstream metadata sync MVP (sources to Qlik) · `active`
+* [RM-01-one-way-sync-mvp](RM-01-one-way-sync-mvp/item.md) — Upstream metadata sync MVP (Databricks to Qlik) · `active`
 * [RM-02-two-way-sync](RM-02-two-way-sync/item.md) — Two-way sync with conflict resolution · `planned`
 * [RM-03-pluggable-endpoints](RM-03-pluggable-endpoints/item.md) — Pluggable endpoint framework for future catalogs · `planned`
 * [RM-04-access-observe-report](RM-04-access-observe-report/item.md) — Access observe and report (post-v1) · `planned`
+* [RM-05-track-b-connectors-glossary](RM-05-track-b-connectors-glossary/item.md) — Track B source connectors and the Qlik glossary · `planned`
 
 ## Completed Roadmap Items
 

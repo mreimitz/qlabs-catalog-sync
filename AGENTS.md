@@ -14,11 +14,14 @@ against the task board.
 ## 2. Find ready work
 
 ```bash
-python3 planning/tools/agent-plan/ready_queue.py
+python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01
 ```
 
-Prints every task whose `depends_on` are all `done`. The authoritative board is
-`planning/tools/agent-plan/tasks.json`.
+Prints every task whose `depends_on` are all `done`. The authoritative board for the MVP is
+`planning/tools/agent-plan/tasks.json` (RM-01). A second board, `tasks-rm-05.json`, holds the
+Track B connectors and is blocked until v0.1 ships — the queue loads both so cross-item
+dependencies resolve, so always pass `--roadmap RM-01` and never pick up a task it did not show
+you.
 
 ## 3. Claim a task
 
@@ -59,7 +62,7 @@ Nothing imports a connector directly. See `CLAUDE.md`.
 - **WP completion:** if your task is the last one open in its work package, refresh the
   root `README.md` in the same PR — status table, what works today, and any planned
   behavior the WP made real. Confirm with
-  `python3 planning/tools/agent-plan/ready_queue.py --all --wp WP<N>`.
+  `python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01 --wp WP<N>`.
 
 ## 7. Scope
 
