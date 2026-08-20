@@ -6,18 +6,209 @@ shared HTTP/auth helpers, the field envelope/checksum utilities, config/exceptio
 types, and the conformance kit. Connectors and the engine import everything from here;
 the SDK depends on neither the engine nor any connector.
 
-The full public surface (model types, ``Connector`` ABC, ``CapabilityManifest``, etc.)
-is re-exported here as the individual modules are implemented in WP1
-(T1.1-T1.9). See the RS-08 connector SDK spec.
+T1.9 re-exports the full public surface at the package root from the sibling modules
+that WP1 has landed. Every name below is imported from exactly one module even where a
+module re-exports something it does not itself define (e.g. ``contract.py`` re-exports
+``models.EntityType`` for connector authors' convenience) — this module always imports
+each symbol from its single authoritative definition site to avoid a duplicate,
+ruff-flagged rebinding of the same name.
+
+Two names are deliberately narrowed at this boundary rather than re-exported twice under
+one name:
+
+* ``auth.py`` and ``config.py`` each define their own ``Clock``/``SystemClock`` — two
+  genuinely different types that happen to share a name (``auth.Clock`` needs only
+  ``now()``; ``config.Clock`` also needs ``async sleep()`` and is what
+  :class:`~qlabs_catalog_sync_sdk.config.ConnectorContext` carries). Re-exporting both
+  under the bare names ``Clock``/``SystemClock`` would make ``from qlabs_catalog_sync_sdk
+  import Clock`` pick one silently depending on import order — a public-surface trap.
+  This module re-exports ``config``'s versions (the ones ``ConnectorContext`` and most
+  connector code actually see); ``auth``'s narrower protocol/impl are still available,
+  unambiguously, as ``qlabs_catalog_sync_sdk.auth.Clock`` /
+  ``qlabs_catalog_sync_sdk.auth.SystemClock`` for auth-provider code that only needs
+  ``now()``. A ``config.SystemClock`` instance satisfies ``auth.Clock`` structurally
+  (it has ``now()``), so this loses no capability in practice.
+
+T1.3's ``manifest.py`` (``CapabilityManifest``, ``EntityCapability``, ``FieldCapability``)
+has not landed in this worktree yet — it is a docstring-only stub with no importable
+names — so it is intentionally not imported here. See that module's TODO and this
+package's WP1 task board entry T1.3. Once it lands, add
+``from .manifest import CapabilityManifest, EntityCapability, FieldCapability`` (or
+whatever T1.3's actual ``__all__`` turns out to be) below and extend ``__all__`` to
+match; nothing else in this file needs to change for that.
 """
 
-# Contract version constant + compatibility gate (T1.9). Bump on breaking changes.
-CONTRACT_VERSION = "0.1.0"
+from __future__ import annotations
 
-# Entry-point group connectors register under; the engine discovers via this group (T1.9).
-CONNECTOR_ENTRY_POINT_GROUP = "qlabs_catalog_sync.connectors"
+from .auth import (
+    DEFAULT_REFRESH_MARGIN,
+    ApiKeyAuthProvider,
+    AuthProvider,
+    JWTAuthProvider,
+    OAuth2ClientCredentialsProvider,
+    TokenRequestEncoding,
+    TokenTransport,
+)
+from .config import (
+    Clock,
+    ConnectorConfig,
+    ConnectorContext,
+    ManualClock,
+    MetricsHandle,
+    NullMetrics,
+    SystemClock,
+)
+from .contract import (
+    CapabilityManifestBase,
+    ChangeKind,
+    ChangeRef,
+    Connector,
+    HealthState,
+    HealthStatus,
+    ListChangedResult,
+    Watermark,
+    WatermarkKind,
+    WriteOutcome,
+    WriteResult,
+)
+from .envelope import (
+    CHECKSUM_ALGORITHM,
+    CHECKSUM_PREFIX,
+    ORDER_INSENSITIVE_FIELDS,
+    TIMESTAMP_PRECISION_DIGITS,
+    ArrayOrder,
+    CanonicalizationError,
+    build_envelope,
+    build_field_envelopes,
+    canonical_json,
+    canonicalize,
+    changed_fields,
+    compute_checksum,
+    has_changed,
+    order_for,
+    refresh_checksum,
+    to_json_value,
+)
+from .exceptions import (
+    AuthError,
+    CapabilityError,
+    ConflictError,
+    ConnectorError,
+    NotFound,
+    TransientError,
+)
+from .http import AuthHeaderProvider, HttpEndpoint
+from .logging import REDACTED, get_connector_logger, redact_secrets
+from .models import (
+    AssetLink,
+    AssetType,
+    Category,
+    DataProduct,
+    DataProductStatus,
+    Dataset,
+    EntityType,
+    FieldChange,
+    FieldDiff,
+    FieldEnvelope,
+    FieldUpdateMode,
+    GlossaryTerm,
+    GlossaryTermStatus,
+    IdentityRef,
+    NeutralEntity,
+    NeutralModel,
+    Party,
+    PartyRole,
+    Tag,
+    TermRelation,
+    TextField,
+    TextFormat,
+)
+from .version import (
+    CONNECTOR_ENTRY_POINT_GROUP,
+    CONTRACT_VERSION,
+    SDK_CONTRACT_VERSION,
+    ContractVersionError,
+    check_contract_compatibility,
+)
 
-# TODO(T1.1-T1.9): re-export the public surface (neutral model, Connector ABC,
-# CapabilityManifest, HttpEndpoint, ConnectorConfig, ConnectorContext, exceptions)
-# from the sibling modules as they are implemented.
-__all__ = ["CONTRACT_VERSION", "CONNECTOR_ENTRY_POINT_GROUP"]
+__all__ = [
+    "CHECKSUM_ALGORITHM",
+    "CHECKSUM_PREFIX",
+    "CONNECTOR_ENTRY_POINT_GROUP",
+    "CONTRACT_VERSION",
+    "DEFAULT_REFRESH_MARGIN",
+    "ORDER_INSENSITIVE_FIELDS",
+    "REDACTED",
+    "SDK_CONTRACT_VERSION",
+    "TIMESTAMP_PRECISION_DIGITS",
+    "ApiKeyAuthProvider",
+    "ArrayOrder",
+    "AssetLink",
+    "AssetType",
+    "AuthError",
+    "AuthHeaderProvider",
+    "AuthProvider",
+    "CanonicalizationError",
+    "CapabilityError",
+    "CapabilityManifestBase",
+    "Category",
+    "ChangeKind",
+    "ChangeRef",
+    "Clock",
+    "ConflictError",
+    "Connector",
+    "ConnectorConfig",
+    "ConnectorContext",
+    "ConnectorError",
+    "ContractVersionError",
+    "DataProduct",
+    "DataProductStatus",
+    "Dataset",
+    "EntityType",
+    "FieldChange",
+    "FieldDiff",
+    "FieldEnvelope",
+    "FieldUpdateMode",
+    "GlossaryTerm",
+    "GlossaryTermStatus",
+    "HealthState",
+    "HealthStatus",
+    "HttpEndpoint",
+    "IdentityRef",
+    "JWTAuthProvider",
+    "ListChangedResult",
+    "ManualClock",
+    "MetricsHandle",
+    "NeutralEntity",
+    "NeutralModel",
+    "NotFound",
+    "NullMetrics",
+    "OAuth2ClientCredentialsProvider",
+    "Party",
+    "PartyRole",
+    "SystemClock",
+    "Tag",
+    "TermRelation",
+    "TextField",
+    "TextFormat",
+    "TokenRequestEncoding",
+    "TokenTransport",
+    "TransientError",
+    "Watermark",
+    "WatermarkKind",
+    "WriteOutcome",
+    "WriteResult",
+    "build_envelope",
+    "build_field_envelopes",
+    "canonical_json",
+    "canonicalize",
+    "changed_fields",
+    "check_contract_compatibility",
+    "compute_checksum",
+    "get_connector_logger",
+    "has_changed",
+    "order_for",
+    "redact_secrets",
+    "refresh_checksum",
+    "to_json_value",
+]
