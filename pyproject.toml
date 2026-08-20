@@ -34,6 +34,9 @@ dev = [
 line-length = 100
 target-version = "py311"
 src = ["packages/*/src", "packages/*/tests"]
+# This root project's tooling must never touch planning/ — it is a separately
+# governed OKF bundle with its own conformance tooling.
+extend-exclude = ["planning"]
 
 [tool.ruff.lint]
 select = [
@@ -59,7 +62,14 @@ mypy_path = [
     "packages/qlabs-connector-collibra/src",
     "packages/qlabs-connector-snowflake/src",
 ]
-files = ["packages"]
+files = [
+    "packages/qlabs-catalog-sync-sdk/src",
+    "packages/qlabs-catalog-sync/src",
+    "packages/qlabs-connector-qlik/src",
+    "packages/qlabs-connector-databricks/src",
+    "packages/qlabs-connector-collibra/src",
+    "packages/qlabs-connector-snowflake/src",
+]
 
 [[tool.mypy.overrides]]
 # Vendor libraries without bundled type stubs.
@@ -74,4 +84,8 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["packages"]
 python_files = ["test_*.py"]
-addopts = "-ra"
+# Six packages each carry an unmarked tests/test_smoke.py (no package
+# __init__.py); importlib mode collects them by file path instead of
+# inserting them into sys.modules by inferred name, so the same basename
+# across packages no longer collides.
+addopts = "-ra --import-mode=importlib"
