@@ -225,7 +225,7 @@
       ],
       "dod": "HTTP helper retries on 429 honoring Retry-After, retries 5xx with jitter, and paginates both cursor and offset styles; covered by respx unit tests.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/http -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.5",
