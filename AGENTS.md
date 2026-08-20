@@ -5,9 +5,9 @@ against the task board.
 
 ## 1. Read first
 
-- `planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md` — conventions, how to add a
+- `planning/Roadmap/completed/RM-01-one-way-sync-mvp/agent-guide.md` — conventions, how to add a
   connector, PR/ownership rules.
-- `planning/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md` — work packages,
+- `planning/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md` — work packages,
   tasks, dependency waves, recommended models.
 - `planning/Roadmap/RM-06-sync-console/implementation-plan.md` — the operator console and
   the selection rule engine (WP10-WP14), the other half of the MVP.

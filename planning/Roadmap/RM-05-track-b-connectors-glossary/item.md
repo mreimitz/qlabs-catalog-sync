@@ -3,7 +3,7 @@ type: "Roadmap Item"
 title: "Track B source connectors and the Qlik glossary"
 description: "Extend the shipped upstream sync with the Collibra and Snowflake read connectors and the Qlik glossary write path, on top of the SDK and engine that v0.1 proved."
 tags: ["roadmap", "RM-05"]
-timestamp: "2026-08-20T11:05:00Z"
+timestamp: "2026-08-20T16:30:20Z"
 status: "planned"
 ---
 
@@ -41,7 +41,7 @@ connectors are read-only, no two-way sync, no access-control sync.
 
 ## Depends on
 
-- [RM-01 Upstream metadata sync MVP](/Roadmap/RM-01-one-way-sync-mvp/item.md) — freezes the
+- [RM-01 Upstream metadata sync MVP](/Roadmap/completed/RM-01-one-way-sync-mvp/item.md) — freezes the
   connector contract, the engine, and the Qlik writer this item builds on.
 
 ## Linked research

@@ -3,7 +3,7 @@ type: "Roadmap"
 title: "Master Roadmap"
 description: "The live project-level index of roadmap items and research topics."
 tags: ["roadmap", "planning"]
-timestamp: "2026-08-20T16:30:02Z"
+timestamp: "2026-08-20T16:30:20Z"
 status: "active"
 ---
 
@@ -13,7 +13,6 @@ This concept is the live project-level index of roadmap items and research topic
 
 ## Roadmap Items
 
-* [RM-01-one-way-sync-mvp](RM-01-one-way-sync-mvp/item.md) — Upstream metadata sync MVP (Databricks to Qlik) · `active`
 * [RM-02-two-way-sync](RM-02-two-way-sync/item.md) — Two-way sync with conflict resolution · `planned`
 * [RM-03-pluggable-endpoints](RM-03-pluggable-endpoints/item.md) — Pluggable endpoint framework for future catalogs · `planned`
 * [RM-04-access-observe-report](RM-04-access-observe-report/item.md) — Access observe and report (post-v1) · `planned`
@@ -22,7 +21,7 @@ This concept is the live project-level index of roadmap items and research topic
 
 ## Completed Roadmap Items
 
-No roadmap items have been completed yet.
+* [RM-01-one-way-sync-mvp](completed/RM-01-one-way-sync-mvp/item.md) — Upstream metadata sync MVP (Databricks to Qlik) · `done`
 
 ## Research Topics
 
@@ -38,11 +37,11 @@ No roadmap items have been completed yet.
 
 ## Documentation
 
-* [DC-01-connector-sdk](../Docu/DC-01-connector-sdk/doc.md) — Connector SDK · `draft`
-* [DC-02-sync-engine](../Docu/DC-02-sync-engine/doc.md) — Sync Engine · `draft`
-* [DC-03-qlik-write-connector](../Docu/DC-03-qlik-write-connector/doc.md) — Qlik Write Connector · `draft`
-* [DC-04-databricks-read-connector](../Docu/DC-04-databricks-read-connector/doc.md) — Databricks Read Connector · `draft`
-* [DC-05-packaging-and-operations](../Docu/DC-05-packaging-and-operations/doc.md) — Packaging and Operations · `draft`
+* [DC-01-connector-sdk](../Docu/DC-01-connector-sdk/doc.md) — Connector SDK · `current`
+* [DC-02-sync-engine](../Docu/DC-02-sync-engine/doc.md) — Sync Engine · `current`
+* [DC-03-qlik-write-connector](../Docu/DC-03-qlik-write-connector/doc.md) — Qlik Write Connector · `current`
+* [DC-04-databricks-read-connector](../Docu/DC-04-databricks-read-connector/doc.md) — Databricks Read Connector · `current`
+* [DC-05-packaging-and-operations](../Docu/DC-05-packaging-and-operations/doc.md) — Packaging and Operations · `current`
 
 ## Now / Next / Later
 

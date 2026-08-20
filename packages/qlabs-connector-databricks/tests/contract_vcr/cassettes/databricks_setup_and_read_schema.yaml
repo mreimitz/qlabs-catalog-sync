@@ -1,5 +1,5 @@
 # Hand-authored, NOT captured from a live Databricks workspace. RM-01 is built without
-# live tenants (planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md,
+# live tenants (planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md,
 # D8). Every field/value/URL is typed by hand from
 # planning/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md
 # sections 1.2 (schema/table field shapes), 3.2 (OAuth M2M -- form-encoded body, HTTP

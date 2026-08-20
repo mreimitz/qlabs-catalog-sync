@@ -3,7 +3,7 @@ type: "Roadmap Item"
 title: "Catalog sync console: endpoint management and sync selection"
 description: "Ship the operator console for the MVP: configure and manage connector endpoints and sync pairs from a browser, decide exactly which source objects sync through an ordered include/exclude rule set, preview the planned writes before applying them, and watch runs. Configuration moves from environment variables into the state database; credentials stay external and are only referenced."
 tags: ["roadmap", "RM-06"]
-timestamp: "2026-08-20T12:34:07Z"
+timestamp: "2026-08-20T16:30:20Z"
 status: "planned"
 ---
 
@@ -24,7 +24,7 @@ selection rule engine, the REST API over the engine, and the SPA itself. It buil
 engine RM-01 produces — the state store, the sync loop, the scheduler and the dry-run planner — so
 its tasks depend on RM-01's tasks rather than running beside them. The configuration store depends
 only on the state store and config loading, both already done, so it is ready now; everything after
-it waits on [WP2](/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md).
+it waits on [WP2](/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md).
 
 **It is part of the MVP.** v0.1 is not tagged until this item's board is finished: RM-01's release
 task depends on it. The two items are sequential, not parallel.
@@ -59,6 +59,6 @@ configuration export/import, and browser-driven end-to-end tests.
 
 ## Relationship to RM-01
 
-- [RM-01 Upstream metadata sync MVP](/Roadmap/RM-01-one-way-sync-mvp/item.md) — the engine this
+- [RM-01 Upstream metadata sync MVP](/Roadmap/completed/RM-01-one-way-sync-mvp/item.md) — the engine this
   console configures. Its task T9.4 (tag v0.1) depends on this item's final task, so the two ship
   together.

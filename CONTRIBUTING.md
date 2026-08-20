@@ -58,7 +58,7 @@ All runtime dependencies are pinned up front. **Contributors must not edit `pypr
 
 Change `planning/` only through its own commands (e.g. `/new-research`, `/new-roadmap`, `/new-docu`, `/complete-roadmap`) and its `planning/.claude/scripts/okf.py` validation tool. The root code project's tooling (ruff, mypy, pytest) must not touch `planning/`, and OKF validation is scoped to the bundle.
 
-The authoritative architectural decisions and mapping rules for v1 live in `planning/Roadmap/RM-01-one-way-sync-mvp/` (decisions D1–D8). Read them before implementing any connector or engine feature.
+The authoritative architectural decisions and mapping rules for v1 live in `planning/Roadmap/completed/RM-01-one-way-sync-mvp/` (decisions D1–D8). Read them before implementing any connector or engine feature.
 
 ## Architectural Decision Records (ADRs)
 
@@ -66,8 +66,8 @@ This repository uses ADRs to document technical decisions. ADRs live in `docs/ad
 
 **For architectural decisions already made:** The MVP scope and the eight mapping decisions (D1–D8) that bind the first release are locked in the governed `planning/` bundle at:
 
-- `planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (D1–D8)
-- `planning/Roadmap/RM-01-one-way-sync-mvp/decision.md` (v1 scope guardrails)
+- `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (D1–D8)
+- `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision.md` (v1 scope guardrails)
 
 **For new ADRs:** If you need to document a technical decision taken during implementation, create one in `docs/adr/` following the template at `docs/adr/0000-template.md`. Read `docs/adr/README.md` for the numbering and filing convention.
 
@@ -94,7 +94,7 @@ If you are a coding agent:
 
 ## More information
 
-- **Implementation plan:** `planning/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md`
-- **Agent build guide:** `planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md`
+- **Implementation plan:** `planning/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md`
+- **Agent build guide:** `planning/Roadmap/completed/RM-01-one-way-sync-mvp/agent-guide.md`
 - **Connector SDK spec:** `planning/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md`
 - **Task board:** `planning/tools/agent-plan/tasks.json` (run `python3 planning/tools/agent-plan/ready_queue.py` to see the ready queue)

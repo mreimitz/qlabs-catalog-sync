@@ -12,6 +12,7 @@
   tenant-verification tasks; gave every task its own test directory so parallel agents never share a
   file; removed the ownership collisions and the loop/diff dependency cycle.
 * **Scope split**: Moved Track B — the Collibra and Snowflake read connectors and the Qlik glossary write path — out to [RM-05](/Roadmap/RM-05-track-b-connectors-glossary/item.md), with its 15 tasks on their own board. This item is now exactly the Databricks-to-Qlik MVP and completes when v0.1 ships, instead of waiting on work that begins afterwards.
+* **Completion**: Marked done, moved to Roadmap/completed/, documented in DC-01, DC-02, DC-03, DC-04, DC-05. 7 milestone(s) ticked.
 
 ## 2026-08-06
 

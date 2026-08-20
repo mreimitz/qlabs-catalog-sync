@@ -3,14 +3,14 @@ type: "Research Output"
 title: "Console and selection implementation plan — Work Packages WP10-WP14"
 description: "Executable build plan for the catalog sync console: the database-backed configuration store, the selection rule engine, the REST API and generated client, the SPA built on the @elabs-ai component packages, and the packaging that ships all of it inside the engine container."
 tags: ["roadmap", "RM-06", "implementation-plan", "work-packages", "console", "selection"]
-timestamp: "2026-08-20T12:45:00Z"
+timestamp: "2026-08-20T16:30:20Z"
 status: "draft"
 ---
 
 # Console and selection implementation plan — Work Packages WP10-WP14
 
 This is the executable plan for RM-06. It follows the same shape as the
-[RM-01 plan](/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md): work packages, tasks a coding
+[RM-01 plan](/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md): work packages, tasks a coding
 agent can pick up, dependencies, an owned file set, a definition of done, a runnable verify command,
 and a recommended model. The narrative lives here; the board at
 [tools/agent-plan/tasks-rm-06.json](/tools/agent-plan/tasks-rm-06.json) is the source of truth for
@@ -187,5 +187,5 @@ Qlik-is-the-sole-writer guardrails, which are unaffected by everything here.
 * [Connector Plugin SDK Specification](/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md) — entry-point discovery and the capability manifest the endpoint screens read.
 * [Neutral Metadata Model Specification (v1)](/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md) — the entities selection scopes are expressed over.
 * [Databricks Unity Catalog Metadata API Reference](/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md) — the catalog/schema/table hierarchy the source tree browses.
-* [v1 Implementation Plan — Work Packages, Tasks & Model Recommendations](/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md) — the engine tasks this board depends on and the three files it extends.
+* [v1 Implementation Plan — Work Packages, Tasks & Model Recommendations](/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md) — the engine tasks this board depends on and the three files it extends.
 * [Decision: configuration lives in the state store, and selection is an ordered rule set](decision-console-config-and-selection.md) — C1-C8, which this plan implements.

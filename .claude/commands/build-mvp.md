@@ -17,10 +17,10 @@ under `packages/`. Main branch is `main`.
 ## Read these first, in this order
 
 1. `CLAUDE.md` — the code project's operating rules (package boundaries, dependency rules, scope guardrails).
-2. `planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` — the eight locked
+2. `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` — the eight locked
    mapping decisions D1–D8. These are binding; do not let a subagent re-litigate one.
-3. `planning/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md` — the narrative plan, waves, gates.
-4. `planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md` — conventions every package must follow.
+3. `planning/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md` — the narrative plan, waves, gates.
+4. `planning/Roadmap/completed/RM-01-one-way-sync-mvp/agent-guide.md` — conventions every package must follow.
 5. `planning/tools/agent-plan/tasks.json` — the RM-01 executable board, 52 tasks. This is the source
    of truth for what to build, in what order, who owns which files, and which model to use. There is
    a second board, `tasks-rm-05.json`, holding the Track B work; it belongs to RM-05 and is not
@@ -195,8 +195,8 @@ Give each subagent everything it needs and nothing it does not. Use this shape:
 > `planning/` — stop and report it instead of doing it.
 >
 > **Read before you write:** `CLAUDE.md`, the MVP decision document
-> `planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (decisions D1–D8 are
-> binding), the coding-agent guide `planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md`, and these
+> `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (decisions D1–D8 are
+> binding), the coding-agent guide `planning/Roadmap/completed/RM-01-one-way-sync-mvp/agent-guide.md`, and these
 > research inputs: `<inputs from tasks.json>`.
 >
 > **Conventions:** async throughout; SDK typed exceptions only; structlog with bound context and no
@@ -278,7 +278,7 @@ lifecycle in `CLAUDE.md`. Do this yourself, on `main`, never through a subagent.
    exists only for items that never had a board.
 
 3. **Fix the paths the move broke.** Moving the folder invalidates every reference to
-   `planning/Roadmap/RM-01-one-way-sync-mvp/`. Markdown links *inside* the bundle are re-pointed by
+   `planning/Roadmap/completed/RM-01-one-way-sync-mvp/`. Markdown links *inside* the bundle are re-pointed by
    the same transaction and reported as "Re-pointed N bundle link(s)". Everything else the command
    only reports, because it never edits outside its own root: expect hits in `README.md`,
    `AGENTS.md`, `CLAUDE.md`, **this file**, and the `inputs` entries on both task boards. Apply

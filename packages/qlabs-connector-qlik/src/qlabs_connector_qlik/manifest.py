@@ -9,7 +9,7 @@ choice rather than a guess:
   fields are exactly the ones the Qlik data-governance API can actually take a value
   for, at create or through the closed PATCH path enum below.
 * ``DATASET`` is declared **read-only in this connector's hands** — decision D2 (see
-  ``planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``): the
+  ``planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``): the
   connector never creates or updates a Qlik dataset, it only *resolves* ``datasetIds``
   against datasets that already exist in the target space (IdentityMap first, then a
   name match within the space). Qlik's Items API can technically express writes to

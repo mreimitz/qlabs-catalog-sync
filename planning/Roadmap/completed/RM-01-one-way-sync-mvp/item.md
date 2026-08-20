@@ -3,8 +3,8 @@ type: "Roadmap Item"
 title: "Upstream metadata sync MVP (Databricks to Qlik)"
 description: "Ship the v1 upstream-only metadata sync: read data product metadata from Databricks and write it into Qlik through the neutral model. Qlik is the sole writer; no two-way sync and no access-control sync in v1."
 tags: ["roadmap", "RM-01"]
-timestamp: "2026-08-20T11:06:00Z"
-status: "active"
+timestamp: "2026-08-20T16:30:20Z"
+status: "done"
 ---
 
 # Upstream metadata sync MVP (Databricks to Qlik)
@@ -37,13 +37,13 @@ across WP0-WP4 and WP7-WP9.
 
 ## Milestones
 
-- [ ] Repair the repository gate and pin every runtime dependency up front.
-- [ ] Extract the connector SDK (contract, neutral model, helpers, conformance kit, fake connector).
-- [ ] Build the engine core (discovery, state store, upstream sync loop, scheduler, dry-run).
-- [ ] Build the Qlik write connector (data products) and the Databricks read connector (UC schemas).
-- [ ] Pilot the Databricks-to-Qlik data-product sync, prove idempotency and restart safety.
-- [ ] Package, deploy, and release v0.1.
-- [ ] Record the delivery in `Docu/` and retire this item to `Roadmap/completed/`.
+- [x] Repair the repository gate and pin every runtime dependency up front.
+- [x] Extract the connector SDK (contract, neutral model, helpers, conformance kit, fake connector).
+- [x] Build the engine core (discovery, state store, upstream sync loop, scheduler, dry-run).
+- [x] Build the Qlik write connector (data products) and the Databricks read connector (UC schemas).
+- [x] Pilot the Databricks-to-Qlik data-product sync, prove idempotency and restart safety.
+- [x] Package, deploy, and release v0.1.
+- [x] Record the delivery in `Docu/` and retire this item to `Roadmap/completed/`.
 
 ## Plan and decisions
 

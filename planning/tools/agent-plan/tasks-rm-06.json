@@ -82,7 +82,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "An environment-only deployment comes up with the same behavior as before; a second start imports nothing; an edit made through the service survives a restart unchanged.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore/test_bootstrap.py",
@@ -105,7 +105,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "The include-then-exclude-then-carve-back-in case resolves correctly and names the deciding rule; an empty rule set includes nothing; a rule set of plain include globs reproduces RM-01 D1 semantics exactly; evaluation is order-stable and side-effect free.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/selection",
@@ -145,7 +145,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/implementation-plan.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "A cycle syncs exactly the objects the evaluator includes; the preview API and the cycle agree object for object on the same rule set; transactional and idempotency guarantees from T2.4 still hold; the full engine suite passes.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests",
@@ -168,7 +168,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/implementation-plan.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Every cycle produces exactly one run row; a crashed cycle leaves the run marked failed rather than open forever; counts reconcile with what the loop actually wrote; unresolved references and orphans are queryable per run.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/runs",
@@ -292,7 +292,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/implementation-plan.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "A dry-run over a configured pair returns the plan and writes nothing; run-now on a pair already running is refused with a clear code; a paused pair does not fire on its cadence and resumes cleanly.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_run_control.py",
@@ -434,7 +434,7 @@
         "console/src/features/pairs/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "A pair can be created, edited and disabled from the browser; activation defaults to off and its consequence is stated in the UI; only enabled, healthy endpoints can be chosen.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
@@ -453,7 +453,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Reordering rules changes the preview and the tree consistently; every node can be traced to its deciding rule; a draft is previewable before saving and discardable; a catalog with thousands of tables stays responsive.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
@@ -471,7 +471,7 @@
         "console/src/features/dry-run/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "The screen makes it obvious what a run would change before it runs; unresolved references are listed with the reason; a no-op plan is presented as such rather than as an empty screen.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
@@ -568,7 +568,7 @@
       ],
       "inputs": [
         "/Roadmap/RM-06-sync-console/implementation-plan.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "The full pilot is driven through the API with no environment-variable configuration and no CLI step; the second run writes nothing; the run report matches the dry-run that preceded the first apply.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/pilot/test_console_pilot.py",

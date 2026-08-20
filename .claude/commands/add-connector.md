@@ -4,7 +4,7 @@ description: Scaffold a new qlabs-connector-<name> package following the RS-08 p
 
 Add a new connector package `qlabs-connector-$ARGUMENTS` to the monorepo, following the
 RS-08 connector SDK pattern and the "How to add a connector" checklist in
-`planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md`. Read that checklist first.
+`planning/Roadmap/completed/RM-01-one-way-sync-mvp/agent-guide.md`. Read that checklist first.
 
 Steps:
 

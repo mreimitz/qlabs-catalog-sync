@@ -64,7 +64,7 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "From a clean checkout `uv sync --all-packages`, `uv run ruff check packages`, `uv run mypy` and `uv run pytest -q` all pass; neither ruff nor mypy reads planning/; uv.lock is committed.",
       "verify": "uv sync --all-packages && uv run ruff check packages && uv run mypy && uv run pytest -q",
@@ -89,7 +89,7 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "Every runtime dependency named in the plan is declared in the right package and locked; a fresh `uv sync --all-packages` imports all of them; no downstream task needs to touch packaging metadata.",
       "verify": "uv sync --all-packages && uv run python -c 'import pydantic, pydantic_settings, httpx, tenacity, sqlalchemy, alembic, apscheduler, structlog, prometheus_client, databricks.sdk'",
@@ -110,7 +110,7 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "CI runs the corrected gate commands and builds a wheel per package on push; the workflow is green.",
       "verify": "uv sync --all-packages && uv run ruff check packages && uv run mypy && uv run pytest -q",
@@ -132,7 +132,7 @@
       ],
       "inputs": [
         "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "Contributor guide states the package boundaries and the connector->SDK-only dependency rule and points to the ADR location.",
       "verify": "uv run python -c \"import pathlib,sys; sys.exit(0 if pathlib.Path('CONTRIBUTING.md').is_file() else 1)\"",
@@ -177,7 +177,7 @@
       "inputs": [
         "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Connector ABC and all contract types compile, are typed, and a stub subclass can be instantiated; list_changed returns a result object carrying the proposed next watermark.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/contract -q",
@@ -313,7 +313,7 @@
       ],
       "inputs": [
         "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "FakeConnector supports read and write modes, honors its declared manifest, and is importable from the SDK's public surface.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/testing -q",
@@ -423,8 +423,8 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "Engine loads endpoint config, resolves secrets from a configured backend, and validates a sync-pair definition including UC selector patterns and the target space; invalid config fails at startup with a precise message.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/config -q",
@@ -452,7 +452,7 @@
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "One cycle reads, resolves, diffs, writes, persists and advances the watermark transactionally; a re-run performs zero writes; a simulated mid-cycle failure leaves state and watermark untouched.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
@@ -473,7 +473,7 @@
         "packages/qlabs-catalog-sync/tests/policy/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/decision.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
       ],
       "dod": "Policy resolves a manually edited target field per configuration: source-wins by default, preserve-local when set; both paths are covered by tests.",
@@ -540,7 +540,7 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "Dry-run writes a JSON plan describing every intended create/update with its field-level diff and applies nothing; the CLI exposes run, dry-run and identity-confirm.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/cli -q",
@@ -561,8 +561,8 @@
         "packages/qlabs-catalog-sync/tests/orphans/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "A vanished source object is logged as an orphan and reported; a test asserts the engine issues no delete or deactivate call in any code path.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/orphans -q",
@@ -610,7 +610,7 @@
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Manifest declares the rw data-product fields, ETag concurrency, partial_update=false for arrays, the exact PATCH path enum, and glossary unsupported.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/manifest -q",
@@ -655,7 +655,7 @@
       ],
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Dataset members resolve to existing Qlik dataset ids or are reported unresolved; owner emails resolve to Qlik userIds or are reported unmatched; no code path creates a Qlik dataset.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/resolve -q",
@@ -680,7 +680,7 @@
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md",
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "create() posts a valid Qlik data-product payload from a neutral entity, enforces the subset and cap rules client-side, and returns the assigned IdentityRef.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
@@ -703,7 +703,7 @@
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "update() issues replace-only JSON Patch honoring the path enum, full-replace arrays, if-match and 8-op batching; a 412 triggers exactly one re-read/re-diff cycle; an out-of-enum path raises CapabilityError.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
@@ -726,7 +726,7 @@
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md",
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "activate/deactivate/move/delete execute against the documented endpoints and are covered by tests; each destructive call requires an explicit opt-in flag that is off by default.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/lifecycle -q",
@@ -799,7 +799,7 @@
       "inputs": [
         "/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Manifest declares read-only entities, full_name+object_id identity, glossary na, concurrency none, and tags conditional on a configured SQL warehouse.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/manifest -q",
@@ -844,7 +844,7 @@
       "inputs": [
         "/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "read() returns a UC schema as a neutral DataProduct with its tables/views as member Datasets, with field envelopes, paging defensively.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/read -q",
@@ -888,7 +888,7 @@
       ],
       "inputs": [
         "/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "With a warehouse configured, schema and table tags are read into neutral Tag values; without one, tags are absent and the manifest reports na - and a test asserts both branches.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/sql_tags -q",
@@ -936,7 +936,7 @@
       "inputs": [
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Bootstrap proposes matches by natural key and binds none without confirmation; confirmed matches persist and are reused; an ambiguous match is reported rather than guessed.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/identity -q",
@@ -960,7 +960,7 @@
       "inputs": [
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
         "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Diff emits minimal mutations, widens arrays where partial_update is false, drops ro/na fields, and produces an empty diff for identical checksums.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/diff -q",
@@ -981,7 +981,7 @@
         "packages/qlabs-catalog-sync/tests/party/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/decision.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision.md",
         "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
       ],
       "dod": "Owners correlate on email as plain metadata; unmatched owners are reported; no code path treats a correlation as an authorization decision.",
@@ -1004,7 +1004,7 @@
       ],
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Neutral status maps to the correct Qlik lifecycle action; with activation opt-in off, no activate call is ever issued.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/status -q",
@@ -1044,8 +1044,8 @@
         "packages/qlabs-catalog-sync/tests/e2e/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md",
         "/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md",
         "/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md"
       ],
@@ -1068,7 +1068,7 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "Re-run is a zero-write no-op, a simulated crash mid-cycle leaves state and watermark untouched, and restart resumes from the persisted watermark.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/restart -q",
@@ -1115,8 +1115,8 @@
       ],
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md",
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Every unverified behavior is listed in the registry with its call site, the probe script runs against a tenant from config, and the checklist maps each item to a pass/fail step.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests -q",
@@ -1164,7 +1164,7 @@
       ],
       "inputs": [
         "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "A per-tenant config and secret template exist and load through the configured secret backend without any secret in the repository.",
       "verify": "uv run python -c 'import qlabs_catalog_sync'",
@@ -1215,7 +1215,7 @@
       ],
       "inputs": [
         "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "The runbook covers deploy, configure, dry-run, confirm, and troubleshoot; the capability matrix is generated from the live manifests; v0.1 is tagged.",
       "verify": "uv run python scripts/gen_capability_matrix.py --check",

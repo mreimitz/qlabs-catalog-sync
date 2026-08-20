@@ -1,5 +1,5 @@
 # Hand-authored, NOT captured from a live Databricks tenant. RM-01 is built without live
-# tenants (planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md:
+# tenants (planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md:
 # "all tests run against respx mocks, an SDK-provided fake connector, and hand-authored
 # cassettes"). Every request/response body below mirrors the field shapes documented in
 # planning/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md

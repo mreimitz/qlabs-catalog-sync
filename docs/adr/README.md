@@ -44,8 +44,8 @@ Do not write an ADR for:
 
 The MVP scope and the eight binding mapping decisions for the first release are documented in the governed `planning/` OKF bundle, not here. Read them at:
 
-- **v1 scope guardrails:** `planning/Roadmap/RM-01-one-way-sync-mvp/decision.md`
-- **MVP mapping decisions (D1–D8):** `planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md`
+- **v1 scope guardrails:** `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision.md`
+- **MVP mapping decisions (D1–D8):** `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md`
 
 These decisions are part of the roadmap governance and may only be changed through the roadmap process, not through this ADR directory.
 

@@ -12,7 +12,7 @@ proof that this actually happens.
 
 **Every cassette under ``cassettes/`` is hand-authored, not captured from a live
 Databricks workspace.** RM-01 is explicitly built without live tenants
-(``planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``, D8).
+(``planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``, D8).
 Every field, value and URL below is typed by hand from the shapes RS-01 documents --
 ``databricks-catalog-api-reference.md`` sections 1.2 (schema/table field shapes), 1.3
 (UC tags, ``INFORMATION_SCHEMA.*_TAGS``, read-back only over the Statement Execution

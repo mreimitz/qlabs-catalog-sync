@@ -1,5 +1,5 @@
 # Hand-authored, NOT captured from a live Qlik Cloud tenant. RM-01 is built without live
-# tenants (planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md,
+# tenants (planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md,
 # D8). Every field/value/URL below is typed by hand from
 # planning/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md
 # sections 3.1 (data-governance paths -- no /v1 segment), 3.2 (OAuth2 client-credentials

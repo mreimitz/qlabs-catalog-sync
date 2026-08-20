@@ -68,7 +68,7 @@ then. `ready_queue.py` loads every `tasks*.json` and resolves dependencies acros
 always scope with `--roadmap RM-01` or `--roadmap RM-06`.
 
 The mappings the MVP depends on are locked in
-`planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (D1-D8) — read it
+`planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md` (D1-D8) — read it
 before touching a connector — and the console's own decisions in
 `planning/Roadmap/RM-06-sync-console/decision-console-config-and-selection.md` (C1-C8). C3 widens
 D1's glob selector into an ordered rule set; nothing else in D1-D8 changes.
@@ -94,9 +94,9 @@ These are hard limits — flag, do not implement, anything that breaks them:
 
 All under `planning/` (read them; execute against the board):
 
-- Plan: `planning/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md`
-- Guide: `planning/Roadmap/RM-01-one-way-sync-mvp/agent-guide.md`
-- Scope decision: `planning/Roadmap/RM-01-one-way-sync-mvp/decision.md`
+- Plan: `planning/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md`
+- Guide: `planning/Roadmap/completed/RM-01-one-way-sync-mvp/agent-guide.md`
+- Scope decision: `planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision.md`
 - Task board: `planning/tools/agent-plan/tasks.json`
   (ready queue: `python3 planning/tools/agent-plan/ready_queue.py --roadmap RM-01`)
 - Console plan: `planning/Roadmap/RM-06-sync-console/implementation-plan.md`

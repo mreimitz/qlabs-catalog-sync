@@ -380,7 +380,7 @@ conformance rules. **Do not hand-edit it**; change it only through its own comma
 
 Start here:
 
-- [`planning/Roadmap/RM-01-one-way-sync-mvp/`](planning/Roadmap/RM-01-one-way-sync-mvp/) —
+- [`planning/Roadmap/completed/RM-01-one-way-sync-mvp/`](planning/Roadmap/completed/RM-01-one-way-sync-mvp/) —
   the v1 scope decision, the Databricks-to-Qlik mapping decisions, the implementation plan
   and the agent guide.
 - [`planning/Roadmap/roadmap.md`](planning/Roadmap/roadmap.md) — RM-01 through RM-05.

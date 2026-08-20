@@ -2,7 +2,7 @@
 
 Correlates :class:`~qlabs_catalog_sync_sdk.models.Party` values across a source-side list and a
 target-side list by e-mail, and by nothing else. Per the v1 scope decision
-(``planning/Roadmap/RM-01-one-way-sync-mvp/decision.md``) and D3 of
+(``planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision.md``) and D3 of
 ``decision-databricks-to-qlik-mvp.md``, owners are best-effort descriptive metadata — never an
 identity-resolution system and never an authorization decision. v1 has no access-control sync at
 all, so nothing in this module is, or may become, reachable from an access-control code path.

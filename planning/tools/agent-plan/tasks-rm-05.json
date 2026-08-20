@@ -19,7 +19,7 @@
       "inputs": [
         "/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md",
         "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
-        "/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md"
       ],
       "dod": "Glossary terms and categories are created and updated with relations and links and a working change-status action.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/glossary -q",
@@ -41,7 +41,7 @@
         "packages/qlabs-catalog-sync/tests/e2e_collibra/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "Collibra glossary terms and categories sync into Qlik with relations preserved.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e_collibra -q",
@@ -62,7 +62,7 @@
         "packages/qlabs-catalog-sync/tests/e2e_snowflake/"
       ],
       "inputs": [
-        "/Roadmap/RM-01-one-way-sync-mvp/implementation-plan.md"
+        "/Roadmap/completed/RM-01-one-way-sync-mvp/implementation-plan.md"
       ],
       "dod": "A Snowflake data object syncs into Qlik matching the expected target state.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e_snowflake -q",

@@ -3,7 +3,7 @@ type: "Decision"
 title: "Decision: configuration lives in the state store, and selection is an ordered rule set"
 description: "Moves endpoints, sync pairs and sync scope out of environment variables into the state store so a console can edit them, keeps credentials outside it as named references, and replaces the MVP's flat glob selector with an ordered include/exclude rule set evaluated by a single shared evaluator."
 tags: ["decision", "RM-06", "console", "selection", "configuration"]
-timestamp: "2026-08-20T12:40:00Z"
+timestamp: "2026-08-20T16:30:20Z"
 status: "accepted"
 ---
 
@@ -99,4 +99,4 @@ engine it configures. RM-01's release task depends on this item's final task.
 * [Connector Plugin SDK Specification](/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md) — the entry-point discovery and capability manifest that make C6 a registration problem rather than an installation problem.
 * [Neutral Metadata Model Specification (v1)](/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md) — the entities selection scopes are expressed over.
 * [Databricks Unity Catalog Metadata API Reference](/Research/RS-01-databricks-catalog-api/outputs/databricks-catalog-api-reference.md) — the catalog/schema/table hierarchy the source tree browses and the tag surface the tag matcher depends on.
-* [Decision: MVP is Databricks-to-Qlik, and how the two models map](/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md) — D1, whose glob selector C3 widens, and D6, which gates tag matching on a configured SQL warehouse.
+* [Decision: MVP is Databricks-to-Qlik, and how the two models map](/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md) — D1, whose glob selector C3 widens, and D6, which gates tag matching on a configured SQL warehouse.

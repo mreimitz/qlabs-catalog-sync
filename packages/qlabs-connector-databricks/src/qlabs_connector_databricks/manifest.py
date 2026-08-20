@@ -3,7 +3,7 @@
 WP4 / T4.2. Declares this connector's capability honestly for the two Unity Catalog
 object kinds it can see: a UC **schema** as ``EntityType.DATA_PRODUCT`` and a **table or
 view** inside that schema as ``EntityType.DATASET`` (decision D1 — see
-``planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md`` item 1).
+``planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md`` item 1).
 Databricks and Snowflake shares/listings ("data products" in the marketplace sense) are
 deferred alongside them — D1 confines the mapping to ``catalog.schema``.
 

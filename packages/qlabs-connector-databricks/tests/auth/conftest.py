@@ -5,7 +5,7 @@ Mirrors the SDK's own ``tests/auth/conftest.py`` (an ``httpx.AsyncClient`` trans
 ``DatabricksConfig`` factory and a fake, injectable ``databricks-sdk`` ``WorkspaceClient``
 double so ``healthcheck()`` is testable without a live workspace or a real vendor SDK
 client (there is no live Databricks workspace for this build; see
-``planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``).
+``planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``).
 """
 
 from __future__ import annotations

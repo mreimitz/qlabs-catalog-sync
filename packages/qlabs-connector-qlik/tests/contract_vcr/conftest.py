@@ -13,7 +13,7 @@ would, and shows a previously-passing assertion now fails.
 
 **Every cassette under ``cassettes/`` is hand-authored, not captured from a live Qlik
 Cloud tenant.** RM-01 is explicitly built without live tenants
-(``planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``, D8: "The
+(``planning/Roadmap/completed/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md``, D8: "The
 MVP is also built without live tenants"). Every field, value and URL below is typed by
 hand from the shapes RS-02 documents — ``qlik-catalog-api-reference.md`` sections 1.1
 (Items API envelope, ``resourceAttributes.secureQri``) and 3.1-3.5 (data-governance
