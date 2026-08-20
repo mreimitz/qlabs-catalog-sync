@@ -544,7 +544,7 @@
       ],
       "dod": "Dry-run writes a JSON plan describing every intended create/update with its field-level diff and applies nothing; the CLI exposes run, dry-run and identity-confirm.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/cli -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.9",
