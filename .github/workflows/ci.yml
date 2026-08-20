@@ -31,6 +31,12 @@ jobs:
       - name: Test (pytest)
         run: uv run pytest -q
 
+      # docs/capability-matrix.json is generated from the live connector manifests.
+      # Without this step a manifest change that nobody regenerated the matrix for
+      # passes CI and only fails on a developer's machine.
+      - name: Capability matrix is current
+        run: uv run python scripts/gen_capability_matrix.py --check
+
       - name: Build wheels (one per package)
         run: uv build --all-packages --wheel -o dist
 
