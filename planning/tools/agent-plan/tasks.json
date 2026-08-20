@@ -1095,7 +1095,7 @@
       ],
       "dod": "Both connectors pass contract tests against recorded cassettes, and a deliberately altered cassette fails the suite.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/contract_vcr packages/qlabs-connector-databricks/tests/contract_vcr -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T8.6",
