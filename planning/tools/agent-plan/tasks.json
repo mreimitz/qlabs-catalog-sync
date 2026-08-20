@@ -317,7 +317,7 @@
       ],
       "dod": "FakeConnector supports read and write modes, honors its declared manifest, and is importable from the SDK's public surface.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/testing -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T1.8",
@@ -382,7 +382,7 @@
       ],
       "dod": "Engine discovers connectors via entry points, registers them by name, rejects an incompatible SDK major, and errors clearly on duplicate names.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/discovery -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.2",
@@ -520,7 +520,7 @@
       ],
       "dod": "Structured logs carry sync context and no secrets; /healthz and /metrics respond and expose the sync metrics.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/observability -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.8",
@@ -614,7 +614,7 @@
       ],
       "dod": "Manifest declares the rw data-product fields, ETag concurrency, partial_update=false for arrays, the exact PATCH path enum, and glossary unsupported.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/manifest -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.3",
@@ -637,7 +637,7 @@
       ],
       "dod": "read() returns current Qlik data products and datasets as neutral entities with field envelopes, secureQri, and the last-seen ETag.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/read -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.9",
@@ -803,7 +803,7 @@
       ],
       "dod": "Manifest declares read-only entities, full_name+object_id identity, glossary na, concurrency none, and tags conditional on a configured SQL warehouse.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/manifest -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T4.3",
@@ -825,7 +825,7 @@
       ],
       "dod": "list_changed returns entities changed since the watermark plus a proposed next watermark; a re-run with the returned watermark yields no candidates.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/changes -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T4.4",
@@ -848,7 +848,7 @@
       ],
       "dod": "read() returns a UC schema as a neutral DataProduct with its tables/views as member Datasets, with field envelopes, paging defensively.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/read -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T4.5",
@@ -964,7 +964,7 @@
       ],
       "dod": "Diff emits minimal mutations, widens arrays where partial_update is false, drops ro/na fields, and produces an empty diff for identical checksums.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/diff -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T7.3",
