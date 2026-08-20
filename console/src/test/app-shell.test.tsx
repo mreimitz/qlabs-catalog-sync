@@ -7,7 +7,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { ThemeProvider } from "@elabs-ai/components-tokens";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { installFetchMock, jsonResponse, sessionInfoFixture } from "./apiFixtures";
+import {
+  endpointsScreenRoutes,
+  installApiRouter,
+  installFetchMock,
+  jsonResponse,
+  sessionInfoFixture,
+} from "./apiFixtures";
 import { setSignedOut } from "../auth/sessionStore";
 import App from "../App";
 
@@ -53,12 +59,20 @@ describe("application shell", () => {
   });
 
   it("redirects the bare '/' path to the default (Endpoints) screen", async () => {
-    const fetchMock = installFetchMock();
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, sessionInfoFixture()));
+    // Routed by URL rather than queued in call order: the default route now mounts a REAL
+    // screen that fetches on mount, and React fires effects bottom-up, so the child's request
+    // reaches the stub before AuthGate's own does. See `installApiRouter`'s doc comment.
+    installApiRouter({
+      "GET /api/auth/session": jsonResponse(200, sessionInfoFixture()),
+      ...endpointsScreenRoutes(),
+    });
     renderApp();
 
     await screen.findByRole("button", { name: /Sign out/ });
     expect(window.location.pathname).toBe("/endpoints");
-    expect(screen.getByText(/This screen has not been built yet\. T13\.3 builds it\./)).toBeInTheDocument();
+    // The real Endpoints screen (T13.3), not the placeholder this once asserted. Its section
+    // heading is what proves the route resolved to the screen rather than to a 404 or a shell
+    // with an empty content region.
+    expect(await screen.findByRole("heading", { name: "Endpoints" })).toBeInTheDocument();
   });
 });

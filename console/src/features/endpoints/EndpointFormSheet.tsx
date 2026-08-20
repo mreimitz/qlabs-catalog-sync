@@ -1,0 +1,306 @@
+// Register (C6) / edit an endpoint. One form for both: creating differs from editing only in
+// which fields are locked (`name` and `connector` cannot change once an endpoint exists --
+// `name` is the row's key, and `connector`'s renders lock in place too, `EndpointUpdateRequest`
+// technically allows a `connector` swap but this form does not offer it -- crossing an
+// endpoint over to a different connector's settings shape is not "editing", it is registering a
+// new endpoint under an old name, and this screen does not need to make that easy) and which
+// endpoint API call submit calls.
+import { useEffect, useId, useState, type FormEvent } from "react";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  FieldRow,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  Spinner,
+  Switch,
+  toast,
+} from "@elabs-ai/components-ui";
+
+import {
+  createEndpoint,
+  updateEndpoint,
+  type ConnectorInfo,
+  type EndpointOut,
+} from "./endpointsApi";
+import { classifyEndpointError, type TopLevelField } from "./errorMapping";
+import { ManifestPanel } from "./ManifestPanel";
+import { newSettingsRow, rowsToSettings, settingsToRows, SettingsEditor, type SettingsRow } from "./SettingsEditor";
+
+const ROLE_VALUES = ["source", "target"] as const;
+type Role = (typeof ROLE_VALUES)[number];
+
+export type EndpointFormMode = { kind: "create" } | { kind: "edit"; endpoint: EndpointOut };
+
+export function EndpointFormSheet({
+  open,
+  onOpenChange,
+  mode,
+  connectors,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  mode: EndpointFormMode;
+  connectors: ConnectorInfo[];
+  onSaved: (endpoint: EndpointOut) => void;
+}) {
+  const headingId = useId();
+  const isEdit = mode.kind === "edit";
+  const existing = mode.kind === "edit" ? mode.endpoint : null;
+
+  const [name, setName] = useState("");
+  const [connector, setConnector] = useState<string | undefined>(undefined);
+  const [role, setRole] = useState<Role | undefined>(undefined);
+  const [secretRef, setSecretRef] = useState("");
+  const [enabled, setEnabled] = useState(false);
+  const [settingsRows, setSettingsRows] = useState<SettingsRow[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<TopLevelField, string>>>({});
+  const [settingsBannerError, setSettingsBannerError] = useState<string | null>(null);
+  const [settingsFieldErrors, setSettingsFieldErrors] = useState<Record<string, string>>({});
+
+  // Re-seed every time the sheet opens (both create and edit) -- so a leftover draft from a
+  // previous open (or a previous endpoint) never survives into the next one.
+  useEffect(() => {
+    if (!open) return;
+    setSubmitting(false);
+    setFormError(null);
+    setFieldErrors({});
+    setSettingsBannerError(null);
+    setSettingsFieldErrors({});
+    if (existing) {
+      setName(existing.name);
+      setConnector(existing.connector);
+      setRole(existing.role);
+      setSecretRef(existing.secret_ref ?? "");
+      setEnabled(existing.enabled);
+      setSettingsRows(settingsToRows(existing.settings));
+    } else {
+      setName("");
+      setConnector(undefined);
+      setRole(undefined);
+      setSecretRef("");
+      setEnabled(false);
+      setSettingsRows([newSettingsRow()]);
+    }
+    // `existing` is derived fresh from `mode` on every render; keying off its identity directly
+    // would re-run on every keystroke elsewhere in the tree. `open` plus the endpoint's own
+    // `name` is what actually changes between "open the sheet for a different row" events.
+  }, [open, existing?.name]);
+
+  const selectedConnectorInfo = connectors.find((entry) => entry.name === connector);
+  const availableConnectors = connectors.filter((entry) => entry.available);
+  const unavailableConnectors = connectors.filter((entry) => !entry.available);
+
+  const canSubmit = name.trim().length > 0 && !!connector && !!role && !submitting;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!connector || !role) return;
+    setSubmitting(true);
+    setFormError(null);
+    setFieldErrors({});
+    setSettingsBannerError(null);
+    setSettingsFieldErrors({});
+
+    const settings = rowsToSettings(settingsRows);
+    const trimmedSecretRef = secretRef.trim();
+
+    const result = existing
+      ? await updateEndpoint(existing.name, {
+          connector,
+          role,
+          settings,
+          secret_ref: trimmedSecretRef.length > 0 ? trimmedSecretRef : null,
+          enabled,
+        })
+      : await createEndpoint({
+          name: name.trim(),
+          connector,
+          role,
+          settings,
+          secret_ref: trimmedSecretRef.length > 0 ? trimmedSecretRef : null,
+          enabled,
+        });
+
+    setSubmitting(false);
+
+    if (result.ok) {
+      toast.success(isEdit ? `Endpoint "${result.data.name}" updated.` : `Endpoint "${result.data.name}" registered.`);
+      onSaved(result.data);
+      onOpenChange(false);
+      return;
+    }
+
+    const classified = classifyEndpointError(result.error);
+    if (classified.kind === "field") {
+      setFieldErrors({ [classified.field]: classified.message });
+    } else if (classified.kind === "settings-fields") {
+      const next: Record<string, string> = {};
+      for (const key of classified.keys) {
+        next[key] = classified.message;
+      }
+      setSettingsFieldErrors(next);
+    } else if (classified.kind === "settings-banner") {
+      setSettingsBannerError(classified.message);
+    } else {
+      setFormError(classified.message);
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetHeader>
+          <SheetTitle id={headingId}>{isEdit ? `Edit endpoint "${existing?.name}"` : "Register endpoint"}</SheetTitle>
+          <SheetDescription>
+            {isEdit
+              ? "Change this endpoint's settings, secret reference, role, or enabled state."
+              : "Name an instance of a connector this image already discovered (C6) -- nothing is installed here."}
+          </SheetDescription>
+        </SheetHeader>
+        <form onSubmit={(event) => void handleSubmit(event)} aria-labelledby={headingId} noValidate className="flex flex-col gap-4 px-4 pb-4">
+          {formError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <FieldRow label="Name" error={fieldErrors.name}>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={isEdit}
+              placeholder="qlik_prod"
+              required
+            />
+          </FieldRow>
+
+          <Select value={connector} onValueChange={(value) => setConnector(value)}>
+            <FieldRow label="Connector" error={fieldErrors.connector}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a discovered connector" />
+              </SelectTrigger>
+            </FieldRow>
+            <SelectContent>
+              {availableConnectors.map((entry) => (
+                <SelectItem key={entry.name} value={entry.name}>
+                  {entry.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {unavailableConnectors.length > 0 ? (
+            <Alert variant="warning">
+              <AlertDescription>
+                {unavailableConnectors.length} discovered connector
+                {unavailableConnectors.length === 1 ? " is" : "s are"} unavailable and cannot be
+                registered against:{" "}
+                {unavailableConnectors
+                  .map((entry) => `${entry.name} (${entry.distribution ?? "unknown distribution"}: ${entry.broken_reason ?? "no reason given"})`)
+                  .join("; ")}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {selectedConnectorInfo ? (
+            selectedConnectorInfo.manifest ? (
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer text-caption font-medium">
+                  What "{selectedConnectorInfo.name}" supports
+                </summary>
+                <div className="mt-3">
+                  <ManifestPanel manifest={selectedConnectorInfo.manifest} />
+                </div>
+              </details>
+            ) : (
+              <Alert variant="info">
+                <AlertDescription>{selectedConnectorInfo.manifest_unavailable_reason}</AlertDescription>
+              </Alert>
+            )
+          ) : null}
+
+          <Select value={role} onValueChange={(value) => setRole(value as Role)}>
+            <FieldRow label="Role" error={fieldErrors.role}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select source or target" />
+              </SelectTrigger>
+            </FieldRow>
+            <SelectContent>
+              {ROLE_VALUES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <FieldRow
+            label="Secret reference"
+            description='A reference to a secret in the configured backend (e.g. "env:QLIK_ACME") -- never a credential value itself. Leave blank for an endpoint with no bound secret yet.'
+            error={fieldErrors.secret_ref}
+          >
+            <Input
+              type="text"
+              value={secretRef}
+              onChange={(event) => setSecretRef(event.target.value)}
+              placeholder="env:QLIK_ACME"
+              autoComplete="off"
+            />
+          </FieldRow>
+
+          <div className="flex flex-col gap-2">
+            <Label>Settings</Label>
+            <p className="text-body text-muted-foreground">
+              Non-secret configuration for this connector instance. A value is parsed as JSON when
+              valid (e.g. <code>true</code>, <code>8080</code>) and kept as plain text otherwise. A
+              connector's own secret-typed fields are rejected here -- bind a secret reference
+              above instead.
+            </p>
+            {settingsBannerError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{settingsBannerError}</AlertDescription>
+              </Alert>
+            ) : null}
+            <SettingsEditor
+              rows={settingsRows}
+              onRowsChange={setSettingsRows}
+              fieldErrors={settingsFieldErrors}
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch id="endpoint-enabled" checked={enabled} onCheckedChange={setEnabled} />
+            <Label htmlFor="endpoint-enabled">Enabled</Label>
+          </div>
+
+          <SheetFooter className="px-0">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!canSubmit}>
+              {submitting ? <Spinner aria-hidden className="mr-2 size-4" /> : null}
+              {submitting ? "Saving…" : isEdit ? "Save changes" : "Register endpoint"}
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}

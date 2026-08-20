@@ -55,3 +55,49 @@ export function requestFromMock(fetchMock: ReturnType<typeof vi.fn>, callIndex =
   }
   return request;
 }
+
+/** A URL-routed stub for `globalThis.fetch`, keyed `"<METHOD> <pathname>"`.
+ *
+ * Prefer this over queueing `mockResolvedValueOnce` whenever the tree under test mounts more
+ * than one component that fetches. Call-order queueing is only correct while exactly one
+ * component fetches on mount, and it fails in a way that is genuinely hard to read: React
+ * fires effects bottom-up, so a newly-added child screen's request reaches the mock BEFORE
+ * its parent's does, silently consuming the response the parent was queued to receive. The
+ * parent then sees `undefined` and surfaces an unhandled rejection from somewhere unrelated.
+ * That is exactly what happened the moment a real screen replaced the inert placeholder at
+ * the default route, and this helper exists so it cannot happen again -- a route answers by
+ * URL, so it does not matter who asks first.
+ *
+ * An unrouted request throws by name rather than returning `undefined`, so a missing fixture
+ * fails loudly at the call site instead of as a mystery rejection elsewhere. */
+export function installApiRouter(
+  routes: Record<string, Response | ((request: Request) => Response | Promise<Response>)>,
+): { fetchMock: ReturnType<typeof vi.fn>; calls: string[] } {
+  const fetchMock = installFetchMock();
+  const calls: string[] = [];
+  fetchMock.mockImplementation(async (request: Request) => {
+    const url = new URL(request.url);
+    const key = `${request.method} ${url.pathname}`;
+    calls.push(key);
+    const route = routes[key];
+    if (route === undefined) {
+      throw new Error(
+        `Unrouted request in test: ${key}. Add it to installApiRouter's routes map.`,
+      );
+    }
+    // A Response body reads once -- clone so one route can answer repeated calls.
+    return typeof route === "function" ? route(request) : route.clone();
+  });
+  return { fetchMock, calls };
+}
+
+/** The two calls the Endpoints screen makes on mount. Any test that renders the shell at the
+ * default route needs these answered, whether or not it cares about endpoints. */
+export function endpointsScreenRoutes(): Record<string, Response> {
+  return {
+    // Both are bare arrays -- verified against openapi.json, not assumed. `/api/endpoints`
+    // is NOT a paginated envelope (unlike `/api/runs`, which is keyset-paginated).
+    "GET /api/endpoints": jsonResponse(200, []),
+    "GET /api/connectors": jsonResponse(200, []),
+  };
+}

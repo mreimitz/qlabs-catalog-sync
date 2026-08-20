@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { ThemeProvider } from "@elabs-ai/components-tokens";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { installFetchMock, jsonResponse, sessionInfoFixture } from "../test/apiFixtures";
+import { endpointsScreenRoutes, installApiRouter, jsonResponse, sessionInfoFixture } from "../test/apiFixtures";
 import { setSignedOut } from "../auth/sessionStore";
 import App from "../App";
 
@@ -25,8 +25,16 @@ function renderApp() {
 }
 
 async function signInAndWaitForShell() {
-  const fetchMock = installFetchMock();
-  fetchMock.mockResolvedValueOnce(jsonResponse(200, sessionInfoFixture({ username: "admin" })));
+  // Reset the module-level session store first. It is deliberately module-level (one signed-in
+  // operator per page), so it survives `cleanup()` -- and the second call below is modelling a
+  // page RELOAD, which in a real browser starts with that store empty. Without this reset the
+  // second mount skips the boot gate entirely and the two halves of this test stop being
+  // comparable.
+  setSignedOut();
+  installApiRouter({
+    "GET /api/auth/session": jsonResponse(200, sessionInfoFixture({ username: "admin" })),
+    ...endpointsScreenRoutes(),
+  });
   renderApp();
   await screen.findByRole("button", { name: /Sign out/ });
 }

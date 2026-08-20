@@ -13,6 +13,7 @@ import { NotFoundScreen } from "./app/screens/NotFoundScreen";
 import { PlaceholderScreen } from "./app/screens/PlaceholderScreen";
 import { DEFAULT_ROUTE, NAV_ROUTES } from "./app/routes";
 import { Shell } from "./app/Shell";
+import { EndpointsScreen } from "./features/endpoints/EndpointsScreen";
 
 function App() {
   return (
@@ -28,7 +29,13 @@ function App() {
               <Route
                 key={route.path}
                 path={route.path}
-                element={<PlaceholderScreen title={route.label} builtBy={route.builtBy} />}
+                element={
+                  route.path === "/endpoints" ? (
+                    <EndpointsScreen />
+                  ) : (
+                    <PlaceholderScreen title={route.label} builtBy={route.builtBy} />
+                  )
+                }
               />
             ))}
             <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
