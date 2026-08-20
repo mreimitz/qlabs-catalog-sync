@@ -203,7 +203,7 @@
       ],
       "dod": "Manifest model expresses per-entity/field rw/ro/na, partial_update, allowed_update_paths and concurrency; validates.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/manifest -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.4",
