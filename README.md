@@ -193,26 +193,29 @@ Planned, not scheduled:
 
 ## Current state
 
-**Nothing syncs yet.** The repository holds a complete design, a task board, and a
-six-package skeleton in which every module is a documented stub. Roughly 330 non-blank
-lines of Python exist across 49 files, and the only definitions in them are four
-placeholder connector classes and one CLI entry function.
+**The Databricks-to-Qlik sync works end to end.** A Unity Catalog schema is read out of
+Databricks, mapped through the neutral model, and written into a Qlik space by the
+`qlabs-catalog-sync` command — dry-run first if you want to see the plan before anything
+is written. It has not run against a live tenant: every test drives the real code against
+mocked vendor APIs and hand-authored cassettes built from the published API documentation,
+and the behaviours only a real tenant can confirm are listed in
+[`docs/tenant-verification.md`](docs/tenant-verification.md) rather than assumed.
 
 ### Status at a glance
 
-As of 2026-08-20 — 95 tasks across three boards, 20 done.
+As of 2026-08-20 — RM-01 (the engine) is 46 of 52 tasks done, with 1,576 tests passing.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
 | WP0 | Workspace, tooling, dependency pinning, CI | 6 / 6 | **Done** |
-| WP1 | Connector SDK — model, contract, manifest, conformance kit | 8 / 10 | In progress |
-| WP2 | Engine — discovery, state store, sync loop, scheduler, CLI | 2 / 9 | In progress |
-| WP3 | Qlik write connector (sole writer) | 1 / 9 | In progress |
-| WP4 | Databricks read connector | 1 / 7 | In progress |
+| WP1 | Connector SDK — model, contract, manifest, conformance kit | 10 / 10 | **Done** |
+| WP2 | Engine — discovery, state store, sync loop, scheduler, CLI | 9 / 9 | **Done** |
+| WP3 | Qlik write connector (sole writer) | 8 / 8 | **Done** |
+| WP4 | Databricks read connector | 7 / 7 | **Done** |
 | WP5 | Collibra read connector | 0 / 6 | Blocked (Track B, RM-05) |
 | WP6 | Snowflake read connector | 0 / 6 | Blocked (Track B, RM-05) |
-| WP7 | Identity map, field diff, owner correlation | 2 / 4 | In progress |
-| WP8 | Integration, end-to-end pilot, release readiness | 0 / 6 | Not started |
+| WP7 | Identity map, field diff, owner correlation | 4 / 4 | **Done** |
+| WP8 | Integration, end-to-end pilot, release readiness | 2 / 4 | In progress |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 0 / 4 | Not started |
 | WP10 | Configuration store, secret references, audit log | 0 / 4 | Not started (console, RM-06) |
 | WP11 | Selection rule engine, source tree, run history | 0 / 4 | Not started (console, RM-06) |
@@ -233,36 +236,51 @@ python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-06
 
 ### What works today
 
-- The uv workspace resolves; `uv sync --all-packages` installs all six packages editable.
-- All four connector entry points resolve — `collibra`, `databricks`, `qlik`, `snowflake`
-  — so the discovery mechanism is real even though nothing consumes it yet.
-- The SDK exports its two contract constants: `CONTRACT_VERSION = "0.1.0"` and the
-  entry-point group name `qlabs_catalog_sync.connectors`.
-- The build gate is green: `uv run ruff check packages`, `uv run mypy` (strict) and
-  `uv run pytest -q` all pass from a clean checkout.
-- Every runtime library the build needs is pinned and locked, in the package that uses
-  it, so no later change has to touch packaging metadata.
-- CI runs that same gate on every push and pull request and builds a wheel per package,
-  uploading all six as build artifacts.
-- `CONTRIBUTING.md` documents the package boundaries, the dependency rule and the gate;
-  `docs/adr/` is the home for decisions taken during implementation.
+Everything below is exercised by the test suite against mocked vendor APIs — no live
+tenant has been involved.
 
-That is the complete list.
+- **The sync runs.** `qlabs-catalog-sync run` reads a Unity Catalog schema as a Qlik data
+  product and its tables and views as datasets, writes the product into the configured
+  Qlik space, and records what it did. `dry-run` computes the same plan, writes it as JSON
+  and as a readable summary, and applies nothing.
+- **Re-running changes nothing.** A second cycle over unchanged source data issues zero
+  API writes — asserted against the target's recorded calls, not against a flag.
+- **It never deletes and never activates.** A source object that disappears is reported as
+  an orphan. The Qlik connector implements delete and the lifecycle actions so the contract
+  is complete, but they refuse unless explicitly enabled, and nothing in v1 enables them.
+- **It never invents a reference.** Dataset members resolve only against datasets already
+  in the target space, and owner emails only against real Qlik users. Anything unresolved
+  is left out of the payload and named in the run report.
+- **Identity is confirmed, not guessed.** A first sync proposes matches into a review file
+  and binds nothing until a human confirms; an ambiguous match is reported rather than
+  tie-broken. Creating missing products is opt-in.
+- **Writes are minimal and guarded.** Only fields that actually differ are sent, as
+  replace-only JSON Patch against Qlik's closed eight-path enum, carrying the revision the
+  change was computed against, with one re-read-and-retry on a concurrency conflict.
+- **Tags come from Unity Catalog** through the Statement Execution API when a SQL warehouse
+  is configured; without one the connector reports tags as unavailable rather than empty,
+  so the sync leaves the target's tags alone instead of clearing them.
+- **Both connectors are certified** against the SDK's conformance kit, which also fails a
+  connector whose capability manifest lies about what it can do.
+- **Operations:** structured JSON logs with sync context and no secrets, Prometheus metrics,
+  `/healthz` and `/metrics`, a per-pair scheduler with jitter that never overlaps a cycle
+  with itself, and automatic database migration on startup.
 
 ### What does not exist yet
 
-- **No SDK.** No `Connector` base class, no neutral model types, no capability-manifest
-  types, no HTTP or auth helpers, no conformance kit.
-- **No engine.** No connector discovery, no state store or migrations, no sync loop, no
-  scheduler, no diff engine, no identity map.
-- **No connector implementations.** The four `Connector` classes are placeholders with a
-  `name` attribute and no methods.
-- **No configuration format.** No config schema, no example config, no `.env` template.
+- **No live-tenant verification.** The connectors have never talked to a real Databricks
+  workspace or Qlik tenant. See [Known-unverified behavior](#known-unverified-behavior) and
+  the checklist in [`docs/tenant-verification.md`](docs/tenant-verification.md).
+- **No packaging or runbook yet** — no container image, no per-tenant config templates, no
+  operator runbook. That is WP9, and v0.1 is not tagged.
+- **No Collibra or Snowflake connector.** Both packages exist as placeholders that declare
+  an entry point, so the engine reports them as unavailable at startup. They are Track B
+  (RM-05) and start after v0.1.
+- **No glossary sync.** Databricks has no glossary to source one from, so the Qlik glossary
+  write path is Track B (decision D5).
+- **No two-way sync and no access-control sync.** Both are out of v1 by design.
 - **No console and no HTTP API.** No configuration store, no selection rule engine, no REST
   API, no SPA — the whole of WP10-WP14 is unbuilt.
-- **No usable CLI.** The `qlabs-catalog-sync` console script installs and then raises
-  `NotImplementedError`.
-- **No real tests.** Six import smoke tests, no conformance suite, no cassettes.
 
 ### Known-unverified behavior
 
