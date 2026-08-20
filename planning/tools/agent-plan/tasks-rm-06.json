@@ -276,7 +276,7 @@
       ],
       "dod": "Preview results match a real cycle's selection object for object on the same rule set; a draft preview leaves the stored configuration untouched; a large source pages rather than timing out.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_preview.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T12.6",
