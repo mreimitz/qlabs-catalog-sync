@@ -18,18 +18,22 @@ DATA_PRODUCT_RW_FIELDS = [
     "name",
     "description",
     "documentation",
-    "status",
     "owners",
     "tags",
     "dataset_refs",
 ]
+
+#: `status` is deliberately NOT among them. Qlik changes it through the activate /
+#: deactivate actions rather than the PATCH path enum, and decision D7 makes activation
+#: opt-in per pair and off by default — nothing in v1 enables it. Declaring it writable
+#: would have the manifest promise a write the engine plans and the connector refuses.
 
 #: The subset of those that are array-valued and therefore full-replace-only
 #: (RS-02 section 2: "Array paths are full-replace").
 DATA_PRODUCT_ARRAY_FIELDS = ["owners", "tags", "dataset_refs"]
 
 #: The scalar rw fields — must NOT require a full replace.
-DATA_PRODUCT_SCALAR_RW_FIELDS = ["name", "description", "documentation", "status"]
+DATA_PRODUCT_SCALAR_RW_FIELDS = ["name", "description", "documentation"]
 
 DATASET_DECLARED_FIELDS = [
     "name",

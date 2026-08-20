@@ -346,6 +346,7 @@ async def setup_connector(
     tenant: FakeQlikTenant | None = None,
     dataset_identity_lookup: Any = None,
     dataset_name_lookup: Any = None,
+    dataset_ref_lookup: Any = None,
     enabled_destructive_actions: frozenset[Any] = frozenset(),
     config: QlikConfig | None = None,
 ) -> AsyncIterator[Connector]:
@@ -371,13 +372,28 @@ async def setup_connector(
     (first-registered, i.e. this fixture's) router therefore always wins for any URL it
     already has a route for — an inner ``assert_no_http_calls()``/``capture_requests()``
     catch-all registered *after* it is only ever reached for a URL this fixture's router
-    does not recognize. In practice this only weakens one check in this whole suite: the
+    does not recognize. In practice this only affects one check in this whole suite: the
     "no HTTP request was sent for the replay" half of
     ``test_reapplying_an_unchanged_diff_is_a_no_op`` does not reliably observe a real
     call here (the outer tenant router answers it first), so that half of the check does
-    not meaningfully execute under this fixture — the test still correctly fails on this
-    connector, but via the ``WriteOutcome`` comparison that runs right after it, not via
-    the call-count assertion. It does **not** weaken any capability-honesty check: every
+    not meaningfully execute under this fixture.
+
+    **That matters more now than it did, and is worth stating plainly rather than
+    quietly relying on.** The connector's idempotency pre-read (``write.py`` module
+    docstring, point 12a) means a replayed ``update()`` really does issue one ``GET`` —
+    and no PATCH. So the base suite passes that check here, but it would not pass a
+    literal reading of it, and neither would *any* connector backed by a remote API:
+    with no per-product state cached in the process (the contract says a connector holds
+    none), the only way to know a diff is already applied is to ask the target. RS-08
+    section 9 states the requirement as "re-applying an unchanged diff is a no-op
+    (checksum stable)", which this satisfies exactly; the SDK suite's stricter
+    zero-calls assertion is satisfiable only by an in-memory double like the SDK's own
+    ``FakeConnector``. The claim that actually matters — **no write** is issued on a
+    replay — is proven reliably instead by ``test_round_trip_findings.py``'s
+    ``test_replaying_an_already_current_name_is_a_no_op_and_issues_no_patch``, which
+    counts real PATCH requests on a single router.
+
+    None of this weakens any capability-honesty check: every
     one of those raises :class:`~qlabs_catalog_sync_sdk.exceptions.CapabilityError` from
     a guard clause that runs before ``self._http.request(...)`` is ever called (verified
     by reading ``write.py``/``lifecycle.py`` directly, not inferred from respx's
@@ -389,10 +405,10 @@ async def setup_connector(
     below), so nothing in this suite relies on the nesting behavior working the way it
     first appears to.
 
-    ``dataset_identity_lookup``/``dataset_name_lookup`` are left at the connector's own
-    defaults (always-miss) unless a caller overrides them — that default is the
-    *realistic* one: a brand-new synced entity has no IdentityMap binding yet, exactly
-    like a real first sync cycle. ``enabled_destructive_actions`` defaults to empty,
+    ``dataset_identity_lookup``/``dataset_name_lookup``/``dataset_ref_lookup`` are left
+    at the connector's own defaults (always-miss) unless a caller overrides them — that
+    default is the *realistic* one: a brand-new synced entity has no IdentityMap binding
+    yet, exactly like a real first sync cycle. ``enabled_destructive_actions`` defaults to empty,
     matching decision D4/D7 — see ``test_capability_honesty.py``.
     """
     fake_tenant = tenant if tenant is not None else FakeQlikTenant()
@@ -403,6 +419,8 @@ async def setup_connector(
             connector.dataset_identity_lookup = dataset_identity_lookup
         if dataset_name_lookup is not None:
             connector.dataset_name_lookup = dataset_name_lookup
+        if dataset_ref_lookup is not None:
+            connector.dataset_ref_lookup = dataset_ref_lookup
         connector.enabled_destructive_actions = enabled_destructive_actions
         await connector.setup(build_ctx(config))
         try:
@@ -422,6 +440,7 @@ async def build_connector(
     *,
     dataset_identity_lookup: Any = None,
     dataset_name_lookup: Any = None,
+    dataset_ref_lookup: Any = None,
     enabled_destructive_actions: frozenset[Any] = frozenset(),
     config: QlikConfig | None = None,
 ) -> Connector:
@@ -443,6 +462,8 @@ async def build_connector(
         connector.dataset_identity_lookup = dataset_identity_lookup
     if dataset_name_lookup is not None:
         connector.dataset_name_lookup = dataset_name_lookup
+    if dataset_ref_lookup is not None:
+        connector.dataset_ref_lookup = dataset_ref_lookup
     connector.enabled_destructive_actions = enabled_destructive_actions
     await connector.setup(build_ctx(config))
     return connector

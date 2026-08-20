@@ -1,19 +1,39 @@
 """Individually-diagnosed proofs of the mismatches ``TestQlikConformance``'s base-suite
 round-trip/idempotency tests hit as a group (see that module's docstring). The base
-suite reports only the *first* field that fails, in each of its three affected checks —
-because all three happen to fail on the alphabetically-first writable field,
-``dataset_refs``, that loop never gets far enough to show the other three independently
-real mismatches (``documentation``, ``owners``, ``status``). Every test below isolates
-one field/behavior with its own realistic setup, so each finding stands on its own
-evidence rather than being inferred from one shared failure.
+suite reports only the *first* field that fails in each affected check, and every one of
+them failed on the alphabetically-first writable field, ``dataset_refs``, so that loop
+never got far enough to show the other independently real mismatches. Every test below
+isolates one field or behavior with its own realistic setup, so each finding stands on
+its own evidence rather than being inferred from one shared failure.
 
-Every positive claim here (``name``/``tags`` round-trip fine; ``owners`` round-trips fine
-*given an email*) is proven by an actually-passing assertion, not asserted from reading
-the source — the point of a conformance kit is to catch the gap between what the code
-appears to do and what it verifiably does.
+**Two of these findings were real connector defects and are now fixed.** Findings 1 and 2
+have been rewritten to pin the *fixed* behavior, not the broken behavior they originally
+documented — the point of pinning a defect is to notice when it comes back, which an
+assertion still describing the bug cannot do. Neither the base suite nor any check here
+was loosened to achieve that; what changed is the connector:
+
+* **Finding 1 — ``read()`` never reported ``dataset_refs``,** though the manifest
+  declares the field ``rw``. ``read.py`` now maps Qlik's native ``datasetIds`` back
+  through an injected reverse identity seam (its module docstring, point 4). Both halves
+  are pinned below: it round-trips when the seam is wired, and it is *not reported at
+  all* — rather than reported empty — when it is not.
+* **Finding 2 — ``update()`` was not idempotent.** ``write.py`` now issues one Tier-1
+  ``GET`` before every PATCH and drops operations the product already carries (its module
+  docstring, point 12a), so a byte-identical replay is a ``NO_OP`` with no write at all.
+
+Findings 3 to 5 are **not** defects and are left exactly as they were: Qlik's ``readMe``
+has no format concept, the base suite's synthetic owner sample carries no email, and
+decision D7 makes activation opt-in. Each is a documented consequence, and each is proven
+here by a passing assertion rather than asserted from reading the source — the point of a
+conformance kit is to catch the gap between what the code appears to do and what it
+verifiably does.
 """
 
 from __future__ import annotations
+
+import uuid
+
+import respx
 
 from qlabs_catalog_sync_sdk.contract import WriteOutcome
 from qlabs_catalog_sync_sdk.envelope import to_json_value
@@ -29,38 +49,37 @@ from qlabs_catalog_sync_sdk.models import (
     TextField,
 )
 
-from .conftest import FakeQlikTenant, setup_connector
+from .conftest import FakeQlikTenant, build_connector, register_routes, setup_connector
 
 # --------------------------------------------------------------------------------------
-# Finding 1: dataset_refs never round-trips through read() — structural, not a
-# resolution artifact. This is the connector-side defect this task's report names a
-# precise fix for.
+# Finding 1 (was a defect, now fixed): dataset_refs is written by create()/update() and
+# read back by read() — through the reverse identity seam, and only when that seam has an
+# answer. Both halves are pinned: the round trip, and the honest silence without it.
 # --------------------------------------------------------------------------------------
 
 
-async def test_dataset_refs_is_written_but_read_never_reports_it_back() -> None:
-    """Seed a matching dataset so member resolution (D2) genuinely succeeds — proving the
-    gap below is not "nothing resolved" but "read.py has no field for this at all."
-    ``read.py``'s ``_map_data_product`` never sets ``dataset_refs`` on the ``DataProduct``
-    it builds (module docstring, point 4): the Qlik-native ``datasetIds`` values travel
-    losslessly into ``custom_attributes`` instead, deliberately, because resolving a
-    native id back to the *neutral* UUID the engine minted is the engine's IdentityMap's
-    job, not a single connector read's. That is a defensible reason for the *value* to
-    come back empty — but the manifest still declares ``dataset_refs`` ``rw``
-    (``manifest.py``), and this is the concrete gap between that declaration and what a
-    caller relying on read-after-write observes.
+async def test_dataset_refs_round_trips_when_the_reverse_identity_seam_is_wired() -> None:
+    """The fix for the original finding: ``read.py``'s ``_map_data_product`` now sets
+    ``DataProduct.dataset_refs`` from the raw ``datasetIds`` it already had in hand,
+    mapping each native id back through ``read.DatasetRefLookup`` — the mirror of the
+    forward ``DatasetIdentityLookup`` ``resolve.py`` documents, defaulting to "no answer"
+    the same way and answered by the same engine-owned IdentityMap. The manifest declares
+    ``dataset_refs`` ``rw``; this is what makes that declaration true.
     """
-    import uuid
-
     tenant = FakeQlikTenant()
     tenant.seed_dataset(name="Orders", resource_id="ds-orders-1")
+    member = uuid.uuid4()
 
     async def name_lookup(neutral_id: uuid.UUID) -> str | None:
         del neutral_id
         return "Orders"
 
-    async with setup_connector(tenant=tenant, dataset_name_lookup=name_lookup) as connector:
-        member = uuid.uuid4()
+    async def ref_lookup(native_id: str) -> uuid.UUID | None:
+        return member if native_id == "ds-orders-1" else None
+
+    async with setup_connector(
+        tenant=tenant, dataset_name_lookup=name_lookup, dataset_ref_lookup=ref_lookup
+    ) as connector:
         product = DataProduct(name="Sales", dataset_refs=[member])
 
         created = await connector.create(product)
@@ -71,36 +90,70 @@ async def test_dataset_refs_is_written_but_read_never_reports_it_back() -> None:
 
         read_back = await connector.read(created.ref)
 
-        assert read_back.dataset_refs == [], (
-            "documenting current behavior, not endorsing it — see the report for the "
-            "precise fix: read.py never populates DataProduct.dataset_refs from the raw "
-            "'datasetIds' it already has in hand"
-        )
-        assert "dataset_refs" not in read_back.field_envelopes
+        assert read_back.dataset_refs == [member]
+        assert "dataset_refs" in read_back.field_envelopes
+        # The raw native ids stay recoverable too: the mapping is lossy by construction
+        # (an unbound id has no neutral counterpart), so 'datasetIds' is deliberately
+        # *not* excluded from custom_attributes -- read.py's point 3 exclusion policy.
+        assert read_back.custom_attributes["datasetIds"] == ["ds-orders-1"]
 
 
-# --------------------------------------------------------------------------------------
-# Finding 2: update() has no field-level no-op detection outside the two documented
-# cases (an empty diff, or every operation dropped by a resolution failure) — a diff
-# that resolves and applies always reports UPDATED and always issues a request, even
-# when it replays a value the target already holds. Shown here with `name`, the
-# cleanest possible field (no resolver, no lifecycle action, no format ambiguity), to
-# isolate this from the dataset_refs-specific findings above and below.
-# --------------------------------------------------------------------------------------
+async def test_dataset_refs_is_not_reported_at_all_when_the_seam_has_no_answer() -> None:
+    """The other half, and the reason this is not simply "report whatever resolved".
 
-
-async def test_replaying_an_already_current_name_is_reported_updated_not_no_op() -> None:
-    """The general form of what the base suite's ``test_reapplying_an_unchanged_diff_is_a_
-    no_op`` hits via ``dataset_refs``: ``write.py``'s own module docstring says
-    idempotency "rests on" the *engine* never calling ``update()`` with an unchanged
-    value (point 9's "empty diff" framing) — there is no read-before-write comparison in
-    the non-conflict path (contrast ``_recover_from_conflict``'s ``_already_applied``,
-    which only runs after a 412). Calling ``update()`` twice with the literal same
-    desired value therefore sends the PATCH twice and reports ``UPDATED`` twice, not
-    ``UPDATED`` then ``NO_OP`` — the exact shape ``suite.py``'s idempotency check expects
-    a conforming connector to avoid.
+    With no reverse binding, the connector cannot state this product's membership. It
+    therefore does not report the field at all — no value, no ``FieldEnvelope`` — rather
+    than reporting ``[]``, which would assert "this product has no datasets" and is
+    exactly the invention decision D2 forbids (and exactly the claim ``write.py`` refuses
+    to *send* for the same reason, its point 10). The raw ids still travel in
+    ``custom_attributes``, so nothing is lost, only left unclaimed.
     """
-    async with setup_connector() as connector:
+    tenant = FakeQlikTenant()
+    tenant.seed_dataset(name="Orders", resource_id="ds-orders-1")
+
+    async def name_lookup(neutral_id: uuid.UUID) -> str | None:
+        del neutral_id
+        return "Orders"
+
+    # dataset_ref_lookup deliberately left at the connector's default: no binding known.
+    async with setup_connector(tenant=tenant, dataset_name_lookup=name_lookup) as connector:
+        created = await connector.create(DataProduct(name="Sales", dataset_refs=[uuid.uuid4()]))
+        assert "dataset_refs" in created.written_fields
+
+        read_back = await connector.read(created.ref)
+
+        assert read_back.dataset_refs == []
+        assert "dataset_refs" not in read_back.field_envelopes
+        assert read_back.custom_attributes["datasetIds"] == ["ds-orders-1"]
+
+
+# --------------------------------------------------------------------------------------
+# Finding 2 (was a defect, now fixed): update() detects, before writing, that the product
+# already carries every value the diff asks for. Shown with `name`, the cleanest possible
+# field (no resolver, no lifecycle action, no format ambiguity), so nothing about this is
+# a dataset_refs artifact.
+# --------------------------------------------------------------------------------------
+
+
+async def test_replaying_an_already_current_name_is_a_no_op_and_issues_no_patch(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """The general form of what the base suite's ``test_reapplying_an_unchanged_diff_is_a_
+    no_op`` exercises via ``dataset_refs``. ``write.py`` used to have no read-before-write
+    comparison outside ``_recover_from_conflict``'s post-412 ``_already_applied``, so
+    calling ``update()`` twice with the literal same desired value sent the PATCH twice
+    and reported ``UPDATED`` twice. It now runs that same comparison proactively (module
+    docstring, point 12a): the replay costs one Tier-1 ``GET`` and issues no write.
+
+    Built on :func:`~.conftest.build_connector`'s single router rather than
+    :func:`~.conftest.setup_connector`'s nested one precisely so "no PATCH was sent" is a
+    reliable count of real requests and not a respx routing artifact — see
+    ``conftest.setup_connector``'s docstring for that caveat.
+    """
+    tenant = FakeQlikTenant()
+    register_routes(respx_mock, tenant)
+    connector = await build_connector()
+    try:
         created = await connector.create(DataProduct(name="Original Name"))
         assert created.outcome is WriteOutcome.CREATED
 
@@ -121,16 +174,23 @@ async def test_replaying_an_already_current_name_is_reported_updated_not_no_op()
             ],
             expected_revision=first.source_revision,
         )
+        patches_before = _patch_count(respx_mock)
         second = await connector.update(created.ref, replay)
 
-        assert second.outcome is WriteOutcome.UPDATED, (
-            "documenting current behavior: a byte-identical replay of 'name' is reported "
-            "as a real update, not a no-op — see the report for the design tension this "
-            "implies"
-        )
-        # And a real PATCH really was sent for it -- the revision moved a second time,
-        # proving this is not a cosmetic mislabeling of an already-skipped write.
-        assert second.source_revision != first.source_revision
+        assert second.outcome is WriteOutcome.NO_OP
+        assert second.written_fields == []  # a no-op that claimed a field would not validate
+        assert second.detail is not None and "/name" in second.detail
+        # No PATCH at all -- not "a PATCH that happened to change nothing".
+        assert _patch_count(respx_mock) == patches_before
+        # And the product's revision did not move, which is the check that would catch a
+        # connector reporting NO_OP while still writing.
+        assert second.source_revision == first.source_revision
+    finally:
+        await connector.close()
+
+
+def _patch_count(respx_mock: respx.MockRouter) -> int:
+    return sum(1 for call in respx_mock.calls if call.request.method == "PATCH")
 
 
 # --------------------------------------------------------------------------------------

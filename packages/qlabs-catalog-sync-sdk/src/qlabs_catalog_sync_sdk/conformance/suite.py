@@ -38,6 +38,7 @@ reported as a skip, not a false green.
 from __future__ import annotations
 
 import pytest
+from pydantic import JsonValue
 
 from ..config import ConnectorConfig
 from ..contract import CapabilityManifestBase, Connector, HealthStatus, WriteOutcome
@@ -189,10 +190,21 @@ class ConnectorConformanceSuite:
             for field in _writable_fields(capability):
                 expected = to_json_value(getattr(sample, field))
                 actual = to_json_value(getattr(read_back, field))
-                assert actual == expected, (
-                    f"{entity_type.value}.{field} did not round-trip: "
-                    f"wrote {expected!r}, read back {actual!r}"
-                )
+                if _is_normalized(capability, field):
+                    # The endpoint stores a lossy projection of this field (Qlik's readMe
+                    # has no plain-vs-markdown concept; its tags are flat strings). The
+                    # write still has to have landed, so require a value back — just not
+                    # a byte-identical one.
+                    assert _has_substance(actual), (
+                        f"{entity_type.value}.{field} is declared normalized_by_target, but "
+                        f"read back {actual!r} after writing {expected!r} — a normalized "
+                        "field must still come back carrying the value that was written"
+                    )
+                else:
+                    assert actual == expected, (
+                        f"{entity_type.value}.{field} did not round-trip: "
+                        f"wrote {expected!r}, read back {actual!r}"
+                    )
                 assert field in read_back.field_envelopes, (
                     f"{entity_type.value}.{field} has no field_envelopes entry after read()"
                 )
@@ -359,6 +371,25 @@ def _require_concrete_manifest(connector: Connector) -> CapabilityManifest:
             "type and cannot introspect an arbitrary one generically"
         )
     return manifest
+
+
+def _is_normalized(capability: EntityCapability, field: str) -> bool:
+    """True when the endpoint declared it stores a lossy projection of ``field``."""
+    declared = capability.fields.get(field)
+    return declared is not None and declared.normalized_by_target
+
+
+def _has_substance(value: JsonValue) -> bool:
+    """True when ``value`` carries something — not ``None``, not empty.
+
+    Deliberately weak: for a normalized field the kit can only insist the write landed,
+    because only the endpoint knows what its own projection looks like.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str | list | dict):
+        return len(value) > 0
+    return True
 
 
 def _writable_fields(capability: EntityCapability) -> list[str]:

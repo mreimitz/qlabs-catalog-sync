@@ -112,9 +112,19 @@ class FieldCapability(NeutralModel):
     choice, never a silently-assumed one — that is what makes the manifest safe for the
     engine to plan writes from. Prefer the :meth:`rw`/:meth:`ro`/:meth:`na` builders over
     the raw constructor; they read as the decision they encode.
+
+    ``normalized_by_target`` says the endpoint stores a *lossy projection* of the neutral
+    value, so a read-back is not byte-identical to what was written even when the write
+    fully succeeded. Qlik's ``readMe`` has no plain-vs-markdown concept and its ``tags``
+    are flat strings where the neutral ``Tag`` is a key/value pair — both are facts about
+    Qlik, not connector defects. Declaring it lets the conformance kit hold such a field
+    to "the substance survived" instead of "the bytes matched", and lets the engine
+    explain a field that never quite settles. It is deliberately **not** a licence to skip
+    a check: a field that could round-trip exactly and does not is still a defect.
     """
 
     mode: FieldCapabilityMode
+    normalized_by_target: bool = False
 
     writable_via: str | None = None
     """How a write reaches the endpoint, e.g. ``"rest-patch"``, ``"sql-ddl"``,
@@ -139,17 +149,24 @@ class FieldCapability(NeutralModel):
 
     @classmethod
     def rw(
-        cls, *, writable_via: str | None = None, partial_update: bool = True
+        cls,
+        *,
+        writable_via: str | None = None,
+        partial_update: bool = True,
+        normalized_by_target: bool = False,
     ) -> FieldCapability:
         """A field this endpoint can write."""
         return cls(
-            mode=FieldCapabilityMode.RW, writable_via=writable_via, partial_update=partial_update
+            mode=FieldCapabilityMode.RW,
+            writable_via=writable_via,
+            partial_update=partial_update,
+            normalized_by_target=normalized_by_target,
         )
 
     @classmethod
-    def ro(cls) -> FieldCapability:
+    def ro(cls, *, normalized_by_target: bool = False) -> FieldCapability:
         """A field this endpoint can only ever read."""
-        return cls(mode=FieldCapabilityMode.RO)
+        return cls(mode=FieldCapabilityMode.RO, normalized_by_target=normalized_by_target)
 
     @classmethod
     def na(cls) -> FieldCapability:

@@ -332,6 +332,9 @@ async def test_the_product_id_comes_from_the_secondary_key_when_present(
     """Same lookup shape as ``read.read_data_product``: ``secondary_keys['id']`` wins."""
     url = "https://acme.eu.qlikcloud.example/api/data-governance/data-products/from-secondary"
     route = respx_mock.patch(url).mock(return_value=httpx.Response(204))
+    # The idempotency pre-read resolves the same id, which is half of what this asserts:
+    # a GET to any other URL would go unmocked and fail the test outright.
+    respx_mock.get(url).mock(return_value=httpx.Response(200, json={"id": "from-secondary"}))
     writer = make_writer()
     ref = product_ref(native_key="from-native", secondary_keys={"id": "from-secondary"})
 

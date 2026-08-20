@@ -292,11 +292,75 @@ def mock_patch(respx_mock: Any, *, status_code: int = 204, headers: Any = None) 
     )
 
 
+#: The product's state *before* whatever these tests are about to patch — what the
+#: idempotency pre-read (``write.py`` module docstring, point 12a) sees. Every mapped
+#: value is deliberately unlike anything the update tests send, which is also the
+#: realistic precondition: the engine only builds a change for a field whose value at
+#: the target actually differs. Without that, the pre-read would legitimately suppress
+#: the very operation a test is asserting on.
+def stale_response(**overrides: Any) -> dict[str, Any]:
+    """:func:`created_response` with every writable field set to a "before" value."""
+    body = created_response(
+        name="Previously Named Product",
+        description="a previous description",
+        readMe="# Previously",
+        tags=["previous-tag"],
+        datasetIds=["ds-previous"],
+        apiConsumableDatasetIds=["ds-previous"],
+        keyContacts=[{"userId": "user-previous", "role": "other"}],
+    )
+    body.update(overrides)
+    return body
+
+
 def mock_read_product(respx_mock: Any, *, etag: str | None = FRESH_ETAG, **overrides: Any) -> Any:
-    """Mock the ``GET .../{id}`` re-read the 412 recovery path issues."""
+    """Mock the ``GET .../{id}`` the 412 recovery path issues.
+
+    Registering the same ``GET PRODUCT_URL`` pattern **replaces** the :func:`pre_read`
+    fixture's default route (respx ``RouteList.add``: "replacing any existing route with
+    same name or pattern"), so a conflict test that calls this gets one GET behavior for
+    both reads. A test that needs them to differ — because the whole point of a 412 is
+    that the product changed between the two — passes ``side_effect`` to
+    :func:`mock_reads` instead.
+    """
     headers = {} if etag is None else {"ETag": etag}
     return respx_mock.get(PRODUCT_URL).mock(
         return_value=httpx.Response(200, json=created_response(**overrides), headers=headers)
+    )
+
+
+def mock_reads(respx_mock: Any, *responses: httpx.Response) -> Any:
+    """Mock ``GET .../{id}`` with one response per read, in order.
+
+    The honest shape for a conflict test now that ``update()`` reads before it writes:
+    the first response is what the pre-read sees, the second what the post-412 re-read
+    sees, and a 412 happens precisely because those two differ.
+    """
+    return respx_mock.get(PRODUCT_URL).mock(side_effect=list(responses))
+
+
+def read_response(*, etag: str | None = FRESH_ETAG, **overrides: Any) -> httpx.Response:
+    """One ``GET .../{id}`` response body, for :func:`mock_reads`."""
+    headers = {} if etag is None else {"ETag": etag}
+    return httpx.Response(200, json=created_response(**overrides), headers=headers)
+
+
+@pytest.fixture(autouse=True)
+def pre_read(respx_mock: Any) -> Any:
+    """Answer the ``GET`` that ``update()`` issues before every PATCH.
+
+    ``write.py``'s idempotency pre-read (module docstring, point 12a) is unconditional,
+    so *every* update test needs this route or respx refuses the unmocked request. It is
+    registered here rather than test-by-test so the default is the realistic one — a
+    product whose current values differ from what is about to be written (see
+    :func:`stale_response`) — and so a test that cares about the pre-read's content
+    overrides it by simply registering its own ``GET PRODUCT_URL`` route.
+
+    Autouse and therefore also active for the create tests, where it is never called;
+    ``respx.mock`` runs with ``assert_all_called=False``, so an unused route is inert.
+    """
+    return respx_mock.get(PRODUCT_URL).mock(
+        return_value=httpx.Response(200, json=stale_response(), headers={"ETag": ETAG})
     )
 
 

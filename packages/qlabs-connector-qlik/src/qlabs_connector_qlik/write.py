@@ -175,6 +175,47 @@ Update-path decisions (T3.5), for the same "no live tenant" reason:
     match on is a contradiction, and an unguarded resend into a customer's catalog is not
     the way to resolve it. A second 412 propagates too — one cycle, never a retry loop —
     so the engine, which holds the state this connector does not, decides.
+12a. **Every PATCH is preceded by one ``GET``, and an operation the product already
+    carries is not sent** — connector-level idempotency, RS-08 section 9's "re-applying
+    an unchanged diff is a no-op". The engine's checksum diff already short-circuits the
+    normal cycle before ``update()`` is ever called, but a retried, duplicated or
+    replayed cycle arrives here with a real, fully-populated diff, and without this
+    check that becomes a real write into a customer's tenant. The comparison is
+    :func:`_already_applied` — the same exact-equality, biased-toward-re-sending rule
+    point 12 already uses after a 412, just run *before* the first attempt instead of
+    only after a failed one. When every operation is already applied the method returns
+    :attr:`~qlabs_catalog_sync_sdk.contract.WriteOutcome.NO_OP` with **no PATCH issued
+    at all** and no ``written_fields``; when only some are, the rest are sent and the
+    dropped ones are reported in ``detail``.
+
+    **The cost, stated rather than hidden.** This is one extra request per ``update()``
+    call that has at least one operation — and it is drawn from the budget that is not
+    the bottleneck: RS-02 section 3.4 puts ``GET``\\ s in Tier 1 (1,000 req/min) and
+    every create/update/delete in Tier 2 (100 req/min). So the check spends from the
+    10x-larger pool to avoid spending from the scarce one, and on the replay path it
+    removes a Tier-2 request entirely. It does **not** double a normal run's request
+    volume: the engine does not call ``update()`` at all for an unchanged object, so the
+    extra ``GET`` is per *attempted write*, not per synced object.
+
+    **Why not narrow it.** Nothing the caller hands over can prove the diff is not a
+    replay: ``expected_revision`` says *when* the engine last saw the product, never
+    *what* it now holds, and a replayed diff is byte-identical to a first attempt by
+    construction. The one alternative that would need no request — remembering the last
+    PATCH this process applied — was rejected outright: it would report ``NO_OP``
+    without ever asking the tenant, so a concurrent target-side edit would silently turn
+    a needed write into a skipped one. That is a lost write in a customer's live
+    catalog, which is precisely the failure the whole "fail toward re-sending" rule
+    exists to prevent.
+
+    **A failed pre-read never fails the update.** The pre-read is an optimization, not a
+    precondition: if the ``GET`` errors or returns something unreadable, the connector
+    logs it and proceeds exactly as it would have before this check existed. Any error
+    that is real (404/401/403/429/5xx) is raised again by the PATCH a moment later, so
+    nothing is swallowed that matters — while turning a legitimate write into an error
+    because an *optimization* failed would be a genuine regression. The PATCH is still
+    guarded by ``diff.expected_revision``, not by anything the pre-read returned, so
+    this adds no new lost-update window: a change landing between the pre-read and the
+    PATCH still produces a 412 and still goes through point 12's recovery.
 13. **``if-match`` is sent when the diff carries a revision, and its absence is not
     fatal.** RS-02 documents ``if-match`` for glossary/category writes but says nothing
     about whether the data-products PATCH honors ETags at all (TENANT_UNVERIFIED, already
@@ -331,6 +372,14 @@ _API_CONSUMABLE_PATH: Final = "/apiConsumableDatasetIds"
 #: How many individual examples one ``detail`` reason enumerates before collapsing the
 #: rest into a count.
 _MAX_REPORTED_EXAMPLES: Final = 5
+
+#: Why an operation was dropped by the idempotency pre-read (module docstring, point
+#: 12a) — the product already held the value the diff asked for, before anything was sent.
+_ALREADY_CURRENT: Final = "the product already carried the value this diff asks for at"
+
+#: Why an operation was dropped by the 412 re-diff (module docstring, point 12) — someone
+#: else applied it between the diff being planned and this request being made.
+_CONCURRENTLY_APPLIED: Final = "a concurrent change had already applied"
 
 #: Neutral field names, in the order they are reported, so ``written_fields`` and
 #: ``skipped_fields`` are stable across runs and easy to assert on.
@@ -624,7 +673,11 @@ class QlikWriter:
         Returns :attr:`~qlabs_catalog_sync_sdk.contract.WriteOutcome.NO_OP` **without
         issuing any request** for an empty diff — the engine's idempotency claim rests on
         that — and also when every operation had to be dropped to avoid emptying an array
-        on a resolution failure (module docstring, point 10).
+        on a resolution failure (module docstring, point 10). It returns ``NO_OP``
+        **without issuing any PATCH** when a pre-read shows the product already carries
+        every value the diff asks for (module docstring, point 12a): that pre-read is one
+        Tier-1 ``GET``, and it is what makes re-applying an unchanged diff a genuine
+        no-op rather than a redundant write into a customer's catalog.
 
         Raises, all before any request:
         :class:`~qlabs_catalog_sync_sdk.exceptions.CapabilityError` for a field the
@@ -674,6 +727,34 @@ class QlikWriter:
                 skipped_fields=request.skipped_fields,
                 detail=request.detail,
             )
+
+        current = await self._read_before_write(ref, url)
+        if current is not None:
+            raw_current, current_revision = current
+            remaining, _ = _partition_already_applied(
+                request, raw_current, reason=_ALREADY_CURRENT, left_out_of="request"
+            )
+            if not remaining:
+                # Module docstring, point 12a: the product already carries every value
+                # this diff asks for, so there is nothing to write and no PATCH is sent.
+                await _logger.ainfo(
+                    "qlik.write.update.no_op",
+                    endpoint=self._endpoint,
+                    native_key=ref.native_key,
+                    reason="already_applied",
+                    paths=request.paths,
+                )
+                return WriteResult.no_op(
+                    ref,
+                    source_revision=(
+                        current_revision
+                        if current_revision is not None
+                        else diff.expected_revision
+                    ),
+                    skipped_fields=request.skipped_fields,
+                    detail=request.detail,
+                )
+            request.operations = remaining
 
         expected_revision = diff.expected_revision
         if expected_revision is None:
@@ -1077,6 +1158,40 @@ class QlikWriter:
             "PATCH", url, json=body, headers=headers, expected_revision=expected_revision
         )
 
+    async def _read_before_write(
+        self, ref: IdentityRef, url: str
+    ) -> tuple[Mapping[str, Any], str | None] | None:
+        """The idempotency pre-read: the product's current state, or ``None`` on failure.
+
+        One Tier-1 ``GET`` (RS-02 section 3.4) so that :func:`_already_applied` can drop
+        operations the product already carries before a single Tier-2 write is spent on
+        them — module docstring, point 12a, which also states why this runs on every
+        update rather than on some narrower subset.
+
+        Never raises. A pre-read is an optimization, not a precondition, so a failure
+        here leaves ``update()`` doing exactly what it did before this check existed: the
+        PATCH goes out, and whatever really was wrong (404, 401/403, an exhausted
+        429/5xx) surfaces from the PATCH itself. ``ValueError`` is caught alongside the
+        connector's own exception hierarchy because a 2xx with a body that is not JSON —
+        or is JSON but not an object — is equally just "no usable answer".
+        """
+        try:
+            response = await self._send("GET", url)
+            raw = _json_object(response, url=url, endpoint=self._endpoint)
+        except (ConnectorError, ValueError) as exc:
+            await _logger.awarning(
+                "qlik.write.update.precheck_unavailable",
+                endpoint=self._endpoint,
+                native_key=ref.native_key,
+                error=type(exc).__name__,
+                reason=(
+                    "the idempotency pre-read failed; applying the diff as asked rather "
+                    "than failing a write because an optimization could not run"
+                ),
+            )
+            return None
+        return raw, response.headers.get("etag")
+
     async def _recover_from_conflict(
         self,
         ref: IdentityRef,
@@ -1114,22 +1229,9 @@ class QlikWriter:
             )
             raise conflict
 
-        remaining: list[_PatchOperation] = []
-        already: list[_PatchOperation] = []
-        for operation in request.operations:
-            (already if _already_applied(operation, current) else remaining).append(operation)
-
-        if already:
-            still_written = {operation.field for operation in remaining}
-            for operation in already:
-                if operation.field not in still_written:
-                    request.unwrite(operation.field)
-            request.note(
-                "a concurrent change had already applied "
-                f"{', '.join(operation.path for operation in already)}, so "
-                f"{'those paths were' if len(already) > 1 else 'that path was'} left out of "
-                "the retry"
-            )
+        remaining, already = _partition_already_applied(
+            request, current, reason=_CONCURRENTLY_APPLIED, left_out_of="retry"
+        )
 
         if not remaining:
             await _logger.ainfo(
@@ -1679,6 +1781,41 @@ def _dedupe(values: Iterable[str]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
+
+
+def _partition_already_applied(
+    request: _UpdateRequest, current: Mapping[str, Any], *, reason: str, left_out_of: str
+) -> tuple[list[_PatchOperation], list[_PatchOperation]]:
+    """Split ``request.operations`` into ``(still needed, already carried)``.
+
+    The one place either "drop what would change nothing" path runs: the idempotency
+    pre-read before the first attempt (module docstring, point 12a) and the re-diff after
+    a 412 (point 12). Both use the same :func:`_already_applied` comparison; they differ
+    only in ``reason``, because "the product already held this" and "someone else set it
+    while we were asking" are different things to tell an operator.
+
+    Mutates ``request``'s bookkeeping, not its operations: a dropped field is taken back
+    out of ``written`` — unless another operation for the same field survives — so
+    ``written_fields`` keeps meaning "fields *this call* wrote". Replacing
+    ``request.operations`` is left to the caller, since the conflict path needs the
+    dropped list to report on.
+    """
+    remaining: list[_PatchOperation] = []
+    already: list[_PatchOperation] = []
+    for operation in request.operations:
+        (already if _already_applied(operation, current) else remaining).append(operation)
+
+    if already:
+        still_written = {operation.field for operation in remaining}
+        for operation in already:
+            if operation.field not in still_written:
+                request.unwrite(operation.field)
+        request.note(
+            f"{reason} {', '.join(operation.path for operation in already)}, so "
+            f"{'those paths were' if len(already) > 1 else 'that path was'} left out of "
+            f"the {left_out_of}"
+        )
+    return remaining, already
 
 
 def _already_applied(operation: _PatchOperation, current: Mapping[str, Any]) -> bool:

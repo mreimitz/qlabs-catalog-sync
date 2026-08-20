@@ -29,9 +29,11 @@ from .conftest import (
     diff,
     mock_datasets_by_name,
     mock_read_product,
+    mock_reads,
     patch_bodies,
     patch_calls,
     product_ref,
+    read_response,
     refs,
     sales_product,
 )
@@ -54,7 +56,10 @@ async def test_a_412_triggers_exactly_one_reread_and_one_retry(
     result = await writer.update(product_ref(), diff(change("name", "Renamed Product")))
 
     assert len(patch_route.calls) == 2
-    assert len(read_route.calls) == 1
+    # Two GETs, and only two: the idempotency pre-read before the first attempt
+    # (write.py point 12a), then the single re-read the 412 recovery is allowed — never
+    # one re-read per attempt.
+    assert len(read_route.calls) == 2
     assert result.outcome is WriteOutcome.UPDATED
     assert result.written_fields == ["name"]
 
@@ -100,8 +105,15 @@ async def test_the_rediff_drops_only_the_operations_the_product_already_carries(
 ) -> None:
     """The honest re-diff: an operation that would change nothing is not re-sent."""
     respx_mock.patch(PRODUCT_URL).mock(side_effect=_conflict_then(httpx.Response(204)))
-    # The concurrent change already set the name we wanted, but not the tags.
-    mock_read_product(respx_mock, name="Renamed Product", tags=["stale"])
+    # The pre-read sees a product that still needs both operations; the concurrent
+    # change lands between it and the PATCH, and by the post-412 re-read it has already
+    # set the name we wanted, but not the tags. Two different bodies is what a 412
+    # *means* — one body for both reads could not produce this situation at all.
+    mock_reads(
+        respx_mock,
+        read_response(name="Someone Else's Name", tags=["stale"]),
+        read_response(name="Renamed Product", tags=["stale"]),
+    )
     writer = make_writer()
 
     result = await writer.update(
@@ -125,7 +137,11 @@ async def test_a_conflict_that_fully_converged_is_a_no_op_and_issues_no_retry(
     patch_route = respx_mock.patch(PRODUCT_URL).mock(
         side_effect=_conflict_then(httpx.Response(204))
     )
-    mock_read_product(respx_mock, name="Renamed Product", tags=["sales"])
+    mock_reads(
+        respx_mock,
+        read_response(name="Someone Else's Name", tags=["stale"]),
+        read_response(name="Renamed Product", tags=["sales"]),
+    )
     writer = make_writer()
 
     result = await writer.update(
@@ -174,7 +190,8 @@ async def test_a_second_412_propagates_as_a_conflict_error(
         await writer.update(product_ref(), diff(change("name", "Renamed Product")))
 
     assert len(patch_route.calls) == 2
-    assert len(read_route.calls) == 1  # exactly one re-read, not one per attempt
+    # The pre-read plus exactly one re-read — not one re-read per attempt.
+    assert len(read_route.calls) == 2
     assert excinfo.value.expected_revision == FRESH_ETAG
     assert excinfo.value.actual_revision == 'W/"rev-9"'
     assert excinfo.value.entity_type == EntityType.DATA_PRODUCT.value
@@ -287,7 +304,8 @@ async def test_the_reread_uses_the_same_product_url_and_is_a_plain_get(
     await writer.update(product_ref(), diff(change("name", "Renamed Product")))
 
     methods = [call.request.method for call in respx_mock.calls]
-    assert methods == ["PATCH", "GET", "PATCH"]
+    # GET (idempotency pre-read), PATCH (412), GET (recovery re-read), PATCH (retry).
+    assert methods == ["GET", "PATCH", "GET", "PATCH"]
     get_request = next(
         call.request for call in respx_mock.calls if call.request.method == "GET"
     )

@@ -1,13 +1,18 @@
 """``read.read_data_product`` — GET /api/data-governance/data-products/{id}.
 
 Covers: full field mapping (name/description/readMe/tags/placement), keyContacts +
-ownerId becoming deduped Party owners with roles, activated -> status, the ETag landing
+ownerId becoming deduped Party owners with roles, activated -> status, ``datasetIds``
+mapping back onto ``dataset_refs`` through the injected reverse identity seam (module
+docstring, point 4) and declining to report the field when it cannot, the ETag landing
 as source_revision on every field envelope, unknown/extra fields surviving in
 custom_attributes byte-identical, checksum idempotency across two identical reads, and
 404/401 classification.
 """
 
 from __future__ import annotations
+
+import uuid
+from collections.abc import Mapping
 
 import httpx
 import pytest
@@ -53,6 +58,20 @@ FULL_PAYLOAD = {
     # anything this module does not explicitly understand.
     "semanticModel": {"foo": "bar", "nested": [1, 2, 3]},
 }
+
+
+def _ref_lookup(bindings: Mapping[str, uuid.UUID]) -> read.DatasetRefLookup:
+    """A :data:`~qlabs_connector_qlik.read.DatasetRefLookup` over an in-memory map.
+
+    Stands in for the engine's IdentityMap exactly as ``tests/write/conftest.py``'s
+    ``identity_lookup`` does for the forward direction: a bare native id in, a bare
+    neutral ``UUID`` (or ``None``) out, and no HTTP anywhere in it.
+    """
+
+    async def _lookup(native_id: str) -> uuid.UUID | None:
+        return bindings.get(native_id)
+
+    return _lookup
 
 
 def _ref(native_key: str = "dp1") -> IdentityRef:
@@ -161,6 +180,10 @@ async def test_unknown_and_unmapped_fields_survive_byte_identical_in_custom_attr
 async def test_dataset_refs_and_glossary_term_refs_are_left_unresolved(
     respx_mock: object, http: HttpEndpoint
 ) -> None:
+    """With no reverse identity seam wired — the connector's own honest default — neither
+    ref field is reported. Not reported is not the same as reported empty: ``[]`` would
+    assert "this product has no members", which this read cannot know (module docstring,
+    point 4). ``glossary_term_refs`` is never reported at all (decision D5)."""
     respx_mock.get(DATA_PRODUCT_URL).mock(return_value=httpx.Response(200, json=FULL_PAYLOAD))
 
     product = await read.read_data_product(http, _ref(), endpoint=ENDPOINT)
@@ -169,6 +192,112 @@ async def test_dataset_refs_and_glossary_term_refs_are_left_unresolved(
     assert product.glossary_term_refs == []
     assert "dataset_refs" not in product.field_envelopes
     assert "glossary_term_refs" not in product.field_envelopes
+
+
+async def test_dataset_refs_map_back_through_the_reverse_identity_seam(
+    respx_mock: object, http: HttpEndpoint
+) -> None:
+    """The manifest declares ``dataset_refs`` ``rw``, so a read after a write has to be
+    able to show the membership the write placed. Order follows ``datasetIds``."""
+    first, second = uuid.uuid4(), uuid.uuid4()
+    respx_mock.get(DATA_PRODUCT_URL).mock(return_value=httpx.Response(200, json=FULL_PAYLOAD))
+
+    product = await read.read_data_product(
+        http,
+        _ref(),
+        endpoint=ENDPOINT,
+        dataset_ref_lookup=_ref_lookup({"ds1": first, "ds2": second}),
+    )
+
+    assert product.dataset_refs == [first, second]
+    assert "dataset_refs" in product.field_envelopes
+    # The mapping is lossy by construction, so the raw ids stay recoverable.
+    assert product.custom_attributes["datasetIds"] == ["ds1", "ds2"]
+
+
+async def test_one_unbound_member_leaves_the_whole_field_unreported(
+    respx_mock: object, http: HttpEndpoint
+) -> None:
+    """All-or-nothing. Reporting just the member that mapped would assert the product's
+    membership *is* that one member — a different and false claim, and exactly the kind
+    of invention decision D2 forbids. So the field is not reported at all."""
+    respx_mock.get(DATA_PRODUCT_URL).mock(return_value=httpx.Response(200, json=FULL_PAYLOAD))
+
+    product = await read.read_data_product(
+        http, _ref(), endpoint=ENDPOINT, dataset_ref_lookup=_ref_lookup({"ds1": uuid.uuid4()})
+    )
+
+    assert product.dataset_refs == []
+    assert "dataset_refs" not in product.field_envelopes
+
+
+async def test_an_empty_dataset_ids_array_is_reported_as_an_empty_dataset_refs(
+    respx_mock: object, http: HttpEndpoint
+) -> None:
+    """A product Qlik says has no datasets maps completely, to nothing — so unlike the
+    cases above this *is* a value the connector can state, and it is reported with an
+    envelope (``envelope.py``'s rule 10: present-but-empty is a real value)."""
+    payload = {**FULL_PAYLOAD, "datasetIds": []}
+    respx_mock.get(DATA_PRODUCT_URL).mock(return_value=httpx.Response(200, json=payload))
+
+    product = await read.read_data_product(
+        http, _ref(), endpoint=ENDPOINT, dataset_ref_lookup=_ref_lookup({})
+    )
+
+    assert product.dataset_refs == []
+    assert "dataset_refs" in product.field_envelopes
+
+
+async def test_an_absent_dataset_ids_key_is_not_reported_at_all(
+    respx_mock: object, http: HttpEndpoint
+) -> None:
+    """Nothing to map is not the same as mapping to nothing."""
+    payload = {key: value for key, value in FULL_PAYLOAD.items() if key != "datasetIds"}
+    respx_mock.get(DATA_PRODUCT_URL).mock(return_value=httpx.Response(200, json=payload))
+
+    product = await read.read_data_product(
+        http, _ref(), endpoint=ENDPOINT, dataset_ref_lookup=_ref_lookup({})
+    )
+
+    assert "dataset_refs" not in product.field_envelopes
+
+
+async def test_two_native_ids_bound_to_one_neutral_id_collapse_to_one_ref(
+    respx_mock: object, http: HttpEndpoint
+) -> None:
+    """The mirror of ``write.py``'s ``_dedupe`` on the way out: two members can
+    legitimately resolve to one Qlik dataset, so the way back must not double-count."""
+    member = uuid.uuid4()
+    respx_mock.get(DATA_PRODUCT_URL).mock(return_value=httpx.Response(200, json=FULL_PAYLOAD))
+
+    product = await read.read_data_product(
+        http,
+        _ref(),
+        endpoint=ENDPOINT,
+        dataset_ref_lookup=_ref_lookup({"ds1": member, "ds2": member}),
+    )
+
+    assert product.dataset_refs == [member]
+
+
+async def test_the_reverse_seam_never_adds_an_http_call(
+    respx_mock: object, http: HttpEndpoint
+) -> None:
+    """The seam is a pure IdentityMap question the engine answers in memory, so mapping
+    the members back must not turn one documented ``GET`` into several."""
+    route = respx_mock.get(DATA_PRODUCT_URL).mock(
+        return_value=httpx.Response(200, json=FULL_PAYLOAD)
+    )
+
+    await read.read_data_product(
+        http,
+        _ref(),
+        endpoint=ENDPOINT,
+        dataset_ref_lookup=_ref_lookup({"ds1": uuid.uuid4(), "ds2": uuid.uuid4()}),
+    )
+
+    assert len(route.calls) == 1
+    assert len(respx_mock.calls) == 1
 
 
 async def test_two_reads_of_identical_data_produce_identical_checksums(

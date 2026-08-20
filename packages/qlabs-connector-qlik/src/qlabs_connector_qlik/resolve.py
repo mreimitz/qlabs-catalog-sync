@@ -35,6 +35,21 @@ Nothing in this module ever imports ``qlabs_catalog_sync`` — the callable is t
 thing crossing the boundary, and it carries no engine type across it (a bare ``UUID``
 in, a bare ``str | None`` out).
 
+**The seam runs both ways, and the other direction lives in ``read.py``.** The manifest
+declares ``dataset_refs`` ``rw``, so a read has to be able to turn Qlik's native
+``datasetIds`` back into the neutral ids this module turned them from. That is
+``read.DatasetRefLookup`` — the exact mirror of :data:`DatasetIdentityLookup`, a bare
+``str`` in and a bare ``uuid.UUID | None`` out, defaulting to "no answer" the same way
+this one does. It is declared in ``read.py`` rather than here purely because *this*
+module imports *that* one (``ITEMS_PATH``/``DEFAULT_PAGE_SIZE``), so declaring it here
+would make the import a cycle. The engine satisfies it from the same IdentityMap, but
+**not** with a mirror of the closure above: ``IdentityResolver.resolve_neutral_id``
+looks a binding up by ``native_key`` (a dataset's is its ``secureQri``), whereas
+``datasetIds`` carries the ``resourceId`` the forward closure hands out — so the reverse
+direction needs an index over ``list_bindings(...)``'s ``identity.secondary_keys
+["resourceId"]``, not a point read. ``read.py``'s point 4 states the reporting rule that
+falls out of it; the connector-side wiring notes say what the orchestrator must build.
+
 Design decisions worth being explicit about, since none of them can be checked against
 a live tenant (decision D8 / agent-guide "no live tenants" rule):
 

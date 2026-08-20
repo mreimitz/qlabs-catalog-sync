@@ -94,10 +94,21 @@ async def _created_ref(respx_mock: respx.MockRouter) -> tuple[object, object]:
     """Create one data product through the real connector and hand back ``(connector,
     ref)`` — every test in this module starts from a genuinely-created product, not a
     hand-built ref, so the ETag it guards against is the one the connector itself would
-    have read."""
+    have read.
+
+    The ``GET`` route answers ``update()``'s idempotency pre-read (``write.py`` module
+    docstring, point 12a). It is registered on *this* router, which respx tries first, so
+    the pre-read never falls through to the ``capture_requests`` catch-all a test opens
+    around the write itself — leaving that route observing exactly the write, which is
+    what these tests are about. Its body still carries the created name, so every diff
+    below is a genuine change and no operation is suppressed before it is sent.
+    """
     mock_token(respx_mock)
     respx_mock.post(DATA_PRODUCTS_URL).mock(
         return_value=httpx.Response(201, json=_created_body(), headers={"ETag": FIRST_ETAG})
+    )
+    respx_mock.get(PRODUCT_URL).mock(
+        return_value=httpx.Response(200, json=_created_body(), headers={"ETag": FIRST_ETAG})
     )
     connector = await build_connector()
     created = await connector.create(DataProduct(name="Sales Analytics Data Product"))
