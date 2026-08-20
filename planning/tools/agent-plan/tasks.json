@@ -1193,7 +1193,7 @@
       ],
       "dod": "Default per-pair cadence and per-endpoint rate-limit budgets are configured, applied by the scheduler, and documented.",
       "verify": "uv run python -c 'import qlabs_catalog_sync'",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T9.4",
