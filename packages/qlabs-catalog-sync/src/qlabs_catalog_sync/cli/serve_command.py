@@ -40,6 +40,7 @@ from pathlib import Path
 import click
 
 from qlabs_catalog_sync.api.app import create_app
+from qlabs_catalog_sync.api.auth import console_auth_from_environment
 from qlabs_catalog_sync.api.server import ApiServer
 from qlabs_catalog_sync.observability import (
     HealthRegistry,
@@ -106,11 +107,18 @@ async def _serve(
     # static assets, /healthz and /metrics on a single port. ObservabilityServer served
     # the last two on their own stdlib thread, which cannot share an origin with an API
     # and a browser console -- see api/server.py for the full reasoning.
+    # Fail closed (C7). console_auth_from_environment RAISES when no administrator
+    # credential is configured, so the service cannot come up serving an unauthenticated
+    # console. Deliberately built before anything binds a socket: refusing to start is a
+    # clear crash with the reason in the logs, whereas a process that boots and serves only
+    # /healthz keeps passing its liveness probe forever while the console is unusable.
+    auth = console_auth_from_environment()
     api = ApiServer(
         create_app(
             health=health,
             metrics_registry=metrics.registry,
             static_dir=console_assets,
+            auth=auth,
         ),
         host=host,
         port=port,

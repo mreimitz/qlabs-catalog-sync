@@ -28,6 +28,12 @@ from pathlib import Path
 
 import pytest
 
+from qlabs_catalog_sync.api.auth import (
+    ADMIN_PASSWORD_HASH_KEY,
+    ADMIN_SECRET_ENDPOINT,
+    ScryptParams,
+    hash_password,
+)
 from qlabs_catalog_sync.cli.deps import CliDeps, RuntimeContext
 from qlabs_catalog_sync.cli.serve_command import _serve
 from qlabs_catalog_sync.discovery import ConnectorRegistry
@@ -97,10 +103,28 @@ async def _wait_for_event(log_path: Path, event: str, *, timeout_ticks: int = 20
     raise AssertionError(f"service never logged {event!r}; log was:\n{tail}")
 
 
+def _configure_admin_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give the service an administrator credential, as a real deployment must.
+
+    ``serve`` calls ``console_auth_from_environment``, which RAISES when none is
+    configured (C7: the console must not come up unauthenticated). So a probe that boots
+    the real service has to configure one -- and that is the point: if this were removed,
+    the service would refuse to start, which is the behaviour the DoD asks for.
+
+    ``log_n=14`` is the lowest the credential loader accepts (16 MiB, ~40 ms) -- enough to
+    exercise the real KDF path without paying the shipped 64 MiB parameters per test.
+    """
+    env_name = f"{ADMIN_SECRET_ENDPOINT.upper()}__{ADMIN_PASSWORD_HASH_KEY.upper()}"
+    digest = hash_password("probe-password-not-a-real-secret", params=ScryptParams(log_n=14))
+    monkeypatch.setenv(env_name, digest)
+
+
 @pytest.fixture
-async def served(tmp_path: Path) -> AsyncIterator[str]:
+async def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[str]:
     """Run the real service until it has fired one cycle; yield its state-db URL."""
     from qlabs_catalog_sync.observability import configure_logging
+
+    _configure_admin_credential(monkeypatch)
 
     log_path = tmp_path / "serve.log"
     state_db = f"sqlite:///{tmp_path / 'state.db'}"

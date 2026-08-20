@@ -28,6 +28,12 @@ from pathlib import Path
 import httpx
 import pytest
 
+from qlabs_catalog_sync.api.auth import (
+    ADMIN_PASSWORD_HASH_KEY,
+    ADMIN_SECRET_ENDPOINT,
+    ScryptParams,
+    hash_password,
+)
 from qlabs_catalog_sync.cli.deps import CliDeps, RuntimeContext
 from qlabs_catalog_sync.cli.serve_command import _serve
 from qlabs_catalog_sync.discovery import ConnectorRegistry
@@ -79,9 +85,29 @@ async def _wait_for_port(log_path: Path) -> int:
     raise AssertionError(f"service never logged serve.started; log was:\n{log_path.read_text()}")
 
 
+def _configure_admin_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give the service an administrator credential, as a real deployment must.
+
+    ``serve`` calls ``console_auth_from_environment``, which RAISES when none is
+    configured (C7: the console must not come up unauthenticated). So a probe that boots
+    the real service has to configure one -- and that is the point: if this were removed,
+    the service would refuse to start, which is the behaviour the DoD asks for.
+
+    ``log_n=14`` is the lowest the credential loader accepts (16 MiB, ~40 ms) -- enough to
+    exercise the real KDF path without paying the shipped 64 MiB parameters per test.
+    """
+    env_name = f"{ADMIN_SECRET_ENDPOINT.upper()}__{ADMIN_PASSWORD_HASH_KEY.upper()}"
+    digest = hash_password("probe-password-not-a-real-secret", params=ScryptParams(log_n=14))
+    monkeypatch.setenv(env_name, digest)
+
+
 @pytest.fixture
-async def service(tmp_path: Path) -> AsyncIterator[_RunningService]:
+async def service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[_RunningService]:
     from qlabs_catalog_sync.observability import configure_logging
+
+    _configure_admin_credential(monkeypatch)
 
     log_path = tmp_path / "serve.log"
     source = FakeConnector.read_only_source(
@@ -140,8 +166,10 @@ async def test_healthz_metrics_api_and_console_all_answer_on_one_port(
     # A real exposition body, not an empty 200.
     assert b"# HELP" in metrics.content or b"# TYPE" in metrics.content
 
-    # Unknown API path: the machine-readable error shape, never the console shell.
-    assert api_miss.status_code == 404
+    # Unknown API path, no session: 401 in the machine-readable error shape, never the
+    # console shell and never a 404. A 404-vs-401 split would let an anonymous caller
+    # enumerate which API routes exist (C7); the running service must not offer that.
+    assert api_miss.status_code == 401
     assert api_miss.headers["content-type"].startswith("application/json")
     assert "code" in api_miss.json()
 
@@ -164,7 +192,27 @@ async def test_the_service_reports_exactly_one_http_port(service: _RunningServic
 
     # Both requests went to service.port -- the one port serve.started reported.
     assert healthz.status_code == 200
-    assert api_miss.status_code == 404
+    assert api_miss.status_code == 401
+
+
+async def test_the_running_service_actually_requires_an_administrator(
+    service: _RunningService,
+) -> None:
+    """Auth is installed in the REAL service, not only in a test-constructed app.
+
+    ``create_app(auth=None)`` builds an unauthenticated app on purpose, for tests of
+    unrelated parts of the API. That escape hatch is exactly how a deployment could end up
+    serving an open console while every auth unit test still passed, so this asserts the
+    property from outside: an anonymous caller reaches the probe endpoints and nothing else.
+    """
+    async with httpx.AsyncClient() as client:
+        probes = [await client.get(service.url(p)) for p in ("/healthz", "/metrics")]
+        protected = await client.get(service.url("/api/endpoints"))
+        mutating = await client.post(service.url("/api/endpoints"), json={})
+
+    assert [response.status_code for response in probes] == [200, 200]
+    assert protected.status_code == 401
+    assert mutating.status_code == 401
 
 
 async def test_healthz_body_matches_the_render_function_the_engine_has_always_used(
@@ -184,3 +232,47 @@ async def test_healthz_body_matches_the_render_function_the_engine_has_always_us
     # exact byte string, because component names depend on what this service started.
     assert isinstance(payload, dict)
     assert "status" in payload
+
+
+async def test_the_service_refuses_to_start_with_no_administrator_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C7's DoD, asserted against the REAL service rather than the credential loader.
+
+    "No credential configured means the console does not serve" is only true if the thing
+    that boots the process actually asks for one. ``console_auth_from_environment`` raising
+    in isolation proves nothing about ``serve``; this proves ``serve`` calls it, and that it
+    does so **before** anything binds a socket -- a process that bound a port and then served
+    only ``/healthz`` would keep passing its liveness probe forever while the console sat
+    unusable, which is the failure mode that hides.
+    """
+    from qlabs_catalog_sync.api.auth import ADMIN_PASSWORD_HASH_KEY, AuthNotConfiguredError
+
+    monkeypatch.delenv(
+        f"{ADMIN_SECRET_ENDPOINT.upper()}__{ADMIN_PASSWORD_HASH_KEY.upper()}", raising=False
+    )
+    source = FakeConnector.read_only_source(
+        name=SOURCE_ENDPOINT, manifest=databricks_shaped_manifest()
+    )
+    target = FakeConnector.write_target(name=TARGET_ENDPOINT, manifest=qlik_shaped_manifest())
+    registry = ConnectorRegistry(
+        {SOURCE_ENDPOINT: wrap_as_class(source), TARGET_ENDPOINT: wrap_as_class(target)}, {}
+    )
+    runtime = RuntimeContext(
+        state_db=f"sqlite:///{tmp_path / 'state.db'}",
+        review_path=tmp_path / "identity-review.json",
+        deps=CliDeps(registry=registry),
+    )
+
+    with pytest.raises(AuthNotConfiguredError):
+        await _serve(
+            config_path=write_engine_config(tmp_path),
+            runtime=runtime,
+            pair_names=(),
+            create_missing=False,
+            host="127.0.0.1",
+            port=0,
+            shutdown_timeout=5.0,
+            run_immediately=False,
+            stop=asyncio.Event(),
+        )
