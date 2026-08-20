@@ -29,23 +29,29 @@ def test_data_product_identity_uses_schema_id_as_native_key() -> None:
 def test_data_product_field_envelopes_cover_every_populated_field() -> None:
     product = build_data_product(make_raw_schema(), endpoint=ENDPOINT)
 
-    assert set(product.field_envelopes) == {"name", "custom_attributes"}
+    assert set(product.field_envelopes) == {"name", "custom_attributes", "description", "owners"}
     for envelope in product.field_envelopes.values():
         assert envelope.source_endpoint == ENDPOINT
         assert envelope.checksum is not None
         assert envelope.checksum.startswith("sha256:")
 
 
-def test_data_product_leaves_t4_5_and_t4_7_fields_at_their_defaults() -> None:
+def test_data_product_applies_the_neutral_mapping() -> None:
+    """`comment` and `owner` are mapped (T4.5); the fields Databricks genuinely has no
+    equivalent for stay unset, and `tags` waits on the SQL read path (T4.7)."""
     product = build_data_product(make_raw_schema(), endpoint=ENDPOINT)
 
-    assert product.description is None
+    assert product.description is not None
+    assert product.description.text == "Sales domain schema"
+    assert [p.display_name or p.email or p.party_id for p in product.owners] == ["data-eng-sp"]
+
+    # Declared `na` in the manifest — Databricks has no equivalent at all.
     assert product.documentation is None
     assert product.status is None
-    assert product.owners == []
+    assert product.placement is None
+    # T4.7's seam, and membership the sync loop resolves through the IdentityMap.
     assert product.tags == []
     assert product.dataset_refs == []
-    assert product.placement is None
 
 
 def test_data_product_custom_attributes_preserve_unmapped_fields_byte_identical() -> None:
@@ -53,8 +59,6 @@ def test_data_product_custom_attributes_preserve_unmapped_fields_byte_identical(
 
     product = build_data_product(raw, endpoint=ENDPOINT)
 
-    assert product.custom_attributes["comment"] == "Sales domain schema"
-    assert product.custom_attributes["owner"] == "data-eng-sp"
     assert product.custom_attributes["properties"] == {"team": "sales"}
     assert product.custom_attributes["some_future_field"] == {"nested": [1, 2, 3]}
     # Structural fields consumed into identity/name are not duplicated here.
@@ -100,7 +104,14 @@ def test_dataset_view_asset_type() -> None:
 def test_dataset_field_envelopes_cover_every_populated_field() -> None:
     dataset = build_dataset(make_raw_table(), endpoint=ENDPOINT)
 
-    assert set(dataset.field_envelopes) == {"name", "asset_type", "custom_attributes"}
+    assert set(dataset.field_envelopes) == {
+        "name",
+        "asset_type",
+        "custom_attributes",
+        "description",
+        "owners",
+        "physical_ref",
+    }
 
 
 def test_dataset_custom_attributes_preserve_columns_byte_identical() -> None:
@@ -113,14 +124,16 @@ def test_dataset_custom_attributes_preserve_columns_byte_identical() -> None:
     assert dataset.custom_attributes["data_source_format"] == "DELTA"
 
 
-def test_dataset_leaves_t4_5_and_t4_7_fields_at_their_defaults() -> None:
+def test_dataset_applies_the_neutral_mapping() -> None:
+    """`comment`, `owner` and `full_name` are mapped (T4.5); tags and classifications
+    both wait on the SQL read path (T4.7, decision D6)."""
     dataset = build_dataset(make_raw_table(), endpoint=ENDPOINT)
 
-    assert dataset.description is None
-    assert dataset.owners == []
+    assert dataset.description is not None
+    assert dataset.physical_ref == "prod.sales.orders"
+    assert dataset.owners != []
     assert dataset.tags == []
     assert dataset.classifications == []
-    assert dataset.physical_ref is None
 
 
 def test_two_reads_of_identical_dataset_data_produce_identical_checksums() -> None:

@@ -90,6 +90,12 @@ from qlabs_catalog_sync_sdk.models import (
     NeutralEntity,
 )
 
+from .mapping import (
+    map_custom_attributes,
+    map_data_product_fields,
+    map_dataset_fields,
+)
+
 __all__ = [
     "DEFAULT_MAX_ITEMS",
     "DEFAULT_PAGE_SIZE",
@@ -326,15 +332,16 @@ def build_data_product(raw_schema: Mapping[str, Any], *, endpoint: str) -> DataP
 
     Structural only: ``name`` and ``identities``, plus every field this module does
     not itself consume preserved verbatim in ``custom_attributes`` (``comment``,
-    ``owner``, ``properties``, audit stamps, ...). ``description``, ``owners``,
-    ``tags``, ``documentation``, ``status`` and ``placement`` are left at their
-    defaults -- T4.5 and T4.7's seams. ``dataset_refs`` is deliberately left empty; see
+    ``owner``, ``properties``, audit stamps, ...). ``description`` and ``owners`` come from
+    ``mapping.py``; ``tags`` is T4.7's seam. ``dataset_refs`` is deliberately left
+    empty; see
     :class:`SchemaRead`.
     """
     ref = build_schema_identity_ref(raw_schema, endpoint=endpoint)
     name = _require_str(raw_schema, "name")
-    custom_attributes = _passthrough(raw_schema, exclude=_SCHEMA_STRUCTURAL_FIELDS)
-    values: dict[str, Any] = {"name": name, "custom_attributes": custom_attributes}
+    custom_attributes = map_custom_attributes(raw_schema, exclude=_SCHEMA_STRUCTURAL_FIELDS)
+    content = map_data_product_fields(raw_schema)
+    values: dict[str, Any] = {"name": name, "custom_attributes": custom_attributes, **content}
     field_envelopes = build_field_envelopes(
         values,
         source_endpoint=endpoint,
@@ -345,6 +352,7 @@ def build_data_product(raw_schema: Mapping[str, Any], *, endpoint: str) -> DataP
         name=name,
         custom_attributes=custom_attributes,
         field_envelopes=field_envelopes,
+        **content,
     )
 
 
@@ -354,17 +362,19 @@ def build_dataset(raw_table: Mapping[str, Any], *, endpoint: str) -> Dataset:
     Structural: ``name``, ``identities``, and ``asset_type`` (mapped from
     ``table_type``, see :func:`asset_type_for_table`), plus a lossless
     ``custom_attributes`` passthrough of everything else -- ``columns`` included.
-    ``description``, ``owners``, ``tags``, ``classifications`` and ``physical_ref`` are
-    left at their defaults -- T4.5 and T4.7's seams.
+    ``description``, ``owners`` and ``physical_ref`` come from ``mapping.py``; ``tags``
+    and ``classifications`` are T4.7's seam.
     """
     ref = build_table_identity_ref(raw_table, endpoint=endpoint)
     name = _require_str(raw_table, "name")
     asset_type = asset_type_for_table(raw_table.get("table_type"))
-    custom_attributes = _passthrough(raw_table, exclude=_TABLE_STRUCTURAL_FIELDS)
+    custom_attributes = map_custom_attributes(raw_table, exclude=_TABLE_STRUCTURAL_FIELDS)
+    content = map_dataset_fields(raw_table)
     values: dict[str, Any] = {
         "name": name,
         "asset_type": asset_type,
         "custom_attributes": custom_attributes,
+        **content,
     }
     field_envelopes = build_field_envelopes(
         values,
@@ -377,6 +387,7 @@ def build_dataset(raw_table: Mapping[str, Any], *, endpoint: str) -> Dataset:
         asset_type=asset_type,
         custom_attributes=custom_attributes,
         field_envelopes=field_envelopes,
+        **content,
     )
 
 
