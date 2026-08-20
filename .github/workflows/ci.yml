@@ -23,7 +23,7 @@ jobs:
         run: uv sync --all-packages
 
       - name: Lint (ruff)
-        run: uv run ruff check packages
+        run: uv run ruff check packages scripts
 
       - name: Type-check (mypy, strict)
         run: uv run mypy

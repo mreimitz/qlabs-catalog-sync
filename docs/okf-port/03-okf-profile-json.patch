@@ -1,0 +1,20 @@
+--- a/planning/.claude/okf-profile.json
++++ b/planning/.claude/okf-profile.json
+@@ -25,6 +25,9 @@
+     "Roadmap": ["planned", "active", "blocked", "done", "archived"],
+     "Roadmap Item": ["planned", "active", "blocked", "done", "archived"],
+     "Documentation": ["draft", "review", "current", "superseded", "archived"],
++    "Guide Page": ["draft", "review", "current", "superseded", "archived"],
++    "Work Package Spec": ["draft", "review", "final", "superseded", "archived"],
++    "Status Ledger": ["active", "archived"],
+     "Decision": ["proposed", "accepted", "superseded", "reversed"],
+     "Agent Instruction": ["active", "deprecated"],
+     "Agent Skill": ["active", "deprecated"],
+@@ -47,6 +50,6 @@
+     "Roadmap/index.md",
+     "Roadmap/roadmap.md",
+     "Roadmap/completed/index.md",
+-    "Docu/index.md"
++    "user-guide/index.md"
+   ]
+ }

@@ -1,0 +1,236 @@
+--- a/planning/.claude/scripts/okf.py
++++ b/planning/.claude/scripts/okf.py
+@@ -43,6 +43,11 @@
+ DELIVERED_HEADING = "## Delivered increments"
+ INCREMENT_RE = re.compile(r"^###\s+(RM-\d{2,})(?:\s|$)")
+ MILESTONES_HEADING = "## Milestones"
++# An unticked work-package box in a STATUS.md ledger: "- [ ] WP 1.4 - ...".
++LEDGER_OPEN_RE = re.compile(r"^\s*[-*]\s+\[ \]")
++# The documentation domain root. Named user-guide here; a DC subject holds both the
++# delivery record (doc.md) and that part of the system's user-facing guide pages.
++DOCU_ROOT = "user-guide"
+ 
+ 
+ @dataclass(frozen=True)
+@@ -113,8 +118,8 @@
+         key="dc",
+         prefix="DC",
+         label="Documentation",
+-        roots=("Docu",),
+-        default_root="Docu",
++        roots=(DOCU_ROOT,),
++        default_root=DOCU_ROOT,
+         concept_file="doc.md",
+         concept_type="Documentation",
+         required_children=("doc.md", "log.md"),
+@@ -124,7 +129,7 @@
+         structure_message="documentation subject structure is incomplete",
+         incomplete_code="PROFILE033",
+         path_code="PROFILE034",
+-        path_message="Documentation must live in Docu/DC-NN-slug/",
++        path_message=f"Documentation must live in {DOCU_ROOT}/DC-NN-slug/",
+     ),
+ )
+ DOMAIN_BY_PREFIX = {domain.prefix: domain for domain in DOMAINS}
+@@ -137,7 +142,7 @@
+     "Research": "Research Topics",
+     "Roadmap": "Roadmap",
+     "Roadmap/completed": "Completed Roadmap Items",
+-    "Docu": "Documentation",
++    DOCU_ROOT: "Documentation",
+ }
+ CHILD_DIRECTORY_TITLES = {
+     "sources": "Sources",
+@@ -851,7 +856,7 @@
+         if item.parent.name == "completed" and (tag := item_tag(item.name))
+     }
+     documented: set[str] = set()
+-    for doc_path in sorted((root / "Docu").glob("DC-*/doc.md")):
++    for doc_path in sorted((root / DOCU_ROOT).glob("DC-*/doc.md")):
+         try:
+             metadata, body = parse_frontmatter(read_text(doc_path))
+         except (OSError, ProfileError):
+@@ -879,7 +884,7 @@
+                     "PROFILE036",
+                     relative(root, completed[tag]),
+                     "completed roadmap item must be recorded as a delivered "
+-                    "increment in a Docu/DC-*/doc.md",
++                    f"increment in a {DOCU_ROOT}/DC-*/doc.md",
+                 )
+             )
+     return issues
+@@ -1027,7 +1032,7 @@
+     rs_rows = [
+         row(topic) for topic in sorted((root / "Research").glob("RS-*/topic.md"))
+     ]
+-    dc_rows = [row(doc) for doc in sorted((root / "Docu").glob("DC-*/doc.md"))]
++    dc_rows = [row(doc) for doc in sorted((root / DOCU_ROOT).glob("DC-*/doc.md"))]
+ 
+     body = "\n".join(
+         [
+@@ -1360,7 +1365,7 @@
+     repointed: tuple[str, ...]
+     documented: tuple[str, ...]
+     milestones_ticked: int
+-    task_board_waived: bool
++    ledger_waived: bool
+     stale_references: tuple[StaleReference, ...]
+ 
+ 
+@@ -1395,9 +1400,11 @@
+         original_roadmap = read_text(roadmap_path)
+         tag, registry = allocate_tag(root, "DC")
+         slug = args.slug or slugify(args.title)
+-        target = root / "Docu" / f"{tag}-{slug}"
+-        if not (root / "Docu").is_dir():
+-            raise RuntimeError("Docu/ does not exist yet; create it and run sync-indexes")
++        target = root / DOCU_ROOT / f"{tag}-{slug}"
++        if not (root / DOCU_ROOT).is_dir():
++            raise RuntimeError(
++                f"{DOCU_ROOT}/ does not exist yet; create it and run sync-indexes"
++            )
+         if target.exists():
+             raise RuntimeError(f"target already exists: {target}")
+         staging = Path(tempfile.mkdtemp(prefix=".okf-staging-", dir=root))
+@@ -1576,41 +1583,60 @@
+     return "\n".join(lines[:first] + [f"## {stamp}", "", bullet, ""] + lines[first:])
+ 
+ 
+-def discover_task_boards(root: Path, explicit: list[str]) -> list[Path]:
++def discover_status_ledgers(root: Path, explicit: list[str]) -> list[Path]:
++    """Every work-package ledger in the bundle, or the ones named explicitly."""
+     if explicit:
+         return [
+             candidate if candidate.is_absolute() else root / candidate
+             for candidate in (Path(value) for value in explicit)
+         ]
+-    # One board per roadmap item: tasks.json, tasks-rm-05.json, and so on.
+-    return sorted((root / "tools" / "agent-plan").rglob("tasks*.json"))
++    # One ledger per roadmap item: Roadmap/RM-NN-slug/STATUS.md, and the same
++    # under Roadmap/completed/ so a re-run can still find a retired item's.
++    return sorted(root.glob("Roadmap/RM-*/STATUS.md")) + sorted(
++        root.glob(f"{COMPLETED_ROOT}/RM-*/STATUS.md")
++    )
+ 
+ 
+-def task_gate(boards: list[Path], tag: str) -> tuple[list[str], bool]:
+-    """Return blocking messages, and whether any board claims this roadmap item."""
++def ledger_gate(ledgers: list[Path], tag: str) -> tuple[list[str], bool]:
++    """Return blocking messages, and whether a ledger was found for this item.
++
++    A ledger belongs to the item whose folder holds it. A work package counts as
++    finished only when its box is ticked, so any unticked box refuses the
++    completion — the same teeth the task board gave, on the format /next-wp
++    already maintains.
++    """
+     problems: list[str] = []
+     matched = False
+-    for board_path in boards:
+-        try:
+-            board = json.loads(read_text(board_path))
+-        except (OSError, json.JSONDecodeError) as exc:
+-            problems.append(f"{board_path}: unreadable task board: {exc}")
++    for ledger_path in ledgers:
++        if not ledger_path.parent.name.startswith(f"{tag}-"):
+             continue
+-        if board.get("roadmap_item") != tag:
++        try:
++            text = read_text(ledger_path)
++        except OSError as exc:
++            problems.append(f"{ledger_path}: unreadable status ledger: {exc}")
+             continue
+         matched = True
+-        incomplete = [
+-            f"{task.get('id')} [{task.get('status')}] {task.get('title')}"
+-            for task in board.get("tasks", [])
+-            if task.get("status") != "done"
++        _, body = parse_frontmatter_safe(text)
++        open_boxes = [
++            line.strip()
++            for line in body.splitlines()
++            if LEDGER_OPEN_RE.match(line)
+         ]
+-        if incomplete:
++        if open_boxes:
+             problems.append(
+-                f"{board_path}: {len(incomplete)} task(s) are not done:\n  "
+-                + "\n  ".join(incomplete[:20])
+-                + ("\n  ..." if len(incomplete) > 20 else "")
++                f"{ledger_path}: {len(open_boxes)} work package(s) are not done:\n  "
++                + "\n  ".join(open_boxes[:20])
++                + ("\n  ..." if len(open_boxes) > 20 else "")
+             )
+     return problems, matched
++
++
++def parse_frontmatter_safe(text: str) -> tuple[Optional[dict[str, Any]], str]:
++    """parse_frontmatter, but a malformed header is not fatal to the gate."""
++    try:
++        return parse_frontmatter(text)
++    except ProfileError:
++        return None, text
+ 
+ 
+ def stale_reference_report(
+@@ -1769,17 +1795,17 @@
+     if destination.exists():
+         raise RuntimeError(f"destination already exists: {destination}")
+ 
+-    boards = discover_task_boards(root, args.tasks_file or [])
+-    problems, matched = task_gate(boards, tag)
++    ledgers = discover_status_ledgers(root, args.ledger or [])
++    problems, matched = ledger_gate(ledgers, tag)
+     if problems:
+         raise RuntimeError(
+-            "refusing to complete; the task board is not finished:\n"
++            "refusing to complete; the work-package ledger is not finished:\n"
+             + "\n".join(problems)
+         )
+-    if not matched and not args.no_task_board:
++    if not matched and not args.no_ledger:
+         raise RuntimeError(
+-            f"no task board declares roadmap_item {tag}; "
+-            "pass --no-task-board to complete without one"
++            f"no STATUS.md ledger was found for {tag}; "
++            "pass --no-ledger to complete without one"
+         )
+ 
+     if not args.no_scan and args.require_clean_tree:
+@@ -1946,7 +1972,7 @@
+         repointed=tuple(sorted(relative(root, path) for path in repointed)),
+         documented=tuple(documented),
+         milestones_ticked=ticked,
+-        task_board_waived=not matched,
++        ledger_waived=not matched,
+         stale_references=tuple(stale),
+     )
+ 
+@@ -2131,7 +2157,7 @@
+         return [Issue("profile", roadmap.path_code, rel, roadmap.path_message)]
+ 
+     documentation = DOMAIN_BY_PREFIX["DC"]
+-    if parts[0] == "Docu":
++    if parts[0] == DOCU_ROOT:
+         if len(parts) == 2 and parts[1] in documentation.loose_files:
+             return []
+         if len(parts) >= 3 and item_ok(documentation, parts[1]):
+@@ -2235,8 +2261,8 @@
+     complete.add_argument("--gap", action="append", default=[])
+     complete.add_argument("--code-path", action="append", default=[])
+     complete.add_argument("--summary")
+-    complete.add_argument("--tasks-file", action="append", default=[])
+-    complete.add_argument("--no-task-board", action="store_true")
++    complete.add_argument("--ledger", action="append", default=[])
++    complete.add_argument("--no-ledger", action="store_true")
+     complete.add_argument("--keep-milestones", action="store_true")
+     complete.add_argument("--docu-status")
+     complete.add_argument("--require-clean-tree", action="store_true")
+@@ -2295,7 +2321,7 @@
+             print(
+                 f"Recorded the increment in {', '.join(result.documented)}. "
+                 f"Ticked {result.milestones_ticked} milestone(s)."
+-                + (" Task board waived." if result.task_board_waived else "")
++                + (" Ledger waived." if result.ledger_waived else "")
+             )
+             if result.repointed:
+                 print(
