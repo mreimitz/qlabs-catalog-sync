@@ -684,7 +684,7 @@
       ],
       "dod": "create() posts a valid Qlik data-product payload from a neutral entity, enforces the subset and cap rules client-side, and returns the assigned IdentityRef.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.5",
