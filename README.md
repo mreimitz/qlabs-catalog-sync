@@ -45,8 +45,32 @@ Every sync pair runs the same cycle:
    a crash mid-cycle commits nothing and the next run resumes from the last good point.
 8. **Skip** anything whose checksum is unchanged.
 
-The consequence worth stating plainly: re-running the sync over an unchanged source is a
-no-op — no API writes, no state churn.
+```mermaid
+flowchart TD
+    POLL["Poll the source<br/>list_changed since watermark"] --> READ["Read into field envelopes"]
+    READ --> IDENT{"Identity bound?"}
+    IDENT -- no --> PROPOSE["Propose a match for review<br/>bind nothing"]
+    IDENT -- yes --> DIFF{"Checksum changed?"}
+    DIFF -- no --> SKIP["Skip — no API call"]
+    DIFF -- yes --> POLICY["Apply the manual-edit policy"]
+    POLICY --> WRITE["Write the minimal native mutation<br/>guarded by ETag / revision"]
+
+    SKIP --> COMMIT
+    PROPOSE --> COMMIT
+    WRITE --> COMMIT["Persist envelopes AND advance the watermark<br/>in ONE transaction"]
+
+    classDef nowrite fill:#f4f4f4,stroke:#9a9a9a,color:#555
+    classDef write fill:#fdecea,stroke:#b3261e,color:#5c1712
+    classDef commit fill:#e9eefb,stroke:#3355aa,color:#16224a
+    class SKIP,PROPOSE nowrite
+    class WRITE write
+    class COMMIT commit
+```
+
+Two properties fall out of that shape. A crash anywhere before the commit leaves both the
+state and the watermark exactly as they were, so the next run resumes from the last good
+point. And re-running over an unchanged source takes the *no* branch for every field — so
+it is a genuine no-op: no API writes, no state churn.
 
 Engine state is small and inspectable — an `identity_map`, per-pair `watermarks`, and the
 last-known `field_envelopes` — on SQLite (WAL mode) by default, with the same schema on
@@ -56,6 +80,30 @@ PostgreSQL when more than one worker is needed.
 
 Catalogs never map to each other directly. Everything passes through a neutral model, so
 adding a catalog means writing one connector rather than N–1 translations.
+
+```mermaid
+flowchart LR
+    DBX[Databricks<br/>Unity Catalog]
+    COL[Collibra]
+    SNO[Snowflake<br/>Horizon]
+    NEUTRAL{{"Neutral model<br/>DataProduct · Dataset<br/>GlossaryTerm · Category"}}
+    QLIK[Qlik Cloud]
+
+    DBX -- read --> NEUTRAL
+    COL -. "read (Track B)" .-> NEUTRAL
+    SNO -. "read (Track B)" .-> NEUTRAL
+    NEUTRAL -- "write (sole target)" --> QLIK
+
+    classDef live fill:#e8f4ea,stroke:#2f7a44,color:#14321f
+    classDef later fill:#f4f4f4,stroke:#9a9a9a,color:#555,stroke-dasharray:4 3
+    classDef hub fill:#e9eefb,stroke:#3355aa,color:#16224a
+    class DBX,QLIK live
+    class COL,SNO later
+    class NEUTRAL hub
+```
+
+Solid is what v1 ships: Databricks in, Qlik out. Collibra and Snowflake are written against
+the same contract and start after v0.1 — adding them changes no engine code.
 
 Entities: **DataProduct**, **Dataset**, **GlossaryTerm**, **Category** — plus the
 **Party**, **Tag** and **IdentityRef** value types reused across them.

@@ -14,7 +14,7 @@
         "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/__init__.py",
         "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/models.py",
         "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/configstore/types.py",
-        "packages/qlabs-catalog-sync/alembic/versions/0002_config_store.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/alembic/versions/0002_config_store.py",
         "packages/qlabs-catalog-sync/tests/configstore/"
       ],
       "inputs": [
@@ -24,7 +24,7 @@
       ],
       "dod": "Migration applies and rolls back cleanly on SQLite; every table round-trips through the ORM; no column anywhere in the schema can hold a credential value.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/configstore",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T10.2",
@@ -163,7 +163,7 @@
         "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/runs/__init__.py",
         "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/runs/models.py",
         "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/runs/recorder.py",
-        "packages/qlabs-catalog-sync/alembic/versions/0003_run_history.py",
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/alembic/versions/0003_run_history.py",
         "packages/qlabs-catalog-sync/tests/runs/"
       ],
       "inputs": [
