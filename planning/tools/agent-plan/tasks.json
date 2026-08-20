@@ -317,7 +317,7 @@
       ],
       "dod": "FakeConnector supports read and write modes, honors its declared manifest, and is importable from the SDK's public surface.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/testing -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.8",
