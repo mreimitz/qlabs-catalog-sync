@@ -614,7 +614,7 @@
       ],
       "dod": "Manifest declares the rw data-product fields, ETag concurrency, partial_update=false for arrays, the exact PATCH path enum, and glossary unsupported.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/manifest -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T3.3",
