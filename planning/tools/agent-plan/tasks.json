@@ -892,7 +892,7 @@
       ],
       "dod": "With a warehouse configured, schema and table tags are read into neutral Tag values; without one, tags are absent and the manifest reports na - and a test asserts both branches.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/sql_tags -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.6",
