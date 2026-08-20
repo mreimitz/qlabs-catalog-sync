@@ -37,6 +37,7 @@ it.
 
 from __future__ import annotations
 
+from . import testing as testing
 from .auth import (
     DEFAULT_REFRESH_MARGIN,
     ApiKeyAuthProvider,
