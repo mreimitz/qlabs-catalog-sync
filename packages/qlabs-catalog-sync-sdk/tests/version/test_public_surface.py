@@ -5,9 +5,6 @@ in this worktree yet (T1.3's ``manifest.py`` is still a docstring-only stub).
 
 from __future__ import annotations
 
-import subprocess
-import sys
-
 import qlabs_catalog_sync_sdk as sdk
 
 
@@ -53,33 +50,17 @@ def test_the_public_clock_and_system_clock_are_configs_not_auths() -> None:
     assert sdk.SystemClock is config.SystemClock
 
 
-def test_root_import_does_not_pull_in_the_unfinished_manifest_module() -> None:
-    """``manifest.py`` (T1.3) has not landed in this worktree — it defines no
-    ``CapabilityManifest`` yet. Importing the package root must not depend on it or
-    even touch it as a side effect; this proves that in a fresh interpreter, not just
-    "it happens not to be imported yet" in a process where some other test already
-    imported it directly.
-    """
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import sys\n"
-            "import qlabs_catalog_sync_sdk\n"
-            "print('qlabs_catalog_sync_sdk.manifest' in sys.modules)\n",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert result.stdout.strip() == "False", result.stderr
+def test_the_capability_manifest_is_exported_from_the_package_root() -> None:
+    """``CapabilityManifest`` is what ``Connector.capabilities()`` returns and what the
+    engine plans every write from, so it must be reachable from the package root."""
+    import qlabs_catalog_sync_sdk as sdk
+    from qlabs_catalog_sync_sdk.contract import CapabilityManifestBase
+    from qlabs_catalog_sync_sdk.manifest import CapabilityManifest
 
-
-def test_the_manifest_module_really_is_still_a_stub() -> None:
-    """Guards the premise of the previous test: if T1.3 lands and this still passes,
-    the premise is stale and the orchestrator's follow-up (wiring ``CapabilityManifest``
-    into ``__init__.py``, per this package's module docstring) is due.
-    """
-    import qlabs_catalog_sync_sdk.manifest as manifest_stub
-
-    assert not hasattr(manifest_stub, "CapabilityManifest")
+    assert sdk.CapabilityManifest is CapabilityManifest
+    assert issubclass(CapabilityManifest, CapabilityManifestBase)
+    for name in ("ConcurrencyMode", "EntityCapability", "FieldCapability", "FieldCapabilityMode"):
+        assert name in sdk.__all__
+        assert getattr(sdk, name) is getattr(
+            __import__("qlabs_catalog_sync_sdk.manifest", fromlist=[name]), name
+        )

@@ -29,13 +29,10 @@ one name:
   ``now()``. A ``config.SystemClock`` instance satisfies ``auth.Clock`` structurally
   (it has ``now()``), so this loses no capability in practice.
 
-T1.3's ``manifest.py`` (``CapabilityManifest``, ``EntityCapability``, ``FieldCapability``)
-has not landed in this worktree yet — it is a docstring-only stub with no importable
-names — so it is intentionally not imported here. See that module's TODO and this
-package's WP1 task board entry T1.3. Once it lands, add
-``from .manifest import CapabilityManifest, EntityCapability, FieldCapability`` (or
-whatever T1.3's actual ``__all__`` turns out to be) below and extend ``__all__`` to
-match; nothing else in this file needs to change for that.
+``manifest.py``'s concrete ``CapabilityManifest`` (and the ``EntityCapability`` /
+``FieldCapability`` types it is built from) is exported here too: it is the type
+``Connector.capabilities()`` returns in practice, and the engine plans every write from
+it.
 """
 
 from __future__ import annotations
@@ -99,6 +96,13 @@ from .exceptions import (
 )
 from .http import AuthHeaderProvider, HttpEndpoint
 from .logging import REDACTED, get_connector_logger, redact_secrets
+from .manifest import (
+    CapabilityManifest,
+    ConcurrencyMode,
+    EntityCapability,
+    FieldCapability,
+    FieldCapabilityMode,
+)
 from .models import (
     AssetLink,
     AssetType,
@@ -132,6 +136,11 @@ from .version import (
 )
 
 __all__ = [
+    "CapabilityManifest",
+    "ConcurrencyMode",
+    "EntityCapability",
+    "FieldCapability",
+    "FieldCapabilityMode",
     "CHECKSUM_ALGORITHM",
     "CHECKSUM_PREFIX",
     "CONNECTOR_ENTRY_POINT_GROUP",
