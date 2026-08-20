@@ -47,10 +47,13 @@ from typing import Final
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry
 
+from qlabs_catalog_sync.configstore.service import ConfigService
+from qlabs_catalog_sync.discovery import ConnectorRegistry
 from qlabs_catalog_sync.observability import HealthRegistry, render_healthz, render_metrics
 
 from .auth import ConsoleAuth, install_auth
 from .errors import API_ERROR_RESPONSES, install_error_handlers
+from .routes import build_connectors_router, build_endpoints_router
 from .static import mount_static
 
 __all__ = ["API_PREFIX", "create_app"]
@@ -69,6 +72,8 @@ def create_app(
     metrics_registry: CollectorRegistry,
     static_dir: Path | None = None,
     auth: ConsoleAuth | None = None,
+    config_service: ConfigService | None = None,
+    registry: ConnectorRegistry | None = None,
     title: str = "QLabs Catalog Sync API",
     version: str = "0.1.0",
 ) -> FastAPI:
@@ -92,6 +97,15 @@ def create_app(
     return one when no credential is configured, so the process cannot start unauthenticated
     (C7). Passing ``auth=None`` here builds an app with no authentication and logs a warning
     saying so; that is for tests of unrelated parts of this API, not for serving.
+
+    ``config_service``/``registry`` (T12.3, C6) are what the ``/connectors`` and
+    ``/endpoints`` routes need: a real
+    :class:`~qlabs_catalog_sync.configstore.service.ConfigService` and the
+    :class:`~qlabs_catalog_sync.discovery.ConnectorRegistry` the process discovered at
+    startup. They are required together -- those routes mount only when both are given;
+    either left at the default ``None`` (every test of an unrelated part of this API, and
+    T12.1's own DoD that the app boots with no configuration store) leaves them
+    unmounted, exactly like ``static_dir=None`` leaves the console unmounted.
     """
     app = FastAPI(title=title, version=version)
 
@@ -112,10 +126,15 @@ def create_app(
         body = render_metrics(metrics_registry)
         return Response(content=body, status_code=200, media_type=CONTENT_TYPE_LATEST)
 
-    # Future WP12 tasks (T12.3 onward) call app.include_router(router, prefix=API_PREFIX)
-    # here -- after /healthz and /metrics, before mount_static. Route resolution in
-    # Starlette is insertion order, and mount_static's fallback matches every unmatched
-    # GET path, so it must always be registered last (see static.py's module docstring).
+    # T12.3's connector/endpoint routes, after /healthz and /metrics, before
+    # mount_static. Route resolution in Starlette is insertion order, and
+    # mount_static's fallback matches every unmatched GET path, so it must always be
+    # registered last (see static.py's module docstring). Later WP12 tasks add their
+    # own app.include_router(router, prefix=API_PREFIX) calls the same way.
+    if config_service is not None and registry is not None:
+        app.include_router(build_connectors_router(registry), prefix=API_PREFIX)
+        app.include_router(build_endpoints_router(config_service, registry), prefix=API_PREFIX)
+
     mount_static(app, static_dir=static_dir, api_prefix=API_PREFIX)
 
     return app
