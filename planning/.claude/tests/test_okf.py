@@ -85,16 +85,21 @@ class OkfValidationTests(unittest.TestCase):
 
     def test_pre_hook_requires_timestamp_change_with_meaningful_edit(self) -> None:
         original = (ROOT / "project.md").read_text(encoding="utf-8")
+        _, body = okf.parse_frontmatter(original)
+        # Derived from the live document so the fixture cannot go stale.
+        old_string = next(
+            line for line in body.splitlines() if len(line.strip()) > 40
+        )
         payload = {
             "tool_name": "Edit",
             "tool_input": {
                 "file_path": str(ROOT / "project.md"),
-                "old_string": "This repository is a reusable knowledge-project scaffold",
-                "new_string": "This repository is a reusable knowledge workspace",
+                "old_string": old_string,
+                "new_string": old_string + " Rewritten.",
             },
         }
         self.assertIn("PROFILE028", {issue.code for issue in okf.hook_pre(ROOT, payload)})
-        self.assertIn("knowledge-project scaffold", original)
+        self.assertEqual(original, (ROOT / "project.md").read_text(encoding="utf-8"))
 
     def test_pre_hook_rejects_markdown_under_tools(self) -> None:
         payload = {
@@ -123,13 +128,21 @@ class GeneratorIntegrationTests(unittest.TestCase):
         shutil.copytree(
             ROOT,
             self.root,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git"),
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git", ".venv"),
         )
 
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    def registry(self) -> dict:
+        return json.loads(
+            (self.root / ".claude" / "tag-registry.json").read_text(encoding="utf-8")
+        )
+
     def test_research_and_roadmap_generation_remain_conformant(self) -> None:
+        before = self.registry()
+        expected_rs = f"RS-{before['next_rs']:02d}"
+        expected_rm = f"RM-{before['next_rm']:02d}"
         research_args = argparse.Namespace(
             title="OKF Compliance",
             objective="Verify the generated research structure.",
@@ -141,7 +154,7 @@ class GeneratorIntegrationTests(unittest.TestCase):
             slug=None,
         )
         research_path = okf.new_research(self.root, research_args)
-        self.assertEqual("RS-01-okf-compliance", research_path.name)
+        self.assertEqual(f"{expected_rs}-okf-compliance", research_path.name)
 
         roadmap_args = argparse.Namespace(
             title="Ship OKF Template",
@@ -152,14 +165,12 @@ class GeneratorIntegrationTests(unittest.TestCase):
             slug=None,
         )
         roadmap_path = okf.new_roadmap(self.root, roadmap_args)
-        self.assertEqual("RM-01-ship-okf-template", roadmap_path.name)
+        self.assertEqual(f"{expected_rm}-ship-okf-template", roadmap_path.name)
 
         self.assertEqual([], okf.validate(self.root))
-        registry = json.loads(
-            (self.root / ".claude" / "tag-registry.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(["RS-01"], registry["allocated_rs"])
-        self.assertEqual(["RM-01"], registry["allocated_rm"])
+        after = self.registry()
+        self.assertEqual(before["allocated_rs"] + [expected_rs], after["allocated_rs"])
+        self.assertEqual(before["allocated_rm"] + [expected_rm], after["allocated_rm"])
 
 
 if __name__ == "__main__":

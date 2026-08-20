@@ -51,13 +51,17 @@ class DocIntakeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    def rs_dirs(self) -> set[str]:
+        """Topic folders present now; the fixture copies the live bundle's own."""
+        return {p.name for p in (self.root / "Research").glob("RS-*") if p.is_dir()}
+
     def test_single_file_creates_one_valid_rs_topic(self) -> None:
         source = self.inputs / "Market Report.pdf"
         source.write_bytes(b"%PDF-test-content")
         target = doc_intake.intake(
             self.root, source, "Market Evidence", FakeConverter()
         )
-        self.assertEqual("RS-01-market-evidence", target.name)
+        self.assertRegex(target.name, r"^RS-\d{2}-market-evidence$")
         self.assertTrue((target / "sources" / "market-report.pdf").is_file())
         concept = target / "sources" / "market-report.md"
         self.assertTrue(concept.is_file())
@@ -91,10 +95,11 @@ class DocIntakeTests(unittest.TestCase):
         doc_intake.intake(self.root, first, "First Intake", FakeConverter())
         second = self.inputs / "second.txt"
         second.write_text("same", encoding="utf-8")
+        before = self.rs_dirs()
 
         with self.assertRaisesRegex(ValueError, "duplicate source content"):
             doc_intake.intake(self.root, second, "Second Intake", FakeConverter())
-        self.assertFalse(any((self.root / "Research").glob("RS-02-*")))
+        self.assertEqual(before, self.rs_dirs())
 
     def test_markdown_input_is_preserved_without_becoming_an_unwrapped_concept(self) -> None:
         source = self.inputs / "README.md"
@@ -107,14 +112,16 @@ class DocIntakeTests(unittest.TestCase):
         self.assertEqual([], doc_intake.okf.validate(self.root))
 
     def test_unsafe_archive_is_rejected_before_conversion(self) -> None:
+        before = self.rs_dirs()
         archive = self.inputs / "unsafe.zip"
         with zipfile.ZipFile(archive, "w") as handle:
             handle.writestr("../escape.txt", "unsafe")
         with self.assertRaisesRegex(ValueError, "unsafe archive path"):
             doc_intake.collect_inputs(self.root, archive)
-        self.assertFalse(any((self.root / "Research").glob("RS-*")))
+        self.assertEqual(before, self.rs_dirs())
 
     def test_conversion_failure_is_atomic(self) -> None:
+        before = self.rs_dirs()
         good = self.inputs / "good.txt"
         bad = self.inputs / "bad.bin"
         good.write_text("good", encoding="utf-8")
@@ -123,7 +130,7 @@ class DocIntakeTests(unittest.TestCase):
             doc_intake.intake(
                 self.root, self.inputs, "Failed Intake", FailingConverter()
             )
-        self.assertFalse(any((self.root / "Research").glob("RS-*")))
+        self.assertEqual(before, self.rs_dirs())
         self.assertEqual([], doc_intake.okf.validate(self.root))
 
     def test_noninteractive_title_is_required(self) -> None:
