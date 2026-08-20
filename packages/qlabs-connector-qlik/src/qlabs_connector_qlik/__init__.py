@@ -38,7 +38,7 @@ from qlabs_catalog_sync_sdk.contract import Connector as ConnectorABC
 from qlabs_catalog_sync_sdk.exceptions import AuthError, ConnectorError, TransientError
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 
-from . import read, write
+from . import lifecycle, read, write
 from .auth import build_http_endpoint, classify_response_error, classify_transport_error
 from .config import QlikConfig
 from .manifest import qlik_capability_manifest
@@ -75,6 +75,11 @@ class Connector(ConnectorABC):
         self.ctx: ConnectorContext[QlikConfig] | None = None
         self.http: HttpEndpoint | None = None
         self.writer: write.QlikWriter | None = None
+        self.lifecycle: lifecycle.LifecycleActions | None = None
+        #: Destructive actions this instance may perform. Empty by design: D4 says v1
+        #: never deletes in Qlik and D7 makes activation opt-in per pair, so a caller
+        #: has to name an action explicitly before it can ever be issued.
+        self.enabled_destructive_actions: frozenset[lifecycle.DestructiveAction] = frozenset()
         self.dataset_identity_lookup: DatasetIdentityLookup = _no_identity_binding
         self.dataset_name_lookup: write.DatasetNameLookup = write.no_dataset_names
         self._oauth_provider: OAuth2ClientCredentialsProvider | None = None
@@ -100,6 +105,11 @@ class Connector(ConnectorABC):
             space_id=ctx.config.space_id,
             dataset_identity_lookup=self.dataset_identity_lookup,
             dataset_name_lookup=self.dataset_name_lookup,
+        )
+        self.lifecycle = lifecycle.build_lifecycle_actions(
+            http,
+            endpoint=self.name,
+            enabled_actions=self.enabled_destructive_actions,
         )
         self._oauth_provider = oauth_provider
         self._token_client = token_client
@@ -249,7 +259,19 @@ class Connector(ConnectorABC):
             raise RuntimeError("setup() must be called before create()")
         return await self.writer.create(entity)
 
-    # -- remaining write path (T3.5/T3.7) ---------------------------------------------
+    async def delete(self, ref: IdentityRef) -> None:
+        """Delete the Qlik data product — refused unless explicitly enabled.
+
+        Implemented for contract completeness only. D4: v1 never deletes in Qlik, and
+        the engine has no code path that calls this. It refuses with ``CapabilityError``
+        unless this instance was built with ``DestructiveAction.DELETE`` enabled, which
+        nothing in v1 does.
+        """
+        if self.lifecycle is None:
+            raise RuntimeError("setup() must be called before delete()")
+        await self.lifecycle.delete(ref)
+
+    # -- remaining write path (T3.5) ----------------------------------------------------
     # create/update/delete are intentionally left at the ABC's defaults (they raise
     # CapabilityError) rather than overridden here: they are not abstract, so nothing
     # blocks instantiation, and the honest-refusal default is exactly right until the
