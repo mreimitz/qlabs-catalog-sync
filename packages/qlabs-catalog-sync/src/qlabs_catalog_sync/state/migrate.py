@@ -17,9 +17,12 @@ from alembic.config import Config
 
 __all__ = ["ALEMBIC_DIR", "build_alembic_config", "downgrade_to_base", "upgrade_to_head"]
 
-# packages/qlabs-catalog-sync/alembic -- a sibling of src/, computed relative to this
-# file so it does not depend on the current working directory.
-ALEMBIC_DIR = Path(__file__).resolve().parents[3] / "alembic"
+# The migration scripts live *inside* the installed package, not beside it. The earlier
+# location (a sibling of src/) only resolved under an editable checkout: a built wheel put
+# the computed path at a directory that had never existed, so any real install failed to
+# migrate at all. Keeping them in the package means the same path works in a checkout, a
+# wheel and a container alike.
+ALEMBIC_DIR = Path(__file__).resolve().parent.parent / "alembic"
 
 
 def build_alembic_config(url: str) -> Config:

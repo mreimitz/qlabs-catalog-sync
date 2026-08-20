@@ -37,8 +37,6 @@ it.
 
 from __future__ import annotations
 
-from . import conformance as conformance
-from . import testing as testing
 from .auth import (
     DEFAULT_REFRESH_MARGIN,
     ApiKeyAuthProvider,
@@ -223,3 +221,22 @@ __all__ = [
     "refresh_checksum",
     "to_json_value",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Expose the ``testing`` and ``conformance`` subpackages without importing them.
+
+    Both pull in ``respx`` and ``pytest``, which are development dependencies the SDK does
+    not declare at runtime — importing them eagerly here made ``import
+    qlabs_catalog_sync_sdk`` fail outright in any non-development install, which is every
+    real deployment. PEP 562 lets them stay reachable as ``sdk.testing`` /
+    ``sdk.conformance`` for the tests and connector authors that want them, while a
+    production import never touches them.
+    """
+    if name in ("conformance", "testing"):
+        import importlib
+
+        module = importlib.import_module(f".{name}", __name__)
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
