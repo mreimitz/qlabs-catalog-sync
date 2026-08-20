@@ -1144,7 +1144,7 @@
       ],
       "dod": "The container builds and runs the sync service as a single long-running process against a mounted config.",
       "verify": "docker build -t qlabs-catalog-sync .",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T9.2",
