@@ -36,10 +36,13 @@ gap named in the task:
   renaming a table under a schema does not bump that *schema's* ``updated_at``, yet the
   data product's dataset membership (decision D1) has changed. This is why a schema's
   checksum input is not just its own REST payload: it also includes the sorted list of
-  full names of the tables currently under it (a second, cheap listing per schema with
-  ``omit_columns``/``omit_properties``/``omit_username`` to keep it light). Any table
-  added, removed or renamed under a schema therefore changes that schema's checksum even
-  though nothing on the schema object itself moved.
+  the **stable ids** of the tables currently under it (a second, cheap listing per
+  schema with ``omit_columns``/``omit_properties``/``omit_username`` to keep it light —
+  ``table_id`` is never omitted by those flags). Any table added or removed under a
+  schema therefore changes that schema's checksum even though nothing on the schema
+  object itself moved; a table *rename* alone does not, which is deliberate (see
+  "Identity" below — a rename is a change to that table's own stream, not to which
+  tables the schema has).
 * **Clock skew between the caller and the workspace** cannot cause a missed change,
   because nothing is ever compared against *our* clock. There is no "now" and no
   inequality anywhere in the decision — only exact equality between two checksums UC's
@@ -47,13 +50,44 @@ gap named in the task:
   bounds the *probability* of a boundary miss, an exact-equality comparison has no
   boundary to miss at.
 
+**Identity converges on ``read.py``'s choices, not this module's own.** The engine calls
+``list_changed()`` to get ``ChangeRef``s and then ``read(ref)`` on each — so the two
+must agree on what a Unity Catalog object's identity *is*. ``read.py`` (T4.4) already
+settled this (see its module docstring for the full reasoning) and this module simply
+reuses its builders, :func:`~qlabs_connector_databricks.read.build_schema_identity_ref`
+and :func:`~qlabs_connector_databricks.read.build_table_identity_ref`, rather than
+re-deriving the same two decisions and risking drift:
+
+* ``native_key`` is the **stable object id** (``schema_id``/``table_id``), never
+  ``full_name`` — Databricks names are renameable (``new_name``), and the engine's
+  IdentityMap resolves strictly by ``(endpoint, entity_type, tenant_id, native_key)``,
+  so a renameable native key would silently break identity continuity the first time
+  somebody renames a schema or table. ``full_name`` still travels in
+  ``secondary_keys["full_name"]``, since Unity Catalog has no get-by-id endpoint.
+* ``tenant_id`` is the **``metastore_id``** carried on every schema/table row, not the
+  workspace host — one metastore can be attached to many workspaces in a region, so a
+  workspace-host tenant id would silently split one physical schema's identity across
+  every workspace sharing its metastore.
+
+Consequence for the snapshot (below): because the diff key is now the *stable* id, a
+rename reads as exactly one change to that object's own checksum (its ``full_name``/
+``name`` moved, so its hash did) — never as a delete of the old name plus a create of
+the new one. Keying the snapshot on ``full_name`` instead would have made every rename
+look like an orphaned deletion under decision D4, which is exactly the failure mode the
+stable-id choice avoids. ``tests/changes/test_renames.py`` proves this directly.
+
 **The watermark carries the snapshot.** Connectors hold no sync state (RS-08 section 5)
 — the *only* state a connector may carry across polls is whatever the engine persists
 and hands back inside the ``Watermark`` it returned last time. So the "snapshot" here is
 not a private cache; it is a :attr:`~qlabs_catalog_sync_sdk.contract.WatermarkKind.CURSOR`
 watermark whose opaque ``cursor`` is
-``{"v": 1, "checksums": {"<full_name>": "<sha256:...>", ...}}`` — meaningful only to this
-module, exactly what ``WatermarkKind.CURSOR`` is documented for. Consequences:
+``{"v": 2, "objects": {"<native_key>": {"checksum", "tenant_id", "full_name"}, ...}}`` —
+meaningful only to this module, exactly what ``WatermarkKind.CURSOR`` is documented for.
+``tenant_id``/``full_name`` travel alongside the checksum (not just the checksum alone)
+because a *vanished* object's :class:`ChangeRef` still needs a fully-formed
+``IdentityRef`` to report as ``ChangeKind.DELETED``, and by the time it has vanished
+there is no fresh row left to read ``metastore_id``/``full_name`` off of — only what was
+last recorded in the snapshot. Consequences:
 
 * An ``initial`` watermark has no snapshot, so every object observed is a candidate —
   the required "from an initial watermark, everything is returned" behavior falls out
@@ -64,7 +98,8 @@ module, exactly what ``WatermarkKind.CURSOR`` is documented for. Consequences:
 * A native key present in the previous snapshot but absent from the fresh traversal is
   reported as :attr:`~qlabs_catalog_sync_sdk.contract.ChangeKind.DELETED` (decision D4:
   v1 never deletes in Qlik, so the engine reports it as an orphan) — a byproduct of the
-  same diff, at no extra API cost.
+  same diff, at no extra API cost, using the snapshot's last-known ``tenant_id``/
+  ``full_name`` to build a valid ref for an object this module can no longer see.
 * ``has_more`` is always ``False`` on a normal return: a call is a complete traversal,
   not one page of an ongoing scan, so there genuinely is no next page. It only would
   differ if a defensive cap below were changed from "raise" to "truncate", which it
@@ -106,7 +141,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Final
 
@@ -131,12 +166,11 @@ from qlabs_catalog_sync_sdk.exceptions import (
 )
 from qlabs_catalog_sync_sdk.http import HttpEndpoint
 
-from .config import DatabricksConfig
+from .read import build_schema_identity_ref, build_table_identity_ref
 
 __all__ = [
     "DEFAULT_MAX_PAGES_PER_LISTING",
     "SNAPSHOT_FORMAT_VERSION",
-    "derive_tenant_id",
     "list_changed",
 ]
 
@@ -145,7 +179,11 @@ _logger = structlog.get_logger("qlabs_connector_databricks.changes")
 #: Schema version stamped into every cursor payload this module writes, so a future
 #: incompatible change to the snapshot's shape can be detected instead of silently
 #: mis-parsed. Bump this and update :func:`_decode_snapshot` if the shape ever changes.
-SNAPSHOT_FORMAT_VERSION: Final = 1
+#: v2: keyed on the stable object id (``schema_id``/``table_id``) with ``tenant_id``
+#: (``metastore_id``) and ``full_name`` carried per entry, not just a bare checksum map
+#: keyed on ``full_name`` — see this module's docstring, "Identity converges on
+#: read.py's choices".
+SNAPSHOT_FORMAT_VERSION: Final = 2
 
 #: Per-listing-call page cap (catalogs; schemas-of-a-catalog; tables-of-a-schema). Each
 #: individual UC list endpoint gets its own fresh budget. 1000 pages comfortably covers
@@ -158,17 +196,6 @@ _SCHEMAS_PATH: Final = "/api/2.1/unity-catalog/schemas"
 _TABLES_PATH: Final = "/api/2.1/unity-catalog/tables"
 
 
-def derive_tenant_id(config: DatabricksConfig) -> str:
-    """A stable ``IdentityRef.tenant_id`` when the engine has not set ``ctx.tenant``.
-
-    Uses the workspace host with its scheme stripped: UC native keys (``full_name``) are
-    unique only within one workspace's metastore (RS-01 section 4.1), so the workspace
-    itself is the natural tenant boundary for a connector that talks to exactly one
-    workspace per configured endpoint.
-    """
-    return config.host.removeprefix("https://").removeprefix("http://")
-
-
 # ----------------------------------------------------------------------------------------
 # Observed object + snapshot codec
 # ----------------------------------------------------------------------------------------
@@ -176,16 +203,30 @@ def derive_tenant_id(config: DatabricksConfig) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Observed:
-    """One object seen during a traversal: enough to diff and to build a ``ChangeRef``."""
+    """One object seen during this poll: its checksum, its already-built identity
+    (reusing ``read.py``'s own builder — see this module's docstring), and enough
+    provenance to build a ``ChangeRef``."""
 
+    ref: IdentityRef
     checksum: str
     last_modified_at: datetime | None
     display_name: str
-    secondary_keys: dict[str, str] = field(default_factory=dict)
 
 
-def _decode_snapshot(since: Watermark) -> dict[str, str]:
-    """The ``{native_key: checksum}`` map carried by a previous ``next_watermark``.
+@dataclass(frozen=True, slots=True)
+class _PrevObserved:
+    """One object recorded in a *previous* poll's snapshot: just enough to tell whether
+    it changed (``checksum``) and, if it has since vanished, to build a valid
+    ``IdentityRef`` for a :attr:`~qlabs_catalog_sync_sdk.contract.ChangeKind.DELETED`
+    report without a fresh row to read ``tenant_id``/``full_name`` off of."""
+
+    checksum: str
+    tenant_id: str
+    full_name: str
+
+
+def _decode_snapshot(since: Watermark) -> dict[str, _PrevObserved]:
+    """The ``{native_key: _PrevObserved}`` map carried by a previous ``next_watermark``.
 
     Empty for an ``initial`` watermark (nothing observed yet — everything is a
     candidate) and for anything that is not a well-formed cursor of our own making: a
@@ -197,10 +238,24 @@ def _decode_snapshot(since: Watermark) -> dict[str, str]:
         return {}
     try:
         payload: Any = json.loads(since.cursor)
-        checksums = payload["checksums"] if isinstance(payload, dict) else None
-        if not isinstance(checksums, dict):
-            raise TypeError("cursor payload has no 'checksums' object")
-        return {str(key): str(value) for key, value in checksums.items()}
+        objects = payload["objects"] if isinstance(payload, dict) else None
+        if not isinstance(objects, dict):
+            raise TypeError("cursor payload has no 'objects' object")
+        result: dict[str, _PrevObserved] = {}
+        for native_key, entry in objects.items():
+            if not isinstance(entry, dict):
+                continue
+            checksum = entry.get("checksum")
+            tenant_id = entry.get("tenant_id")
+            if not isinstance(checksum, str) or not isinstance(tenant_id, str):
+                continue
+            full_name = entry.get("full_name")
+            result[str(native_key)] = _PrevObserved(
+                checksum=checksum,
+                tenant_id=tenant_id,
+                full_name=full_name if isinstance(full_name, str) else "",
+            )
+        return result
     except Exception:
         _logger.warning(
             "databricks.list_changed.snapshot_unparseable",
@@ -210,9 +265,16 @@ def _decode_snapshot(since: Watermark) -> dict[str, str]:
 
 
 def _encode_snapshot(fresh: Mapping[str, _Observed]) -> str:
-    checksums = {native_key: observed.checksum for native_key, observed in fresh.items()}
+    objects = {
+        native_key: {
+            "checksum": observed.checksum,
+            "tenant_id": observed.ref.tenant_id,
+            "full_name": observed.ref.secondary_keys.get("full_name", observed.display_name),
+        }
+        for native_key, observed in fresh.items()
+    }
     return json.dumps(
-        {"v": SNAPSHOT_FORMAT_VERSION, "checksums": checksums},
+        {"v": SNAPSHOT_FORMAT_VERSION, "objects": objects},
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -418,8 +480,10 @@ async def _scan_schemas(
     http: HttpEndpoint, *, endpoint: str, max_pages: int
 ) -> dict[str, _Observed]:
     """Traverse catalogs -> schemas, folding each schema's table-membership fingerprint
-    into its checksum so a child table's arrival, departure or rename registers as a
-    data-product-level change even though it never touches the schema's own fields."""
+    (by stable ``table_id``, not ``full_name`` — a table rename must not look like a
+    membership change) into its checksum so a child table's arrival or departure
+    registers as a data-product-level change even though it never touches the schema's
+    own fields."""
     entity_type = EntityType.DATA_PRODUCT
     fresh: dict[str, _Observed] = {}
     async for catalog_name in _iter_catalog_names(
@@ -432,12 +496,11 @@ async def _scan_schemas(
             endpoint=endpoint,
             entity_type=entity_type,
         ):
-            full_name = schema.get("full_name")
             schema_name = schema.get("name")
-            if not isinstance(full_name, str) or not full_name:
-                continue
+            ref = build_schema_identity_ref(schema, endpoint=endpoint)
+            full_name = ref.secondary_keys["full_name"]
 
-            table_names: list[str] = []
+            table_ids: list[str] = []
             if isinstance(schema_name, str) and schema_name:
                 async for table in _iter_tables(
                     http,
@@ -448,23 +511,18 @@ async def _scan_schemas(
                     entity_type=entity_type,
                     cheap=True,
                 ):
-                    table_full_name = table.get("full_name")
-                    if isinstance(table_full_name, str) and table_full_name:
-                        table_names.append(table_full_name)
+                    table_id = table.get("table_id")
+                    if isinstance(table_id, str) and table_id:
+                        table_ids.append(table_id)
 
             checksum = compute_checksum(
-                {"schema": schema, "dataset_membership": sorted(table_names)}
+                {"schema": schema, "dataset_membership": sorted(table_ids)}
             )
-            secondary_keys: dict[str, str] = {}
-            schema_id = schema.get("schema_id")
-            if isinstance(schema_id, str) and schema_id:
-                secondary_keys["schema_id"] = schema_id
-
-            fresh[full_name] = _Observed(
+            fresh[ref.native_key] = _Observed(
+                ref=ref,
                 checksum=checksum,
                 last_modified_at=_parse_epoch_millis(schema.get("updated_at")),
                 display_name=full_name,
-                secondary_keys=secondary_keys,
             )
     return fresh
 
@@ -498,20 +556,14 @@ async def _scan_tables(
                 entity_type=entity_type,
                 cheap=False,
             ):
-                full_name = table.get("full_name")
-                if not isinstance(full_name, str) or not full_name:
-                    continue
+                ref = build_table_identity_ref(table, endpoint=endpoint)
+                full_name = ref.secondary_keys["full_name"]
 
-                secondary_keys: dict[str, str] = {}
-                table_id = table.get("table_id")
-                if isinstance(table_id, str) and table_id:
-                    secondary_keys["table_id"] = table_id
-
-                fresh[full_name] = _Observed(
+                fresh[ref.native_key] = _Observed(
+                    ref=ref,
                     checksum=compute_checksum(table),
                     last_modified_at=_parse_epoch_millis(table.get("updated_at")),
                     display_name=full_name,
-                    secondary_keys=secondary_keys,
                 )
     return fresh
 
@@ -523,43 +575,39 @@ async def _scan_tables(
 
 def _diff(
     fresh: Mapping[str, _Observed],
-    prev_checksums: Mapping[str, str],
+    prev: Mapping[str, _PrevObserved],
     *,
     endpoint: str,
     entity_type: EntityType,
-    tenant_id: str,
 ) -> list[ChangeRef]:
     changes: list[ChangeRef] = []
     for native_key in sorted(fresh):
         observed = fresh[native_key]
-        if prev_checksums.get(native_key) == observed.checksum:
+        prior = prev.get(native_key)
+        if prior is not None and prior.checksum == observed.checksum:
             continue
         changes.append(
             ChangeRef(
-                ref=IdentityRef(
-                    endpoint=endpoint,
-                    entity_type=entity_type,
-                    native_key=native_key,
-                    tenant_id=tenant_id,
-                    secondary_keys=observed.secondary_keys,
-                ),
+                ref=observed.ref,
                 kind=ChangeKind.UPSERT,
                 last_modified_at=observed.last_modified_at,
                 display_name=observed.display_name,
             )
         )
 
-    for native_key in sorted(set(prev_checksums) - set(fresh)):
+    for native_key in sorted(set(prev) - set(fresh)):
+        prior = prev[native_key]
         changes.append(
             ChangeRef(
                 ref=IdentityRef(
                     endpoint=endpoint,
                     entity_type=entity_type,
                     native_key=native_key,
-                    tenant_id=tenant_id,
+                    tenant_id=prior.tenant_id,
+                    secondary_keys={"full_name": prior.full_name} if prior.full_name else {},
                 ),
                 kind=ChangeKind.DELETED,
-                display_name=native_key,
+                display_name=prior.full_name or native_key,
             )
         )
     return changes
@@ -584,7 +632,6 @@ async def list_changed(
     since: Watermark,
     *,
     endpoint: str,
-    tenant_id: str,
     max_pages_per_listing: int = DEFAULT_MAX_PAGES_PER_LISTING,
 ) -> ListChangedResult:
     """List UC schemas (``DATA_PRODUCT``) or tables/views (``DATASET``) changed since
@@ -595,10 +642,20 @@ async def list_changed(
     connector's ``__init__.py`` wiring note). ``entity_type`` other than
     ``DATA_PRODUCT``/``DATASET`` raises :class:`CapabilityError`: Databricks has no
     native glossary (decision D5).
+
+    Every ``IdentityRef`` this function produces — for both a fresh
+    :attr:`~qlabs_catalog_sync_sdk.contract.ChangeKind.UPSERT` and a vanished
+    :attr:`~qlabs_catalog_sync_sdk.contract.ChangeKind.DELETED` — is built the same way
+    ``read.py`` builds one for the same object, so ``entity_type``/``tenant_id`` are
+    never accepted as caller-supplied parameters here: ``tenant_id`` is Databricks'
+    ``metastore_id``, read directly off each row (or, for a deleted object, off what the
+    snapshot last recorded for it), exactly as :func:`~qlabs_connector_databricks.read.
+    build_schema_identity_ref`/:func:`~qlabs_connector_databricks.read.
+    build_table_identity_ref` do.
     """
     _require_matching_stream(since, endpoint=endpoint, entity_type=entity_type)
-    log = _logger.bind(endpoint=endpoint, entity_type=entity_type.value, tenant_id=tenant_id)
-    prev_checksums = _decode_snapshot(since)
+    log = _logger.bind(endpoint=endpoint, entity_type=entity_type.value)
+    prev = _decode_snapshot(since)
 
     if entity_type is EntityType.DATA_PRODUCT:
         fresh = await _scan_schemas(http, endpoint=endpoint, max_pages=max_pages_per_listing)
@@ -613,9 +670,7 @@ async def list_changed(
             operation="list_changed",
         )
 
-    changes = _diff(
-        fresh, prev_checksums, endpoint=endpoint, entity_type=entity_type, tenant_id=tenant_id
-    )
+    changes = _diff(fresh, prev, endpoint=endpoint, entity_type=entity_type)
     next_watermark = Watermark.from_cursor(
         endpoint,
         entity_type,

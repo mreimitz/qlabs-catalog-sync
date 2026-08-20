@@ -21,7 +21,6 @@ from .conftest import (
     ENDPOINT,
     SCHEMAS_PATH,
     TABLES_PATH,
-    TENANT_ID,
     catalog,
     mock_single_page,
     schema,
@@ -53,7 +52,6 @@ async def test_rerun_on_unchanged_schemas_yields_nothing(respx_mock, http: HttpE
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
     assert len(first.changes) == 1  # sanity: the first pass did find the schema
 
@@ -62,7 +60,6 @@ async def test_rerun_on_unchanged_schemas_yields_nothing(respx_mock, http: HttpE
         EntityType.DATA_PRODUCT,
         first.next_watermark,
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert second.is_empty
@@ -95,7 +92,6 @@ async def test_rerun_on_unchanged_tables_yields_nothing(respx_mock, http: HttpEn
         EntityType.DATASET,
         Watermark.initial(ENDPOINT, EntityType.DATASET),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
     assert len(first.changes) == 2
 
@@ -104,7 +100,6 @@ async def test_rerun_on_unchanged_tables_yields_nothing(respx_mock, http: HttpEn
         EntityType.DATASET,
         first.next_watermark,
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
     assert second.is_empty
@@ -139,7 +134,6 @@ async def test_third_run_after_a_real_change_is_quiet_again(
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
     assert len(first.changes) == 1
 
@@ -156,7 +150,6 @@ async def test_third_run_after_a_real_change_is_quiet_again(
         EntityType.DATA_PRODUCT,
         first.next_watermark,
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
     assert len(second.changes) == 1
 
@@ -173,6 +166,5 @@ async def test_third_run_after_a_real_change_is_quiet_again(
         EntityType.DATA_PRODUCT,
         second.next_watermark,
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
     assert third.is_empty

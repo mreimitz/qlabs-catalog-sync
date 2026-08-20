@@ -23,8 +23,9 @@ from .conftest import (
     ENDPOINT,
     SCHEMAS_PATH,
     TABLES_PATH,
-    TENANT_ID,
     catalog,
+    default_schema_id,
+    default_table_id,
     mock_single_page,
     schema,
     table,
@@ -57,9 +58,9 @@ async def test_content_change_with_unmoved_updated_at_is_still_caught(
         EntityType.DATASET,
         Watermark.initial(ENDPOINT, EntityType.DATASET),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
-    assert {c.ref.native_key for c in first.changes} == {"main.sales.orders"}
+    expected = {default_table_id("main", "sales", "orders")}
+    assert {c.ref.native_key for c in first.changes} == expected
 
     # The comment changed but `updated_at` is byte-identical to the prior poll — the
     # scenario a pure updated_at-threshold design would miss.
@@ -76,10 +77,10 @@ async def test_content_change_with_unmoved_updated_at_is_still_caught(
     )
 
     second = await list_changed(
-        http, EntityType.DATASET, first.next_watermark, endpoint=ENDPOINT, tenant_id=TENANT_ID
+        http, EntityType.DATASET, first.next_watermark, endpoint=ENDPOINT
     )
 
-    assert {c.ref.native_key for c in second.changes} == {"main.sales.orders"}
+    assert {c.ref.native_key for c in second.changes} == expected
     assert second.changes[0].kind is ChangeKind.UPSERT
 
 
@@ -113,9 +114,8 @@ async def test_new_table_under_a_schema_is_caught_as_a_data_product_change(
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
-    assert {c.ref.native_key for c in first.changes} == {"main.sales"}
+    assert {c.ref.native_key for c in first.changes} == {default_schema_id("main", "sales")}
 
     # A table now exists under "sales". The schema payload itself (registered above) is
     # untouched — same comment, same updated_at — only membership changed.
@@ -132,10 +132,9 @@ async def test_new_table_under_a_schema_is_caught_as_a_data_product_change(
         EntityType.DATA_PRODUCT,
         first.next_watermark,
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
-    assert {c.ref.native_key for c in second.changes} == {"main.sales"}
+    assert {c.ref.native_key for c in second.changes} == {default_schema_id("main", "sales")}
     assert second.changes[0].kind is ChangeKind.UPSERT
 
 
@@ -165,9 +164,8 @@ async def test_removing_a_table_from_a_schema_is_also_a_data_product_change(
         EntityType.DATA_PRODUCT,
         Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
-    assert {c.ref.native_key for c in first.changes} == {"main.sales"}
+    assert {c.ref.native_key for c in first.changes} == {default_schema_id("main", "sales")}
 
     mock_single_page(
         respx_mock,
@@ -182,7 +180,6 @@ async def test_removing_a_table_from_a_schema_is_also_a_data_product_change(
         EntityType.DATA_PRODUCT,
         first.next_watermark,
         endpoint=ENDPOINT,
-        tenant_id=TENANT_ID,
     )
 
-    assert {c.ref.native_key for c in second.changes} == {"main.sales"}
+    assert {c.ref.native_key for c in second.changes} == {default_schema_id("main", "sales")}
