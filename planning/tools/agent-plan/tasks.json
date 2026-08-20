@@ -825,7 +825,7 @@
       ],
       "dod": "list_changed returns entities changed since the watermark plus a proposed next watermark; a re-run with the returned watermark yields no candidates.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/changes -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.4",
