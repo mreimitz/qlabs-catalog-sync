@@ -405,7 +405,7 @@
       ],
       "dod": "Models for identity map, watermarks, envelopes and orphans migrate cleanly on SQLite via Alembic; a round-trip write/read of each table passes.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/state -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.3",
