@@ -5,10 +5,17 @@ an operator checking something or for a CI step. A deployment wants the other sh
 process that stays up, fires each pair on its own cadence, and answers a health probe. Every
 piece of that already existed and was tested --
 :class:`~qlabs_catalog_sync.scheduler.SyncScheduler` (per-pair jobs, jitter,
-``max_instances=1``, graceful shutdown) and
-:class:`~qlabs_catalog_sync.observability.ObservabilityServer` (``/healthz`` and
-``/metrics``) -- but nothing wired them together, so the container had no service to run.
-This module is that wiring and nothing more.
+``max_instances=1``, graceful shutdown) and the ``/healthz``/``/metrics`` surface -- but
+nothing wired them together, so the container had no service to run. This module is that
+wiring and nothing more.
+
+**One origin (C8).** The HTTP surface is now the FastAPI application (WP12/T12.1) run by
+:class:`~qlabs_catalog_sync.api.server.ApiServer`: the REST API, the console's static
+assets, ``/healthz`` and ``/metrics`` all answer on one port, so the console cannot drift
+from the engine it configures and there is no CORS to configure.
+:class:`~qlabs_catalog_sync.observability.ObservabilityServer` served the last two on their
+own stdlib thread and is no longer started here; ``/healthz`` and ``/metrics`` are rendered
+by the same ``render_healthz``/``render_metrics`` functions as before, byte for byte.
 
 Two behaviours worth knowing, because they are what make this safe in a container:
 
@@ -31,9 +38,10 @@ from pathlib import Path
 
 import click
 
+from qlabs_catalog_sync.api.app import create_app
+from qlabs_catalog_sync.api.server import ApiServer
 from qlabs_catalog_sync.observability import (
     HealthRegistry,
-    ObservabilityServer,
     PrometheusMetrics,
     get_logger,
 )
@@ -67,6 +75,7 @@ async def _serve(
     port: int,
     shutdown_timeout: float,
     run_immediately: bool,
+    console_assets: Path | None = None,
     stop: asyncio.Event | None = None,
 ) -> None:
     """Build every pair's loop, start the scheduler and the probe surface, then block.
@@ -91,8 +100,19 @@ async def _serve(
         metrics=metrics,
     )
 
-    observability = ObservabilityServer(registry=metrics.registry, health=health, host=host,
-                                        port=port)
+    # One listener, not two (C8): the FastAPI app serves the REST API, the console's
+    # static assets, /healthz and /metrics on a single port. ObservabilityServer served
+    # the last two on their own stdlib thread, which cannot share an origin with an API
+    # and a browser console -- see api/server.py for the full reasoning.
+    api = ApiServer(
+        create_app(
+            health=health,
+            metrics_registry=metrics.registry,
+            static_dir=console_assets,
+        ),
+        host=host,
+        port=port,
+    )
     scheduler = SyncScheduler(
         runners=[
             build_sync_loop(
@@ -117,12 +137,13 @@ async def _serve(
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, waiter.set)
 
-    observability.start()
+    await api.start()
     scheduler.start()
     _LOG.info(
         "serve.started",
         pairs=list(scheduler.pairs),
-        observability_port=observability.bound_port,
+        http_port=api.bound_port,
+        console_assets=str(console_assets) if console_assets is not None else None,
         create_missing=create_missing,
     )
     try:
@@ -130,7 +151,7 @@ async def _serve(
     finally:
         _LOG.info("serve.stopping")
         await scheduler.shutdown(timeout=shutdown_timeout)
-        observability.stop()
+        await api.stop()
         await pool.close()
         _LOG.info("serve.stopped")
 
@@ -160,9 +181,19 @@ async def _serve(
     ),
 )
 @click.option("--host", default="0.0.0.0", show_default=True,
-              help="Interface for /healthz and /metrics.")
+              help="Interface for the API, the console, /healthz and /metrics.")
 @click.option("--port", default=8080, show_default=True, type=int,
-              help="Port for /healthz and /metrics.")
+              help="Port for the API, the console, /healthz and /metrics -- one origin (C8).")
+@click.option(
+    "--console-assets",
+    "console_assets",
+    default=None,
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help=(
+        "Directory of built console assets to serve at /. Omit to run headless -- the API, "
+        "/healthz and /metrics still serve, and / explains that the console is not installed."
+    ),
+)
 @click.option(
     "--shutdown-timeout",
     default=DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
@@ -186,6 +217,7 @@ def serve(
     port: int,
     shutdown_timeout: float,
     run_immediately: bool,
+    console_assets: Path | None,
 ) -> None:
     """Run the sync service: one process, one job per pair, until SIGTERM."""
     asyncio.run(
@@ -198,5 +230,6 @@ def serve(
             port=port,
             shutdown_timeout=shutdown_timeout,
             run_immediately=run_immediately,
+            console_assets=console_assets,
         )
     )
