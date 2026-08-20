@@ -338,7 +338,7 @@
       ],
       "dod": "Conformance kit runs green against FakeConnector in both read and write modes and fails a deliberately dishonest manifest.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/conformance -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T1.9",
@@ -456,7 +456,7 @@
       ],
       "dod": "One cycle reads, resolves, diffs, writes, persists and advances the watermark transactionally; a re-run performs zero writes; a simulated mid-cycle failure leaves state and watermark untouched.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.5",
@@ -659,7 +659,7 @@
       ],
       "dod": "Dataset members resolve to existing Qlik dataset ids or are reported unresolved; owner emails resolve to Qlik userIds or are reported unmatched; no code path creates a Qlik dataset.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/resolve -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.4",
