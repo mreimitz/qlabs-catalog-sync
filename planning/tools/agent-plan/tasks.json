@@ -964,7 +964,7 @@
       ],
       "dod": "Diff emits minimal mutations, widens arrays where partial_update is false, drops ro/na fields, and produces an empty diff for identical checksums.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/diff -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T7.3",
