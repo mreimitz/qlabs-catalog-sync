@@ -236,7 +236,7 @@
       ],
       "dod": "An endpoint can be registered, healthchecked and enabled end to end against FakeConnector; invalid settings are rejected with field-level errors from the connector's own ConfigModel; no route accepts a secret value.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_endpoints.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T12.4",
@@ -257,7 +257,7 @@
       ],
       "dod": "Rule order is stable and explicit; reordering rewrites ordinals in one transaction; a pair referencing a disabled or missing endpoint is rejected; every mutation appears in the change log.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_pairs.py packages/qlabs-catalog-sync/tests/api/test_selection_routes.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.5",
