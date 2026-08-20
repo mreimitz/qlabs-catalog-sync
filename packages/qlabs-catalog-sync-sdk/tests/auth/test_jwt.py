@@ -79,11 +79,11 @@ async def test_direct_mode_reuses_assertion_then_resigns_before_expiry(rsa_keypa
 
     first = await provider.headers()
 
-    clock.advance(timedelta(minutes=4, seconds=20))  # within TTL, outside margin
+    clock.advance(4 * 60 + 20)  # within TTL, outside margin
     still_same = await provider.headers()
     assert still_same == first
 
-    clock.advance(timedelta(seconds=35))  # now inside the refresh margin
+    clock.advance(35)  # now inside the refresh margin
     resigned = await provider.headers()
     assert resigned != first  # a fresh assertion with a new iat/exp was signed
 

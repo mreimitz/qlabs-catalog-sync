@@ -61,14 +61,14 @@ async def test_token_is_refreshed_before_expiry_not_after_a_401(respx_mock, tran
     assert route.call_count == 1
 
     # Not yet within the refresh margin: still the cached token, no new request.
-    clock.advance(timedelta(seconds=3600 - 61))
+    clock.advance(3600 - 61)
     still_cached = await provider.headers()
     assert still_cached == first
     assert route.call_count == 1
 
     # Now within the refresh margin but the token has NOT expired yet (no 401
     # ever happens in this test) — the provider refreshes proactively.
-    clock.advance(timedelta(seconds=30))
+    clock.advance(30)
     refreshed = await provider.headers()
     assert refreshed == {"Authorization": "Bearer tok-2"}
     assert route.call_count == 2

@@ -51,7 +51,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, Literal, Protocol
 
@@ -59,6 +59,7 @@ import httpx
 import jwt
 import structlog
 
+from qlabs_catalog_sync_sdk.config import Clock, SystemClock
 from qlabs_catalog_sync_sdk.exceptions import AuthError
 
 __all__ = [
@@ -80,19 +81,6 @@ _log = structlog.get_logger(__name__)
 #: comfortably outrun clock skew and one retried HTTP round trip without
 #: refreshing so eagerly that we double request volume.
 DEFAULT_REFRESH_MARGIN = timedelta(seconds=60)
-
-
-class Clock(Protocol):
-    """Seam for "now", so token expiry/refresh is testable without sleeping."""
-
-    def now(self) -> datetime: ...
-
-
-class SystemClock:
-    """Default :class:`Clock`: the real wall clock, in UTC."""
-
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 class TokenTransport(Protocol):

@@ -5,39 +5,21 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import httpx
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from qlabs_catalog_sync_sdk.auth import Clock
-
-
-@dataclass
-class FakeClock:
-    """A :class:`Clock` whose time only moves when the test tells it to —
-    proves refresh-before-expiry behavior without sleeping."""
-
-    current: datetime = datetime(2026, 1, 1, tzinfo=UTC)
-
-    def now(self) -> datetime:
-        return self.current
-
-    def advance(self, delta: timedelta) -> None:
-        self.current = self.current + delta
+from qlabs_catalog_sync_sdk.config import ManualClock
 
 
 @pytest.fixture
-def clock() -> FakeClock:
-    return FakeClock()
-
-
-def _static_clock_check(c: Clock) -> None:
-    # Structural sanity check that FakeClock satisfies the Clock protocol;
-    # exercised at import time via the type checker, not at runtime.
-    c.now()
+def clock() -> ManualClock:
+    """The SDK's own controllable clock — time only moves when a test advances it,
+    which is what proves refresh-before-expiry without sleeping."""
+    return ManualClock(datetime(2026, 1, 1, tzinfo=UTC))
 
 
 @pytest.fixture
