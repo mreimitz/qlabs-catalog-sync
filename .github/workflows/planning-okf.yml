@@ -1,0 +1,24 @@
+name: Planning OKF conformance
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate planning bundle
+        run: python3 planning/.claude/scripts/okf.py --root planning validate
+      - name: Run planning tests
+        run: |
+          python3 -m unittest discover -s planning/.claude/tests -p "test_*.py" -v
+          python3 -m unittest discover -s planning/tools/tests -p "test_*.py" -v

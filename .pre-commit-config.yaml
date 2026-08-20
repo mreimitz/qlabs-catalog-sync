@@ -1,15 +1,44 @@
 repos:
   - repo: local
     hooks:
-      - id: validate-okf
-        name: Validate OKF bundle and Research Scaffold profile
-        entry: python3 .claude/scripts/okf.py validate
+      # --- Code project (root monorepo) ---
+      - id: ruff-lint
+        name: ruff (lint + autofix)
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+        require_serial: true
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        require_serial: true
+      - id: mypy
+        name: mypy (strict, over packages)
+        entry: uv run mypy
         language: system
         pass_filenames: false
         always_run: true
-      - id: test-doc-intake
-        name: Test transactional document intake
-        entry: python3 -m unittest discover -s tools/tests -p test_*.py
+        require_serial: true
+      - id: pytest
+        name: pytest (quick)
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        require_serial: true
+
+      # --- OKF integrity (scoped to the planning/ bundle) ---
+      - id: validate-okf-planning
+        name: Validate OKF bundle (planning/)
+        entry: python3 planning/.claude/scripts/okf.py --root planning validate
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: test-doc-intake-planning
+        name: Test transactional document intake (planning/)
+        entry: python3 -m unittest discover -s planning/tools/tests -p "test_*.py"
         language: system
         pass_filenames: false
         always_run: true

@@ -1,0 +1,77 @@
+[project]
+name = "qlabs-catalog-sync-workspace"
+version = "0.0.0"
+description = "QLabs Catalog Sync — uv workspace root (two-way data-product metadata bridge; v1 is upstream-only, sources -> Qlik)."
+requires-python = ">=3.11"
+
+[tool.uv]
+# The workspace root is not itself a distributable package.
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+# Resolve first-party deps to the in-tree workspace members.
+qlabs-catalog-sync-sdk = { workspace = true }
+qlabs-catalog-sync = { workspace = true }
+qlabs-connector-qlik = { workspace = true }
+qlabs-connector-databricks = { workspace = true }
+qlabs-connector-collibra = { workspace = true }
+qlabs-connector-snowflake = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-asyncio",
+    "respx",
+    "vcrpy",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["packages/*/src", "packages/*/tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "W",    # pycodestyle warnings
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = [
+    "packages/qlabs-catalog-sync-sdk/src",
+    "packages/qlabs-catalog-sync/src",
+    "packages/qlabs-connector-qlik/src",
+    "packages/qlabs-connector-databricks/src",
+    "packages/qlabs-connector-collibra/src",
+    "packages/qlabs-connector-snowflake/src",
+]
+files = ["packages"]
+
+[[tool.mypy.overrides]]
+# Vendor libraries without bundled type stubs.
+module = [
+    "apscheduler.*",
+    "vcr.*",
+    "snowflake.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages"]
+python_files = ["test_*.py"]
+addopts = "-ra"

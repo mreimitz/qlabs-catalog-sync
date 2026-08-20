@@ -1,5 +1,25 @@
+# --- Python ---
 __pycache__/
 *.py[cod]
+*.egg-info/
+dist/
+build/
+
+# --- Environments ---
+.venv/
+**/.venv/
+.env
+
+# --- Tooling caches ---
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# --- Local state / databases ---
+*.db
+
+# --- OKF planning bundle (governed under planning/) ---
+planning/tools/.venv/
 .tag-allocation.lock
 .okf-staging-*/
-tools/.venv/

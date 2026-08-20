@@ -1,0 +1,21 @@
+{
+  "allocated_rm": [
+    "RM-01",
+    "RM-02",
+    "RM-03",
+    "RM-04"
+  ],
+  "allocated_rs": [
+    "RS-01",
+    "RS-02",
+    "RS-03",
+    "RS-04",
+    "RS-05",
+    "RS-06",
+    "RS-07",
+    "RS-08",
+    "RS-09"
+  ],
+  "next_rm": 5,
+  "next_rs": 10
+}

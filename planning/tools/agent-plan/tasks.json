@@ -1,0 +1,1403 @@
+{
+  "version": 1,
+  "roadmap_item": "RM-01",
+  "tasks": [
+    {
+      "id": "T0.1",
+      "wp": "WP0",
+      "title": "Monorepo + uv workspace scaffolding",
+      "description": "Create the monorepo with a uv workspace containing the six packages (SDK, engine, and four connectors) using src layout, with shared pyproject conventions.",
+      "model": "haiku",
+      "depends_on": [],
+      "parallel": true,
+      "owns_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "packages/qlabs-catalog-sync-sdk/pyproject.toml",
+        "packages/qlabs-catalog-sync/pyproject.toml",
+        "packages/qlabs-connector-qlik/pyproject.toml",
+        "packages/qlabs-connector-databricks/pyproject.toml",
+        "packages/qlabs-connector-collibra/pyproject.toml",
+        "packages/qlabs-connector-snowflake/pyproject.toml"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (package topology section)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "uv workspace resolves all six packages; each importable with an empty src package; `uv sync` succeeds.",
+      "verify": "uv sync && uv run python -c 'import qlabs_catalog_sync_sdk'",
+      "status": "pending"
+    },
+    {
+      "id": "T0.2",
+      "wp": "WP0",
+      "title": "Tooling config: ruff, mypy strict, pytest, pre-commit",
+      "description": "Configure ruff, mypy (strict), pytest plus pytest-asyncio, and pre-commit across the workspace with shared settings.",
+      "model": "haiku",
+      "depends_on": [
+        "T0.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "ruff.toml",
+        ".pre-commit-config.yaml",
+        "mypy.ini",
+        "pytest.ini"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (tooling/stack choices)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "ruff, mypy --strict, and an empty pytest run all pass locally with the shared config.",
+      "verify": "uv run ruff check . && uv run mypy",
+      "status": "pending"
+    },
+    {
+      "id": "T0.3",
+      "wp": "WP0",
+      "title": "CI pipeline: lint, type-check, test, build wheels",
+      "description": "Create the CI pipeline that runs lint, type-check, and tests, and builds a wheel per package.",
+      "model": "sonnet",
+      "depends_on": [
+        "T0.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        ".github/workflows/ci.yml"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (CI/packaging)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "CI runs ruff + mypy + pytest and builds a wheel per package on push.",
+      "verify": "uv run ruff check . && uv run mypy",
+      "status": "pending"
+    },
+    {
+      "id": "T0.4",
+      "wp": "WP0",
+      "title": "Contributor docs: boundaries & dependency rules",
+      "description": "Document package boundaries, the dependency rule that connectors depend only on the SDK, and the ADR location. (No Markdown under tools/; place docs in the repo docs area.)",
+      "model": "haiku",
+      "depends_on": [
+        "T0.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "CONTRIBUTING.rst",
+        "docs/adr/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (dependency rules)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Contributor guide states package boundaries + connector->SDK-only rule and points to ADR location.",
+      "verify": "uv sync && uv run python -c 'import qlabs_catalog_sync_sdk'",
+      "status": "pending"
+    },
+    {
+      "id": "T1.1",
+      "wp": "WP1",
+      "title": "Neutral model types (pydantic v2)",
+      "description": "Implement the neutral model types with pydantic v2: DataProduct, Dataset, GlossaryTerm, Category, Party, Tag, FieldEnvelope, IdentityRef, FieldDiff.",
+      "model": "opus",
+      "depends_on": [
+        "T0.2"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/models.py"
+      ],
+      "inputs": [
+        "RS-03 neutral metadata model spec sections 1-3 (entities & envelopes)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "All neutral entities are defined, validate, and serialize round-trip; mypy strict clean.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/models -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.2",
+      "wp": "WP1",
+      "title": "Connector ABC + contract types",
+      "description": "Define the Connector abstract base class (capabilities/setup/healthcheck/list_changed/read/create/update/delete) and contract types EntityType, Watermark, ChangeRef, WriteResult, HealthStatus.",
+      "model": "opus",
+      "depends_on": [
+        "T1.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/contract.py"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec sections 2-3 (connector contract)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Connector ABC and all contract types compile, are typed, and a stub subclass can be instantiated.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/contract -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.3",
+      "wp": "WP1",
+      "title": "CapabilityManifest types",
+      "description": "Implement CapabilityManifest types: EntityCapability, FieldCapability (mode rw/ro/na), partial_update, and concurrency descriptors.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.2"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/manifest.py"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 4 (capability manifest)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Manifest model expresses per-entity/field rw/ro/na, partial_update, and concurrency; validates.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/manifest -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.4",
+      "wp": "WP1",
+      "title": "HTTP helper + retry/backoff + pagination",
+      "description": "Build the httpx wrapper (base URL, auth injection, timeouts, pooling), tenacity retry/backoff honoring 429/Retry-After, and pagination helpers.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/http.py"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 5 (HTTP/retry helpers)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "HTTP helper retries on 429 honoring Retry-After and paginates; covered by unit tests with respx.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/http -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.5",
+      "wp": "WP1",
+      "title": "Auth providers base",
+      "description": "Implement auth provider bases: API key, OAuth2 M2M, JWT/key-pair, with an in-memory token cache and refresh.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/auth.py"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 5 (auth providers)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "API-key, OAuth2 M2M, and JWT/key-pair providers issue and refresh cached tokens; unit tested.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/auth -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.6",
+      "wp": "WP1",
+      "title": "Field envelope + canonical checksum utilities",
+      "description": "Implement field envelope and canonical checksum utilities with deterministic normalization for stable diffing.",
+      "model": "opus",
+      "depends_on": [
+        "T1.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/envelope.py"
+      ],
+      "inputs": [
+        "RS-03 neutral metadata model spec (field envelopes & checksums)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
+        "RS-08 connector SDK spec (envelope helpers)"
+      ],
+      "dod": "Checksum is stable across reordering/formatting; identical logical values produce identical checksums.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/envelope -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.7",
+      "wp": "WP1",
+      "title": "Config base + ConnectorContext + typed exceptions",
+      "description": "Implement the pydantic-settings config base, ConnectorContext, and typed exceptions (Transient/Auth/NotFound/Conflict/Capability).",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/config.py",
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/exceptions.py"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 6 (config, context, exceptions)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Config base loads from env; ConnectorContext wired; all typed exceptions defined and raisable.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/config -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.8",
+      "wp": "WP1",
+      "title": "Conformance test kit",
+      "description": "Build the reusable pytest conformance suite (contract, round-trip, idempotency, capability-honesty) plus a respx/vcr harness.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.3",
+        "T1.6"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/conformance/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 7 (conformance kit)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Conformance kit runs against a fake connector and asserts contract, round-trip, idempotency, capability honesty.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/conformance -q",
+      "status": "pending"
+    },
+    {
+      "id": "T1.9",
+      "wp": "WP1",
+      "title": "Contract version + compatibility gate + entry-point group",
+      "description": "Add the SDK contract version constant, the compatibility gate, the entry-point group, and packaging docs.",
+      "model": "haiku",
+      "depends_on": [
+        "T1.2"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync-sdk/src/qlabs_catalog_sync_sdk/__init__.py",
+        "packages/qlabs-catalog-sync-sdk/pyproject.toml"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 8 (versioning & discovery)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Contract version constant exported; compatibility gate function present; entry-point group declared.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/version -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.1",
+      "wp": "WP2",
+      "title": "Entry-point discovery + connector registry + version gate",
+      "description": "Implement entry-point-based connector discovery, a connector registry, and the SDK version gate.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.2",
+        "T1.9"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/discovery.py"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec section 8 (discovery & versioning)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "Engine discovers connectors via entry points, registers them, and rejects incompatible SDK versions.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/discovery -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.2",
+      "wp": "WP2",
+      "title": "State store: SQLAlchemy models + Alembic on SQLite",
+      "description": "Implement the state store with SQLAlchemy 2.0 models (IdentityMap, watermarks, last-known field envelopes) and Alembic init on SQLite.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/state/"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (state store)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RS-03 neutral metadata model (identity map)"
+      ],
+      "dod": "SQLAlchemy models for identity map, watermarks, and envelopes migrate cleanly on SQLite via Alembic.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/state -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.3",
+      "wp": "WP2",
+      "title": "Config & secrets loading",
+      "description": "Implement config and secrets loading for tenants/endpoints and secret backends via pydantic-settings.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.7"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/config.py"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (config & secrets)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "Engine loads tenant/endpoint config and resolves secrets from a configured backend.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/config -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.4",
+      "wp": "WP2",
+      "title": "Upstream sync loop (single transaction, idempotent)",
+      "description": "Implement the upstream sync loop: poll source -> read to envelopes -> identity resolve -> checksum diff -> write to Qlik -> persist -> advance watermark, all in one transaction, with idempotent skip on no-op.",
+      "model": "opus",
+      "depends_on": [
+        "T2.2",
+        "T2.3",
+        "T1.2"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/sync/loop.py"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (sync loop)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RM-01 decision.md (upstream-only scope)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "One cycle reads, resolves, diffs, writes, persists, and advances watermark transactionally; re-run is a no-op.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.5",
+      "wp": "WP2",
+      "title": "Manual-edit-on-Qlik policy",
+      "description": "Implement the manual-edit-on-Qlik policy: source-wins overwrite vs preserve-local, configurable per field/entity.",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/sync/policy.py"
+      ],
+      "inputs": [
+        "RM-01 decision.md (source-wins default, configurable)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Policy resolves conflicts per configured field/entity: source-wins by default, preserve-local when set.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.6",
+      "wp": "WP2",
+      "title": "Scheduler: APScheduler async, per-source cadence",
+      "description": "Implement the scheduler using APScheduler AsyncIOScheduler (or an asyncio loop) with per-source cadence, jitter, and max_instances=1.",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.4"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/scheduler.py"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (scheduling)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "Per-source jobs run on cadence with jitter and never overlap (max_instances=1).",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/scheduler -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.7",
+      "wp": "WP2",
+      "title": "Observability: structlog + prometheus + healthz/metrics",
+      "description": "Implement observability: structlog context-bound logging, prometheus_client metrics, and a /healthz + /metrics HTTP surface.",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/observability.py"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (observability)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md"
+      ],
+      "dod": "Structured logs carry sync context; /healthz and /metrics respond and expose sync metrics.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/observability -q",
+      "status": "pending"
+    },
+    {
+      "id": "T2.8",
+      "wp": "WP2",
+      "title": "Dry-run mode",
+      "description": "Implement dry-run mode: compute and log planned writes without applying them.",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.4"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/cli.py"
+      ],
+      "inputs": [
+        "RS-07 architecture & tech stack (dry-run)",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RM-01 decision.md"
+      ],
+      "dod": "Dry-run computes and logs the planned write set and performs zero mutations against Qlik.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.1",
+      "wp": "WP3",
+      "title": "Qlik auth (OAuth2 M2M) + endpoint config",
+      "description": "Implement Qlik OAuth2 M2M auth and HttpEndpoint config with the tenant base URL.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/auth.py",
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/__init__.py"
+      ],
+      "inputs": [
+        "RS-02 qlik catalog API reference (auth)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "Connector authenticates to a Qlik tenant via OAuth2 M2M using configured base URL.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/auth -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.2",
+      "wp": "WP3",
+      "title": "Qlik capability manifest",
+      "description": "Declare the Qlik capability manifest: data product, dataset/item, glossary term/category; rw; ETag concurrency; product arrays partial_update=false.",
+      "model": "haiku",
+      "depends_on": [
+        "T1.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/manifest.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (capabilities, ETag, arrays)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "Manifest declares rw entities, ETag concurrency, and partial_update=false for product arrays.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/manifest -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.3",
+      "wp": "WP3",
+      "title": "read() Qlik entities -> neutral envelopes",
+      "description": "Implement read() mapping Qlik entities to neutral envelopes, needed to diff existing target state.",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/read.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (read payloads)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "read() returns current Qlik data products/datasets/glossary as neutral envelopes.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.4",
+      "wp": "WP3",
+      "title": "create() data products + datasets/items",
+      "description": "Implement create() for data products and datasets/items, mapping neutral entities to Qlik payloads.",
+      "model": "opus",
+      "depends_on": [
+        "T3.3"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/write.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (create payloads)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "create() posts valid Qlik data product and dataset/item payloads from neutral entities.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.5",
+      "wp": "WP3",
+      "title": "update() via JSON Patch (replace-only, ETag, batching)",
+      "description": "Implement update() via JSON Patch replace-only with a closed path enum, full-replace arrays, ETag if-match, and max-8-ops batching.",
+      "model": "opus",
+      "depends_on": [
+        "T3.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/write.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (PATCH path enum, ETag, batching)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "update() issues replace-only JSON Patch honoring the path enum, full-replace arrays, ETag, and 8-op batches.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.6",
+      "wp": "WP3",
+      "title": "Glossary terms/categories + relations + change-status",
+      "description": "Implement glossary term/category create+update, term relations/links, and the change-status action.",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/glossary.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (glossary, links, change-status)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "Glossary terms/categories created and updated with relations/links and a working change-status action.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/glossary -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.7",
+      "wp": "WP3",
+      "title": "delete()/lifecycle actions",
+      "description": "Implement delete() and lifecycle actions (deactivate/move).",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.4"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/write.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (lifecycle actions)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "delete() and deactivate/move lifecycle actions execute against Qlik.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests/write -q",
+      "status": "pending"
+    },
+    {
+      "id": "T3.8",
+      "wp": "WP3",
+      "title": "Qlik conformance tests (respx + vcr)",
+      "description": "Write conformance tests using respx (unit) and vcr cassettes (recorded real Qlik responses).",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.5",
+        "T3.6"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/tests/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit, write mode)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "Qlik connector passes the SDK conformance kit in write mode against respx and recorded cassettes.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests -q",
+      "status": "pending"
+    },
+    {
+      "id": "T4.1",
+      "wp": "WP4",
+      "title": "Databricks auth (OAuth M2M) + client config",
+      "description": "Implement Databricks OAuth M2M auth and client config using databricks-sdk.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-databricks/src/qlabs_connector_databricks/auth.py",
+        "packages/qlabs-connector-databricks/src/qlabs_connector_databricks/__init__.py"
+      ],
+      "inputs": [
+        "RS-01 databricks catalog API reference (auth)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Connector authenticates to Databricks via OAuth M2M with a configured client.",
+      "verify": "uv run pytest packages/qlabs-connector-databricks/tests/auth -q",
+      "status": "pending"
+    },
+    {
+      "id": "T4.2",
+      "wp": "WP4",
+      "title": "Databricks capability manifest",
+      "description": "Declare the Databricks capability manifest: ro; identity full_name+object_id; glossary=na; concurrency none.",
+      "model": "haiku",
+      "depends_on": [
+        "T1.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-databricks/src/qlabs_connector_databricks/manifest.py"
+      ],
+      "inputs": [
+        "RS-01 databricks reference (identity keys, capabilities)"
+      ],
+      "dod": "Manifest declares read-only entities, full_name+object_id identity, glossary=na, concurrency none.",
+      "verify": "uv run pytest packages/qlabs-connector-databricks/tests/manifest -q",
+      "status": "pending"
+    },
+    {
+      "id": "T4.3",
+      "wp": "WP4",
+      "title": "Databricks list_changed",
+      "description": "Implement list_changed via updated_at plus snapshot/checksum comparison.",
+      "model": "sonnet",
+      "depends_on": [
+        "T4.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-databricks/src/qlabs_connector_databricks/read.py"
+      ],
+      "inputs": [
+        "RS-01 databricks reference (change detection)"
+      ],
+      "dod": "list_changed returns entities changed since watermark using updated_at and checksum comparison.",
+      "verify": "uv run pytest packages/qlabs-connector-databricks/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T4.4",
+      "wp": "WP4",
+      "title": "Databricks read() UC objects + shares/listings",
+      "description": "Implement read() for UC catalogs/schemas/tables plus shares/listings, producing neutral entities with envelopes.",
+      "model": "sonnet",
+      "depends_on": [
+        "T4.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-databricks/src/qlabs_connector_databricks/read.py"
+      ],
+      "inputs": [
+        "RS-01 databricks reference (UC objects, shares/listings)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "read() returns UC catalogs/schemas/tables and shares/listings as neutral entities with envelopes.",
+      "verify": "uv run pytest packages/qlabs-connector-databricks/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T4.5",
+      "wp": "WP4",
+      "title": "Databricks source-to-neutral mapping",
+      "description": "Map Databricks source fields to neutral: comments/descriptions, tags, owners.",
+      "model": "sonnet",
+      "depends_on": [
+        "T4.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-databricks/src/qlabs_connector_databricks/mapping.py"
+      ],
+      "inputs": [
+        "RS-01 databricks reference (field mapping)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Comments/descriptions, tags, and owners map correctly into neutral fields.",
+      "verify": "uv run pytest packages/qlabs-connector-databricks/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T4.6",
+      "wp": "WP4",
+      "title": "Databricks conformance tests (respx + vcr)",
+      "description": "Write conformance tests (respx + vcr) for the Databricks read connector.",
+      "model": "sonnet",
+      "depends_on": [
+        "T4.5"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-databricks/tests/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit, read mode)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Databricks connector passes the SDK conformance kit in read mode.",
+      "verify": "uv run pytest packages/qlabs-connector-databricks/tests -q",
+      "status": "pending"
+    },
+    {
+      "id": "T5.1",
+      "wp": "WP5",
+      "title": "Collibra auth (Basic/JWT) + config",
+      "description": "Implement Collibra Basic/JWT auth and config.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/auth.py",
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/__init__.py"
+      ],
+      "inputs": [
+        "RS-05 collibra catalog API reference (auth)"
+      ],
+      "dod": "Connector authenticates to Collibra via Basic/JWT with configured endpoint.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/auth -q",
+      "status": "pending"
+    },
+    {
+      "id": "T5.2",
+      "wp": "WP5",
+      "title": "Collibra capability manifest",
+      "description": "Declare the Collibra capability manifest: ro; asset UUID keys; rich glossary + data product.",
+      "model": "haiku",
+      "depends_on": [
+        "T1.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/manifest.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (identity keys, glossary richness)"
+      ],
+      "dod": "Manifest declares read-only entities, asset-UUID identity, and rich glossary/data product support.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/manifest -q",
+      "status": "pending"
+    },
+    {
+      "id": "T5.3",
+      "wp": "WP5",
+      "title": "Collibra list_changed",
+      "description": "Implement list_changed via lastModifiedOn / GraphQL reads.",
+      "model": "sonnet",
+      "depends_on": [
+        "T5.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/read.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (change detection, GraphQL)"
+      ],
+      "dod": "list_changed returns assets changed since watermark using lastModifiedOn via GraphQL.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T5.4",
+      "wp": "WP5",
+      "title": "Collibra read() assets, data products, business terms",
+      "description": "Implement read() for assets, data products, and business terms, producing neutral terms and categories.",
+      "model": "sonnet",
+      "depends_on": [
+        "T5.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/read.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (assets, data products, terms)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "read() returns assets, data products, and business terms as neutral terms/categories with envelopes.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T5.5",
+      "wp": "WP5",
+      "title": "Collibra source-to-neutral mapping incl. relation graph",
+      "description": "Map Collibra source to neutral including term relations/links (relation-graph mapping).",
+      "model": "opus",
+      "depends_on": [
+        "T5.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/src/qlabs_connector_collibra/mapping.py"
+      ],
+      "inputs": [
+        "RS-05 collibra reference (relation graph, term links)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Term relations/links map into the neutral relation graph without loss; relations preserved.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T5.6",
+      "wp": "WP5",
+      "title": "Collibra conformance tests (respx + vcr)",
+      "description": "Write conformance tests (respx + vcr) for the Collibra read connector.",
+      "model": "sonnet",
+      "depends_on": [
+        "T5.5"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-collibra/tests/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit, read mode)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Collibra connector passes the SDK conformance kit in read mode with relations preserved.",
+      "verify": "uv run pytest packages/qlabs-connector-collibra/tests -q",
+      "status": "pending"
+    },
+    {
+      "id": "T6.1",
+      "wp": "WP6",
+      "title": "Snowflake auth (key-pair JWT) + config",
+      "description": "Implement Snowflake key-pair JWT auth and connector-python / SQL REST config.",
+      "model": "sonnet",
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/auth.py",
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/__init__.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake catalog API reference (auth)"
+      ],
+      "dod": "Connector authenticates to Snowflake via key-pair JWT with configured client.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/auth -q",
+      "status": "pending"
+    },
+    {
+      "id": "T6.2",
+      "wp": "WP6",
+      "title": "Snowflake capability manifest",
+      "description": "Declare the Snowflake capability manifest: ro; FQN + listing global name; tags/comments.",
+      "model": "haiku",
+      "depends_on": [
+        "T1.3"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/manifest.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (identity keys, capabilities)"
+      ],
+      "dod": "Manifest declares read-only entities, FQN + listing global name identity, and tags/comments support.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/manifest -q",
+      "status": "pending"
+    },
+    {
+      "id": "T6.3",
+      "wp": "WP6",
+      "title": "Snowflake list_changed",
+      "description": "Implement list_changed via SHOW / INFORMATION_SCHEMA / ACCOUNT_USAGE (note ~2h lag).",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/read.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (change detection, ACCOUNT_USAGE lag)"
+      ],
+      "dod": "list_changed returns changed objects using SHOW/INFORMATION_SCHEMA/ACCOUNT_USAGE, accounting for ~2h lag.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T6.4",
+      "wp": "WP6",
+      "title": "Snowflake read() objects + listings/shares",
+      "description": "Implement read() for objects plus listings/shares, producing neutral entities.",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.1"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/read.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (objects, listings/shares)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "read() returns objects and listings/shares as neutral entities with envelopes.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T6.5",
+      "wp": "WP6",
+      "title": "Snowflake source-to-neutral mapping",
+      "description": "Map Snowflake source to neutral: comments and tags.",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/src/qlabs_connector_snowflake/mapping.py"
+      ],
+      "inputs": [
+        "RS-06 snowflake reference (field mapping)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Comments and tags map correctly into neutral fields.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
+      "status": "pending"
+    },
+    {
+      "id": "T6.6",
+      "wp": "WP6",
+      "title": "Snowflake conformance tests (respx + vcr)",
+      "description": "Write conformance tests (respx + vcr) for the Snowflake read connector.",
+      "model": "sonnet",
+      "depends_on": [
+        "T6.5"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-connector-snowflake/tests/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit, read mode)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Snowflake connector passes the SDK conformance kit in read mode.",
+      "verify": "uv run pytest packages/qlabs-connector-snowflake/tests -q",
+      "status": "pending"
+    },
+    {
+      "id": "T7.1",
+      "wp": "WP7",
+      "title": "IdentityMap store + bootstrap matching",
+      "description": "Implement the IdentityMap store and bootstrap matching by natural key (name+type+parent path) with a confirmation workflow.",
+      "model": "opus",
+      "depends_on": [
+        "T2.2"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/identity.py"
+      ],
+      "inputs": [
+        "RS-03 neutral metadata model spec (identity map & natural keys)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Bootstrap matches sources to Qlik targets by natural key with a confirmation step; matches persist.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/identity -q",
+      "status": "pending"
+    },
+    {
+      "id": "T7.2",
+      "wp": "WP7",
+      "title": "Field diff engine",
+      "description": "Implement the field diff engine: full-replace vs partial-patch per capability manifest, with minimal-mutation output.",
+      "model": "opus",
+      "depends_on": [
+        "T1.6",
+        "T2.4"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/diff.py"
+      ],
+      "inputs": [
+        "RS-03 neutral metadata model spec (diffing)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
+        "RS-08 connector SDK spec (capability manifest)"
+      ],
+      "dod": "Diff engine emits minimal mutations honoring per-manifest full-replace vs partial-patch.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/diff -q",
+      "status": "pending"
+    },
+    {
+      "id": "T7.3",
+      "wp": "WP7",
+      "title": "Owner/Party best-effort email mapping",
+      "description": "Implement owner/Party best-effort email mapping as metadata only (explicitly not an identity system).",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.4"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/identity.py"
+      ],
+      "inputs": [
+        "RM-01 decision.md (owners as best-effort metadata)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md"
+      ],
+      "dod": "Owners correlate on email as plain metadata with no identity-resolution guarantees.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/identity -q",
+      "status": "pending"
+    },
+    {
+      "id": "T7.4",
+      "wp": "WP7",
+      "title": "Neutral status/enum reconciliation",
+      "description": "Implement neutral status/enum reconciliation between neutral status and Qlik lifecycle.",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.6"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/src/qlabs_catalog_sync/sync/policy.py"
+      ],
+      "inputs": [
+        "RS-03 neutral metadata model spec (status enums)",
+        "/Research/RS-03-neutral-metadata-model/outputs/neutral-metadata-model-spec.md",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "Neutral status values map bidirectionally to Qlik lifecycle states.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/sync -q",
+      "status": "pending"
+    },
+    {
+      "id": "T8.1",
+      "wp": "WP8",
+      "title": "Databricks -> Qlik end-to-end pilot",
+      "description": "Run the Databricks -> Qlik end-to-end pilot (dry-run then apply) on one data product.",
+      "model": "opus",
+      "depends_on": [
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T2.4",
+        "T2.5",
+        "T2.6",
+        "T2.7",
+        "T2.8",
+        "T3.1",
+        "T3.2",
+        "T3.3",
+        "T3.4",
+        "T3.5",
+        "T3.6",
+        "T3.7",
+        "T3.8",
+        "T4.1",
+        "T4.2",
+        "T4.3",
+        "T4.4",
+        "T4.5",
+        "T4.6",
+        "T7.1",
+        "T7.2"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e/"
+      ],
+      "inputs": [
+        "RM-01 decision.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/reference-projects.md"
+      ],
+      "dod": "One Databricks data product syncs to Qlik in dry-run then apply, matching expected target state.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e -q",
+      "status": "pending"
+    },
+    {
+      "id": "T8.2",
+      "wp": "WP8",
+      "title": "Collibra -> Qlik glossary end-to-end pilot",
+      "description": "Run the Collibra -> Qlik glossary end-to-end pilot.",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T2.4",
+        "T2.5",
+        "T2.6",
+        "T2.7",
+        "T2.8",
+        "T3.1",
+        "T3.2",
+        "T3.3",
+        "T3.4",
+        "T3.5",
+        "T3.6",
+        "T3.7",
+        "T3.8",
+        "T5.1",
+        "T5.2",
+        "T5.3",
+        "T5.4",
+        "T5.5",
+        "T5.6",
+        "T7.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e/"
+      ],
+      "inputs": [
+        "RM-01 decision.md (glossary flow high value)",
+        "/Research/RS-07-architecture-techstack-references/outputs/reference-projects.md"
+      ],
+      "dod": "Collibra glossary terms/categories sync into Qlik with relations preserved.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e -q",
+      "status": "pending"
+    },
+    {
+      "id": "T8.3",
+      "wp": "WP8",
+      "title": "Snowflake -> Qlik pilot",
+      "description": "Run the Snowflake -> Qlik pilot.",
+      "model": "sonnet",
+      "depends_on": [
+        "T2.1",
+        "T2.2",
+        "T2.3",
+        "T2.4",
+        "T2.5",
+        "T2.6",
+        "T2.7",
+        "T2.8",
+        "T3.1",
+        "T3.2",
+        "T3.3",
+        "T3.4",
+        "T3.5",
+        "T3.6",
+        "T3.7",
+        "T3.8",
+        "T6.1",
+        "T6.2",
+        "T6.3",
+        "T6.4",
+        "T6.5",
+        "T6.6",
+        "T7.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e/"
+      ],
+      "inputs": [
+        "RM-01 decision.md",
+        "/Research/RS-07-architecture-techstack-references/outputs/reference-projects.md"
+      ],
+      "dod": "A Snowflake data object syncs into Qlik matching expected target state.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e -q",
+      "status": "pending"
+    },
+    {
+      "id": "T8.4",
+      "wp": "WP8",
+      "title": "Idempotency + restart-safety tests",
+      "description": "Write idempotency and restart-safety tests: re-run no-op and watermark resume.",
+      "model": "sonnet",
+      "depends_on": [
+        "T8.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e/"
+      ],
+      "inputs": [
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RM-01 implementation-plan.md WP8 gate"
+      ],
+      "dod": "Re-running a synced product is a no-op; the engine resumes from watermark after restart.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e -q",
+      "status": "pending"
+    },
+    {
+      "id": "T8.5",
+      "wp": "WP8",
+      "title": "VCR contract tests across all connectors",
+      "description": "Run VCR contract tests across all connectors against recorded real responses.",
+      "model": "sonnet",
+      "depends_on": [
+        "T8.1"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-catalog-sync/tests/e2e/"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (conformance kit)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "All connectors pass VCR contract tests against recorded real responses.",
+      "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e -q",
+      "status": "pending"
+    },
+    {
+      "id": "T8.6",
+      "wp": "WP8",
+      "title": "Resolve RS-02 tenant-test open items",
+      "description": "Resolve the RS-02 tenant-test open items: Qlik PATCH path enum, change-status body, links payload, qri stability, role strings.",
+      "model": "sonnet",
+      "depends_on": [
+        "T3.5"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/write.py",
+        "packages/qlabs-connector-qlik/src/qlabs_connector_qlik/glossary.py"
+      ],
+      "inputs": [
+        "RS-02 qlik sync-readiness note (tenant-test open items)",
+        "/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md"
+      ],
+      "dod": "PATCH path enum, change-status body, links payload, qri stability, and role strings are confirmed against a tenant.",
+      "verify": "uv run pytest packages/qlabs-connector-qlik/tests -q",
+      "status": "pending"
+    },
+    {
+      "id": "T9.1",
+      "wp": "WP9",
+      "title": "Containerize service",
+      "description": "Containerize the service (Dockerfile) as a single long-running service run shape.",
+      "model": "haiku",
+      "depends_on": [
+        "T8.1",
+        "T8.2",
+        "T8.3",
+        "T8.4",
+        "T8.5",
+        "T8.6"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "Dockerfile"
+      ],
+      "inputs": [
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RM-01 implementation-plan.md WP9"
+      ],
+      "dod": "Container builds and runs the sync service as a single long-running process against config.",
+      "verify": "docker build -t qlabs-catalog-sync .",
+      "status": "pending"
+    },
+    {
+      "id": "T9.2",
+      "wp": "WP9",
+      "title": "Config + secret templates per tenant",
+      "description": "Provide config and secret templates per tenant and wire secret-backend integration.",
+      "model": "sonnet",
+      "depends_on": [
+        "T8.1",
+        "T8.2",
+        "T8.3",
+        "T8.4",
+        "T8.5",
+        "T8.6"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "deploy/config/"
+      ],
+      "inputs": [
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RM-01 decision.md"
+      ],
+      "dod": "Per-tenant config and secret templates exist and load through the configured secret backend.",
+      "verify": "uv run python -c 'import qlabs_catalog_sync'",
+      "status": "pending"
+    },
+    {
+      "id": "T9.3",
+      "wp": "WP9",
+      "title": "Scheduling cadence + rate-limit budgeting defaults",
+      "description": "Provide scheduling cadence config and per-endpoint rate-limit budgeting defaults.",
+      "model": "sonnet",
+      "depends_on": [
+        "T8.1",
+        "T8.2",
+        "T8.3",
+        "T8.4",
+        "T8.5",
+        "T8.6"
+      ],
+      "parallel": true,
+      "owns_paths": [
+        "deploy/config/"
+      ],
+      "inputs": [
+        "/Research/RS-07-architecture-techstack-references/outputs/architecture-and-techstack.md",
+        "RS-08 connector SDK spec (rate limits)"
+      ],
+      "dod": "Default per-source cadence and per-endpoint rate-limit budgets are configured and applied.",
+      "verify": "uv run python -c 'import qlabs_catalog_sync'",
+      "status": "pending"
+    },
+    {
+      "id": "T9.4",
+      "wp": "WP9",
+      "title": "Runbook + capability-matrix docs + tag v0.1",
+      "description": "Write the runbook and capability-matrix docs (generated from manifests) and tag the v0.1 release. (Docs live outside tools/; no Markdown under tools/.)",
+      "model": "haiku",
+      "depends_on": [
+        "T9.1",
+        "T9.2",
+        "T9.3"
+      ],
+      "parallel": false,
+      "owns_paths": [
+        "docs/runbook.rst",
+        "docs/capability-matrix.json"
+      ],
+      "inputs": [
+        "RS-08 connector SDK spec (capability manifests)",
+        "/Research/RS-08-connector-plugin-sdk/outputs/connector-sdk-spec.md"
+      ],
+      "dod": "Runbook validated and capability matrix generated from manifests; v0.1 tagged.",
+      "verify": "uv run python tools/agent-plan/ready_queue.py --all",
+      "status": "pending"
+    }
+  ]
+}
