@@ -1051,7 +1051,7 @@
       ],
       "dod": "One Databricks UC schema syncs to one Qlik data product in dry-run then apply, and the applied requests match the expected payloads field for field.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/e2e -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T8.4",
