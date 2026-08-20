@@ -181,7 +181,7 @@
       ],
       "dod": "Connector ABC and all contract types compile, are typed, and a stub subclass can be instantiated; list_changed returns a result object carrying the proposed next watermark.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/contract -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.3",
