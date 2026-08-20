@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import importlib.util
 import json
 import os
@@ -511,6 +513,29 @@ class GeneratorIntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "already completed"):
             okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
         self.assertEqual(after, self.snapshot())
+
+    def test_check_references_is_inert_for_an_item_that_has_not_moved(self) -> None:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = okf.check_references(
+                self.root, argparse.Namespace(tag="RM-01", scan_root=None)
+            )
+        self.assertEqual(0, code)
+        self.assertIn("has not been completed", buffer.getvalue())
+
+    def test_check_references_reports_after_a_completion(self) -> None:
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        self.finish_task_board()
+        okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
+        buffer = io.StringIO()
+        with contextlib.redirect_stderr(buffer):
+            code = okf.check_references(
+                self.root, argparse.Namespace(tag="RM-01", scan_root=str(self.root))
+            )
+        # The task board still names the old path, and the tool must not fix it.
+        self.assertEqual(3, code)
+        self.assertIn("tasks.json", buffer.getvalue())
 
     def test_stale_reference_report_finds_outside_root_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

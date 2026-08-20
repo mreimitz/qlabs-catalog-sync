@@ -1890,11 +1890,12 @@ def print_stale_references(stale: list[StaleReference], tag: str) -> None:
 def check_references(root: Path, args: argparse.Namespace) -> int:
     tag = normalize_tag(args.tag, "RM")
     directory = find_item_dir(root, tag)
+    if directory.parent.name != "completed":
+        # Nothing has moved, so there is no old path anything could still name.
+        print(f"{tag} has not been completed; there is nothing to re-point.")
+        return 0
     new_rel = relative(root, directory)
-    if directory.parent.name == "completed":
-        old_rel = f"Roadmap/{directory.name}"
-    else:
-        old_rel = f"{COMPLETED_ROOT}/{directory.name}"
+    old_rel = f"Roadmap/{directory.name}"
     scan_root = Path(args.scan_root).resolve() if args.scan_root else root.parent
     stale = stale_reference_report(root, old_rel, new_rel, scan_root)
     if not stale:
