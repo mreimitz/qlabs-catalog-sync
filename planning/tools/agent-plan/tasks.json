@@ -68,7 +68,7 @@
       ],
       "dod": "From a clean checkout `uv sync --all-packages`, `uv run ruff check packages`, `uv run mypy` and `uv run pytest -q` all pass; neither ruff nor mypy reads planning/; uv.lock is committed.",
       "verify": "uv sync --all-packages && uv run ruff check packages && uv run mypy && uv run pytest -q",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "T0.6",
@@ -93,7 +93,7 @@
       ],
       "dod": "Every runtime dependency named in the plan is declared in the right package and locked; a fresh `uv sync --all-packages` imports all of them; no downstream task needs to touch packaging metadata.",
       "verify": "uv sync --all-packages && uv run python -c 'import pydantic, pydantic_settings, httpx, tenacity, sqlalchemy, alembic, apscheduler, structlog, prometheus_client, databricks.sdk'",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T0.3",
