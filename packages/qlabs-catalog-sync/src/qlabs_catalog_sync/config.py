@@ -522,6 +522,25 @@ class EngineConfig(BaseSettings):
                     f"{WRITE_CONNECTOR_NAME!r} connector, but v1 is upstream-only — Qlik can "
                     "never be a sync source (decision.md guardrail 1)"
                 )
+            # A pair names the space it writes into, and so does the Qlik endpoint it
+            # writes through. The connector's own value wins at write time, so a
+            # disagreement is silent: the product lands in the endpoint's space while every
+            # create reports `placement` unresolvable, forever, with the run still green. A
+            # mistyped space is a configuration error and belongs here, at load time.
+            if target_endpoint is not None:
+                endpoint_space = target_endpoint.settings.get("space_id")
+                if (
+                    isinstance(endpoint_space, str)
+                    and endpoint_space
+                    and endpoint_space != pair.target_space
+                ):
+                    errors.append(
+                        f"sync pair {pair.name!r}: target_space {pair.target_space!r} does not "
+                        f"match the space_id {endpoint_space!r} configured on target endpoint "
+                        f"{pair.target!r}. The connector writes into its own configured space, "
+                        "so these must agree or the pair would silently write somewhere else"
+                    )
+
             if target_endpoint is not None and target_endpoint.connector != WRITE_CONNECTOR_NAME:
                 errors.append(
                     f"sync pair {pair.name!r}: target endpoint {pair.target!r} uses connector "
