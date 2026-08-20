@@ -478,7 +478,7 @@
       ],
       "dod": "Policy resolves a manually edited target field per configuration: source-wins by default, preserve-local when set; both paths are covered by tests.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/policy -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.6",
@@ -499,7 +499,7 @@
       ],
       "dod": "Per-pair jobs run on cadence with jitter and never overlap; a long-running cycle causes the next trigger to be skipped rather than queued.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/scheduler -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.7",
@@ -544,7 +544,7 @@
       ],
       "dod": "Dry-run writes a JSON plan describing every intended create/update with its field-level diff and applies nothing; the CLI exposes run, dry-run and identity-confirm.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/cli -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T2.9",
@@ -566,7 +566,7 @@
       ],
       "dod": "A vanished source object is logged as an orphan and reported; a test asserts the engine issues no delete or deactivate call in any code path.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/orphans -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.1",
@@ -730,7 +730,7 @@
       ],
       "dod": "activate/deactivate/move/delete execute against the documented endpoints and are covered by tests; each destructive call requires an explicit opt-in flag that is off by default.",
       "verify": "uv run pytest packages/qlabs-connector-qlik/tests/lifecycle -q",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T3.8",
