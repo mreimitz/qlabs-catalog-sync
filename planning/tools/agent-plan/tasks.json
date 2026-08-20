@@ -382,7 +382,7 @@
       ],
       "dod": "Engine discovers connectors via entry points, registers them by name, rejects an incompatible SDK major, and errors clearly on duplicate names.",
       "verify": "uv run pytest packages/qlabs-catalog-sync/tests/discovery -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T2.2",
