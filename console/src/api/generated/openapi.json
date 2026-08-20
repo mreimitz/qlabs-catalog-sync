@@ -1,0 +1,5372 @@
+{
+  "components": {
+    "schemas": {
+      "CandidateFact": {
+        "description": "A fact a matcher needs from a candidate, named so an unavailable one can be reported.",
+        "enum": [
+          "qualified_name",
+          "tags",
+          "owners"
+        ],
+        "title": "CandidateFact",
+        "type": "string"
+      },
+      "CapabilityManifestOut": {
+        "description": "A connector's whole capability manifest, per\n:class:`~qlabs_catalog_sync_sdk.manifest.CapabilityManifest`. Keyed by\n:class:`~qlabs_catalog_sync_sdk.models.EntityType` value (``\"data_product\"``, ...),\nsame as ``docs/capability-matrix.json``.",
+        "properties": {
+          "concurrency": {
+            "$ref": "#/components/schemas/ConcurrencyMode"
+          },
+          "entities": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EntityCapabilityOut"
+            },
+            "title": "Entities",
+            "type": "object"
+          }
+        },
+        "required": [
+          "concurrency",
+          "entities"
+        ],
+        "title": "CapabilityManifestOut",
+        "type": "object"
+      },
+      "ChangeAction": {
+        "description": "What kind of write one ``config_changes`` row records.",
+        "enum": [
+          "create",
+          "update",
+          "delete"
+        ],
+        "title": "ChangeAction",
+        "type": "string"
+      },
+      "ChangeEntityKind": {
+        "description": "Which configuration table one ``config_changes`` row is about.",
+        "enum": [
+          "endpoint",
+          "sync_pair",
+          "selection_rule",
+          "selection_override"
+        ],
+        "title": "ChangeEntityKind",
+        "type": "string"
+      },
+      "ConcurrencyMode": {
+        "description": "How a connector's write path guards against a lost update, per RS-08 section 4.2.\n\nConnector-level, not per-field: an endpoint's optimistic-concurrency story is a\nproperty of its write API as a whole (Qlik sends the ETag it last read back as\n``if-match``), not of any one field.",
+        "enum": [
+          "etag",
+          "revision",
+          "none"
+        ],
+        "title": "ConcurrencyMode",
+        "type": "string"
+      },
+      "ConfigChangeListPage": {
+        "description": "Same explicit pagination contract as :class:`RunListPage`: newest-first\n(``changed_at`` descending, ``id`` descending as the tie-breaker -- a multi-field\nupdate's rows share one ``changed_at`` exactly, by construction, so the tie-breaker is\nnot a corner case here, it is the common case for every update).",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigChangeOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "has_more",
+          "next_cursor"
+        ],
+        "title": "ConfigChangeListPage",
+        "type": "object"
+      },
+      "ConfigChangeOut": {
+        "description": "One raw ``config_changes`` row -- one changed field for an update, or the whole\nentity for a create/delete. See the module docstring for why this is never grouped\ninto a synthetic \"operation\" server-side.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ChangeAction"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "changed_at": {
+            "format": "date-time",
+            "title": "Changed At",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_kind": {
+            "$ref": "#/components/schemas/ChangeEntityKind"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "generation": {
+            "title": "Generation",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "entity_kind",
+          "entity_id",
+          "action",
+          "field",
+          "old_value",
+          "new_value",
+          "actor",
+          "changed_at",
+          "generation"
+        ],
+        "title": "ConfigChangeOut",
+        "type": "object"
+      },
+      "ConnectorInfo": {
+        "description": "One entry point discovery found (C6): either a usable connector with its live\ncapability manifest, or a broken one with why -- never both, never neither.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "broken_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broken Reason"
+          },
+          "broken_stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broken Stage"
+          },
+          "distribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distribution"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapabilityManifestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "available"
+        ],
+        "title": "ConnectorInfo",
+        "type": "object"
+      },
+      "DatasetNodeOut": {
+        "description": "One dataset-scope (table/view) tree node.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "qualified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualified Name"
+          },
+          "scope": {
+            "const": "dataset",
+            "default": "dataset",
+            "title": "Scope",
+            "type": "string"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/DatasetSelectionOut"
+          }
+        },
+        "required": [
+          "object_id",
+          "qualified_name",
+          "display_name",
+          "selection"
+        ],
+        "title": "DatasetNodeOut",
+        "type": "object"
+      },
+      "DatasetSelectionOut": {
+        "description": "The C5 join for one dataset -- the wire form of\n:class:`~qlabs_catalog_sync.selection.source_tree.DatasetSelection`. ``parent`` and\n``dataset`` are each the real, complete result (never withheld), so a console that\nwants to know exactly which one decided can always tell from ``explain`` -- or from\n``parent.source``/``dataset.source`` directly -- rather than from a second,\nseparately-computed field that could drift from it.",
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/SelectionResultOut"
+          },
+          "explain": {
+            "title": "Explain",
+            "type": "string"
+          },
+          "included": {
+            "title": "Included",
+            "type": "boolean"
+          },
+          "parent": {
+            "$ref": "#/components/schemas/SelectionResultOut"
+          }
+        },
+        "required": [
+          "included",
+          "explain",
+          "parent",
+          "dataset"
+        ],
+        "title": "DatasetSelectionOut",
+        "type": "object"
+      },
+      "DecisionSource": {
+        "description": "What produced a decision -- the third value is why \"no rule matched\" is not a guess.",
+        "enum": [
+          "override",
+          "rule",
+          "default"
+        ],
+        "title": "DecisionSource",
+        "type": "string"
+      },
+      "DraftSelectionRuleIn": {
+        "additionalProperties": false,
+        "description": "One rule of an unsaved draft rule list. Deliberately excludes ``rule_id`` and\n``ordinal``: the list's own order *is* the ordinal (C3: evaluated low-to-high, last\nmatch wins), and a fresh, request-scoped id (``draft-<position>``) is synthesized by\nthe route -- a draft has nothing durable to name a rule by yet. Every other field\nmirrors ``routes/selection.py``'s own ``SelectionRuleCreateRequest`` exactly, so a\nrule this model accepts is shaped exactly like one that route would accept to save.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "matcher_kind": {
+            "$ref": "#/components/schemas/MatcherKind"
+          },
+          "pattern": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Pattern",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          }
+        },
+        "required": [
+          "scope",
+          "decision",
+          "matcher_kind",
+          "pattern"
+        ],
+        "title": "DraftSelectionRuleIn",
+        "type": "object"
+      },
+      "DroppedFieldOut": {
+        "description": "One field the target's manifest could not carry (D2/D3).",
+        "properties": {
+          "capability_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability Mode"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "native_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Path"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason",
+          "capability_mode",
+          "native_path"
+        ],
+        "title": "DroppedFieldOut",
+        "type": "object"
+      },
+      "DryRunRequest": {
+        "additionalProperties": false,
+        "description": "Narrow a dry run to specific entity types (omitted or empty means every entity\ntype this pair is configured to sync), and preview what a create would look like\n(off by default) -- mirrors the CLI's ``dry-run --create-missing``: without it, a\nsource object with no target binding previews as a skip\n(``SkipReason.NO_TARGET_BINDING``), not a create.",
+        "properties": {
+          "create_missing": {
+            "default": false,
+            "title": "Create Missing",
+            "type": "boolean"
+          },
+          "entity_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EntityType"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Types"
+          }
+        },
+        "title": "DryRunRequest",
+        "type": "object"
+      },
+      "EndpointCreateRequest": {
+        "additionalProperties": false,
+        "description": "Register an instance of an already-discovered connector (C6). ``settings`` is\nvalidated against the connector's own ``ConfigModel``; an inline secret there is\nrefused (``InlineSecretRejectedError``, already handled -- see the module\ndocstring), never stored. Binding a credential is ``secret_ref``'s job.",
+        "properties": {
+          "connector": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Connector",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/EndpointRole"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
+          "settings": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "connector",
+          "role"
+        ],
+        "title": "EndpointCreateRequest",
+        "type": "object"
+      },
+      "EndpointHealthOut": {
+        "description": "The result of running one endpoint's connector ``healthcheck()`` (C6). Always a\n200 -- see the module docstring for why a red result lands here, never as an HTTP\nerror.",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "$ref": "#/components/schemas/HealthState"
+          }
+        },
+        "required": [
+          "endpoint",
+          "state",
+          "reason",
+          "checked_at",
+          "details"
+        ],
+        "title": "EndpointHealthOut",
+        "type": "object"
+      },
+      "EndpointOut": {
+        "description": "One registered endpoint. Carries ``secret_ref`` (a reference, C2) and non-secret\n``settings`` -- never a secret value; there is no field here capable of holding one.",
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/EndpointRole"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
+          "settings": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "connector",
+          "role",
+          "settings",
+          "secret_ref",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "EndpointOut",
+        "type": "object"
+      },
+      "EndpointRole": {
+        "description": "Whether a configured endpoint is used as a pair's source or its target.",
+        "enum": [
+          "source",
+          "target"
+        ],
+        "title": "EndpointRole",
+        "type": "string"
+      },
+      "EndpointUpdateRequest": {
+        "additionalProperties": false,
+        "description": "A partial update (C6: edit settings, bind a secret reference, enable/disable). A\nfield omitted from the request body keeps its current value. ``secret_ref`` is the\none nullable column: sending it explicitly as ``null`` clears the reference (an\nendpoint can be un-bound without deleting and recreating it); omitting it leaves\nwhatever is currently bound alone. Distinguishing \"omitted\" from \"sent as null\" is\nread from ``model_fields_set``, then translated into\n:class:`~qlabs_catalog_sync.configstore.service.ConfigService`'s own ``UNSET``\nconvention -- this route never invents a second way to say \"not supplied\".",
+        "properties": {
+          "connector": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connector"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndpointRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings"
+          }
+        },
+        "title": "EndpointUpdateRequest",
+        "type": "object"
+      },
+      "EntityCapabilityOut": {
+        "description": "One entity type's capability, per\n:class:`~qlabs_catalog_sync_sdk.manifest.EntityCapability`.",
+        "properties": {
+          "allowed_update_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Update Paths"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldCapabilityOut"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "identity_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Identity Keys",
+            "type": "array"
+          },
+          "max_update_operations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Update Operations"
+          },
+          "supported": {
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "supports_events": {
+            "title": "Supports Events",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "supported",
+          "identity_keys",
+          "supports_events",
+          "allowed_update_paths",
+          "max_update_operations",
+          "fields"
+        ],
+        "title": "EntityCapabilityOut",
+        "type": "object"
+      },
+      "EntityType": {
+        "description": "The neutral entity types the engine synchronizes.\n\nv1 is upstream-only with no access-control sync: there is deliberately no\n``PRINCIPAL`` or ``ACCESS_BINDING`` member.",
+        "enum": [
+          "data_product",
+          "dataset",
+          "glossary_term",
+          "category"
+        ],
+        "title": "EntityType",
+        "type": "string"
+      },
+      "ErrorModel": {
+        "description": "The one JSON error shape every failure this API can produce returns.\n\n``code`` is the stable, machine-readable identifier the console (and T12.8's\ngenerated TypeScript client) switches on -- it never changes shape or meaning once\nshipped, even if ``message`` is reworded. ``message`` is a human-readable\nexplanation: never a stack trace, never a secret (see the module docstring's tier 3).\n``field``/``entity`` are filled in only when the failure can name which request field\nor which domain entity was at fault; both are ``None`` otherwise, never an empty\nstring. ``correlation_id`` is set only for an unexpected (500) failure -- the one\ncase where the client cannot act on ``message`` alone and instead needs something to\nhand to an operator, who can grep the structured logs for it.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorModel",
+        "type": "object"
+      },
+      "ErrorReportOut": {
+        "description": "One error the cycle hit, classified by the SDK exception type that carried it.",
+        "properties": {
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "fatal": {
+            "title": "Fatal",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "native_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Key"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "message",
+          "endpoint",
+          "native_key",
+          "operation",
+          "retryable",
+          "fatal"
+        ],
+        "title": "ErrorReportOut",
+        "type": "object"
+      },
+      "FieldCapabilityMode": {
+        "description": "A field's write posture at one endpoint, per RS-08 section 4.2.\n\nNamed ``FieldCapabilityMode`` rather than the shorter ``FieldMode`` to keep it\nunambiguous next to ``models.FieldUpdateMode`` (``FieldChange``'s patch-vs-replace\nwrite *intent*) — a different question about a different object, both importable\nfrom the same package.\n\n``NA`` and ``RO`` are deliberately distinct even though the engine treats both as\n\"never write this\": ``RO`` means the endpoint can express the field but only ever\nreturns it (Qlik ``secureQri``, Databricks ``physical_ref``); ``NA`` means either the\nendpoint has no native equivalent at all (Databricks has no glossary), or — for a\nfield that could exist but this endpoint *instance* cannot currently even read\n(Databricks ``tags`` with no SQL warehouse configured, decision D6) — is unavailable\nfull stop. Keeping them distinct lets the run report and connector documentation\nexplain *why* a field never changes, rather than collapsing both into one\nuninformative \"not writable\".",
+        "enum": [
+          "rw",
+          "ro",
+          "na"
+        ],
+        "title": "FieldCapabilityMode",
+        "type": "string"
+      },
+      "FieldCapabilityOut": {
+        "description": "One neutral field's write posture at this connector, per\n:class:`~qlabs_catalog_sync_sdk.manifest.FieldCapability`.",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/FieldCapabilityMode"
+          },
+          "normalized_by_target": {
+            "title": "Normalized By Target",
+            "type": "boolean"
+          },
+          "partial_update": {
+            "title": "Partial Update",
+            "type": "boolean"
+          },
+          "writable_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Writable Via"
+          }
+        },
+        "required": [
+          "mode",
+          "writable_via",
+          "partial_update",
+          "normalized_by_target"
+        ],
+        "title": "FieldCapabilityOut",
+        "type": "object"
+      },
+      "HealthState": {
+        "description": "How usable an endpoint is right now.",
+        "enum": [
+          "healthy",
+          "degraded",
+          "unhealthy"
+        ],
+        "title": "HealthState",
+        "type": "string"
+      },
+      "JsonValue": {},
+      "ManualEditMode": {
+        "description": "How the engine reacts when a Qlik-side value was edited manually since last sync.",
+        "enum": [
+          "source_wins",
+          "preserve_local"
+        ],
+        "title": "ManualEditMode",
+        "type": "string"
+      },
+      "ManualEditPolicy": {
+        "additionalProperties": false,
+        "description": "The pair's manual-edit-on-Qlik policy (source-wins by default, per decision.md\nguardrail 2), configurable to preserve local edits per entity type or per field.\n\nResolution order in :meth:`mode_for`, most specific first: a ``per_field`` entry for\nthe exact ``\"<entity_type>.<field>\"`` pair, then a ``per_entity`` entry for the\nentity type, then :attr:`default`.",
+        "properties": {
+          "default": {
+            "$ref": "#/components/schemas/ManualEditMode",
+            "default": "source_wins"
+          },
+          "per_entity": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ManualEditMode"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/EntityType"
+            },
+            "title": "Per Entity",
+            "type": "object"
+          },
+          "per_field": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ManualEditMode"
+            },
+            "title": "Per Field",
+            "type": "object"
+          }
+        },
+        "title": "ManualEditPolicy",
+        "type": "object"
+      },
+      "MatcherKind": {
+        "description": "What a selection rule's ``pattern`` is evaluated against (T11.1's evaluator).",
+        "enum": [
+          "glob",
+          "tag",
+          "owner"
+        ],
+        "title": "MatcherKind",
+        "type": "string"
+      },
+      "OrphanReportOut": {
+        "description": "A source object that vanished (D4: recorded, reported, never deleted).",
+        "properties": {
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "native_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Key"
+          },
+          "neutral_id": {
+            "format": "uuid",
+            "title": "Neutral Id",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "neutral_id",
+          "entity_type",
+          "endpoint",
+          "native_key",
+          "observed_at"
+        ],
+        "title": "OrphanReportOut",
+        "type": "object"
+      },
+      "PreviewCountsOut": {
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/ScopeCountsOut"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ScopeCountsOut"
+          }
+        },
+        "required": [
+          "object",
+          "dataset"
+        ],
+        "title": "PreviewCountsOut",
+        "type": "object"
+      },
+      "PreviewOut": {
+        "description": "Counts plus a bounded sample for one rule set (stored or draft) over one pair's\nlive source. ``rule_set_source`` names which one was actually evaluated, so a\nconsole cannot mistake a draft preview for the stored configuration's own numbers\nor vice versa.",
+        "properties": {
+          "candidates_examined": {
+            "title": "Candidates Examined",
+            "type": "integer"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/PreviewCountsOut"
+          },
+          "rule_set_source": {
+            "enum": [
+              "stored",
+              "draft"
+            ],
+            "title": "Rule Set Source",
+            "type": "string"
+          },
+          "sample": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewSampleItemOut"
+            },
+            "title": "Sample",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rule_set_source",
+          "counts",
+          "sample",
+          "candidates_examined",
+          "truncated"
+        ],
+        "title": "PreviewOut",
+        "type": "object"
+      },
+      "PreviewRequest": {
+        "additionalProperties": false,
+        "description": "What to preview, and how much of it. ``rules`` left unset (the default) previews\nthe pair's stored rules; an explicit list (including ``[]``, \"no rules at all\")\npreviews that draft instead. Overrides are never draftable here -- see the module\ndocstring for why.",
+        "properties": {
+          "max_candidates": {
+            "default": 20000,
+            "maximum": 200000.0,
+            "minimum": 1.0,
+            "title": "Max Candidates",
+            "type": "integer"
+          },
+          "resolve_owners": {
+            "default": false,
+            "description": "Same trade-off as resolve_tags.",
+            "title": "Resolve Owners",
+            "type": "boolean"
+          },
+          "resolve_tags": {
+            "default": false,
+            "description": "Read each candidate's real tags (one extra read() per node, only where the source's manifest offers tags at all) instead of leaving them unknown.",
+            "title": "Resolve Tags",
+            "type": "boolean"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DraftSelectionRuleIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An unsaved draft rule list, evaluated in list order. Omit to preview the pair's stored, saved rules instead.",
+            "title": "Rules"
+          },
+          "sample_limit": {
+            "default": 100,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Sample Limit",
+            "type": "integer"
+          }
+        },
+        "title": "PreviewRequest",
+        "type": "object"
+      },
+      "PreviewSampleItemOut": {
+        "description": "One example candidate from a preview, decision and deciding rule attached. For a\ndataset, ``rule_id``/``explain`` name whichever of the parent schema's or the\ndataset's own rule actually decided (see :func:`_dataset_deciding_rule_id`) -- the\nsame three cases :class:`~qlabs_catalog_sync.selection.source_tree.DatasetSelection`\ndocuments, never the dataset's own rule when the parent is what decided.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "explain": {
+            "title": "Explain",
+            "type": "string"
+          },
+          "has_undetermined": {
+            "title": "Has Undetermined",
+            "type": "boolean"
+          },
+          "included": {
+            "title": "Included",
+            "type": "boolean"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "qualified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualified Name"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          }
+        },
+        "required": [
+          "scope",
+          "object_id",
+          "qualified_name",
+          "display_name",
+          "included",
+          "explain",
+          "rule_id",
+          "has_undetermined"
+        ],
+        "title": "PreviewSampleItemOut",
+        "type": "object"
+      },
+      "RecordOutcome": {
+        "description": "What happened to one candidate object in this cycle.",
+        "enum": [
+          "created",
+          "written",
+          "unchanged",
+          "no_op",
+          "skipped",
+          "orphaned",
+          "filtered",
+          "failed"
+        ],
+        "title": "RecordOutcome",
+        "type": "string"
+      },
+      "RecordReportOut": {
+        "description": "What the cycle did with one candidate object, and why.",
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "dropped": {
+            "items": {
+              "$ref": "#/components/schemas/DroppedFieldOut"
+            },
+            "title": "Dropped",
+            "type": "array"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "holds_watermark": {
+            "title": "Holds Watermark",
+            "type": "boolean"
+          },
+          "native_key": {
+            "title": "Native Key",
+            "type": "string"
+          },
+          "neutral_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neutral Id"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/RecordOutcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkipReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_native_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Native Key"
+          },
+          "target_skipped_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Skipped Fields",
+            "type": "array"
+          },
+          "was_read": {
+            "title": "Was Read",
+            "type": "boolean"
+          },
+          "withheld": {
+            "items": {
+              "$ref": "#/components/schemas/WithheldFieldOut"
+            },
+            "title": "Withheld",
+            "type": "array"
+          },
+          "written_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Written Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "native_key",
+          "entity_type",
+          "outcome",
+          "neutral_id",
+          "display_name",
+          "target_native_key",
+          "reason",
+          "detail",
+          "was_read",
+          "changed_fields",
+          "written_fields",
+          "dropped",
+          "withheld",
+          "target_skipped_fields",
+          "holds_watermark"
+        ],
+        "title": "RecordReportOut",
+        "type": "object"
+      },
+      "RuleScope": {
+        "description": "Which layer of the source tree a selection rule or override applies to (C5).",
+        "enum": [
+          "object",
+          "dataset"
+        ],
+        "title": "RuleScope",
+        "type": "string"
+      },
+      "RunControlStatusOut": {
+        "description": "Whether a pair is paused and/or has a ``run-now`` cycle in flight through this API.\n\n``enabled``/``paused`` are ``SyncPairRow.enabled`` read straight back from the\ndatabase (``paused`` is exactly ``not enabled``) -- real, persisted, true from any\nprocess that reads the same row. ``running`` is this process's own ``run-now``\nin-flight tracking. See the module docstring's \"Pause / resume\" section for exactly\nwhat pausing does and does not control today.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "pair_id": {
+            "format": "uuid",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "pair_name": {
+            "title": "Pair Name",
+            "type": "string"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pair_id",
+          "pair_name",
+          "enabled",
+          "paused",
+          "running"
+        ],
+        "title": "RunControlStatusOut",
+        "type": "object"
+      },
+      "RunDetailOut": {
+        "description": "``GET /runs/{run_id}``: counts (inherited from :class:`RunSummaryOut`), every\nreportable item, and every error -- the DoD's \"run detail includes counts, items and\nerrors\", literally.",
+        "properties": {
+          "committed": {
+            "title": "Committed",
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/qlabs_catalog_sync__api__routes__history__RunCountsOut"
+          },
+          "create_enabled": {
+            "title": "Create Enabled",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/RunErrorOut"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "pair": {
+            "title": "Pair",
+            "type": "string"
+          },
+          "quarantined_endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quarantined Endpoints",
+            "type": "array"
+          },
+          "source_endpoint": {
+            "title": "Source Endpoint",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunRecordStatus"
+          },
+          "swept_stale": {
+            "title": "Swept Stale",
+            "type": "boolean"
+          },
+          "target_endpoint": {
+            "title": "Target Endpoint",
+            "type": "string"
+          },
+          "watermark_advanced": {
+            "title": "Watermark Advanced",
+            "type": "boolean"
+          },
+          "watermark_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watermark After"
+          },
+          "watermark_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watermark Before"
+          }
+        },
+        "required": [
+          "id",
+          "pair",
+          "source_endpoint",
+          "target_endpoint",
+          "entity_type",
+          "status",
+          "in_progress",
+          "dry_run",
+          "committed",
+          "create_enabled",
+          "watermark_before",
+          "watermark_after",
+          "watermark_advanced",
+          "has_more",
+          "pages",
+          "started_at",
+          "finished_at",
+          "duration_seconds",
+          "counts",
+          "quarantined_endpoints",
+          "items",
+          "errors",
+          "swept_stale"
+        ],
+        "title": "RunDetailOut",
+        "type": "object"
+      },
+      "RunErrorOut": {
+        "description": "One ``run_errors`` row. ``is_stale_sweep`` is ``True`` exactly when this error is\n:meth:`RunRecorder.reap_stale`'s own marker -- see the module docstring.",
+        "properties": {
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "fatal": {
+            "title": "Fatal",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_stale_sweep": {
+            "title": "Is Stale Sweep",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "native_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Key"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "kind",
+          "message",
+          "endpoint",
+          "native_key",
+          "operation",
+          "retryable",
+          "fatal",
+          "is_stale_sweep"
+        ],
+        "title": "RunErrorOut",
+        "type": "object"
+      },
+      "RunIssuesOut": {
+        "description": "The operator's actual question -- \"what went wrong, and what could this run not\nresolve\" -- answered as one response, not four separate lists a console would have to\nreassemble. See the module docstring for ``issues_recorded``/``swept_stale``.\n\nCategories are not mutually exclusive by construction: one write can report both an\nunresolved owner and an unresolved dataset member at once. ``other_outstanding`` is\nevery remaining reportable item -- a failed record, or one holding the watermark for a\nreason that is neither D2 nor D3 (e.g. an unconfirmed identity binding) -- so every\n``run_items`` row for this run appears in exactly the categories it actually belongs\nto, and no reportable item is silently dropped from the answer.",
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/RunErrorOut"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "has_issues": {
+            "title": "Has Issues",
+            "type": "boolean"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "boolean"
+          },
+          "issues_recorded": {
+            "title": "Issues Recorded",
+            "type": "boolean"
+          },
+          "orphans": {
+            "items": {
+              "$ref": "#/components/schemas/RunOrphanIssueOut"
+            },
+            "title": "Orphans",
+            "type": "array"
+          },
+          "other_outstanding": {
+            "items": {
+              "$ref": "#/components/schemas/RunItemOut"
+            },
+            "title": "Other Outstanding",
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunRecordStatus"
+          },
+          "swept_stale": {
+            "title": "Swept Stale",
+            "type": "boolean"
+          },
+          "unresolvable_owners": {
+            "items": {
+              "$ref": "#/components/schemas/RunItemOut"
+            },
+            "title": "Unresolvable Owners",
+            "type": "array"
+          },
+          "unresolved_dataset_members": {
+            "items": {
+              "$ref": "#/components/schemas/RunItemOut"
+            },
+            "title": "Unresolved Dataset Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "in_progress",
+          "issues_recorded",
+          "swept_stale",
+          "has_issues",
+          "unresolved_dataset_members",
+          "unresolvable_owners",
+          "orphans",
+          "other_outstanding",
+          "errors"
+        ],
+        "title": "RunIssuesOut",
+        "type": "object"
+      },
+      "RunItemOut": {
+        "description": "One ``run_items`` row -- a record an operator would plausibly ask about, never\nevery candidate the cycle looked at (``runs/models.py``'s module docstring).",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "held_watermark": {
+            "title": "Held Watermark",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "native_key": {
+            "title": "Native Key",
+            "type": "string"
+          },
+          "neutral_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neutral Id"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/RecordOutcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "target_native_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Native Key"
+          },
+          "unresolved_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "native_key",
+          "neutral_id",
+          "display_name",
+          "target_native_key",
+          "outcome",
+          "reason",
+          "detail",
+          "endpoint",
+          "held_watermark",
+          "unresolved_fields"
+        ],
+        "title": "RunItemOut",
+        "type": "object"
+      },
+      "RunListPage": {
+        "description": "The explicit pagination contract every listing route in this module shares:\nnewest-first (``started_at`` descending, ``id`` descending as a total-order\ntie-breaker -- see the cursor section above), a ``limit`` echoing what was actually\napplied, ``has_more``, and a ``next_cursor`` that is ``None`` exactly when there is no\nfurther page. A client never has to guess whether it has reached the end.",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummaryOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "has_more",
+          "next_cursor"
+        ],
+        "title": "RunListPage",
+        "type": "object"
+      },
+      "RunNowRequest": {
+        "additionalProperties": false,
+        "description": "Narrow ``run-now`` to specific entity types, and opt into creating missing target\nobjects (off by default -- see ``sync/loop.py``'s own module docstring for why).",
+        "properties": {
+          "create_missing": {
+            "default": false,
+            "title": "Create Missing",
+            "type": "boolean"
+          },
+          "entity_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EntityType"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Types"
+          }
+        },
+        "title": "RunNowRequest",
+        "type": "object"
+      },
+      "RunOrphanIssueOut": {
+        "description": "One D4 orphan this run reported, enriched from ``orphan_log`` -- the authoritative\nrecord (``runs/models.py``'s module docstring: \"'this run's orphans' is a join, not a\ncopy\"). ``orphan_log_found`` is ``False`` only if the join could not find a matching\n``orphan_log`` row (should not happen for a committed run; a dry run that reported an\norphan without ever calling ``StateStore.unit_of_work`` is the one documented case it\ncan), so this never *invents* lifecycle data the two sources could disagree about --\nan unmatched row surfaces its absence honestly instead of a fabricated guess.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "first_missing_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Missing At"
+          },
+          "last_missing_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Missing At"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "native_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Native Key"
+          },
+          "neutral_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neutral Id"
+          },
+          "orphan_log_found": {
+            "title": "Orphan Log Found",
+            "type": "boolean"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "run_item_id": {
+            "format": "uuid",
+            "title": "Run Item Id",
+            "type": "string"
+          },
+          "still_open": {
+            "title": "Still Open",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_item_id",
+          "neutral_id",
+          "endpoint",
+          "native_key",
+          "display_name",
+          "detail",
+          "orphan_log_found",
+          "first_missing_at",
+          "last_missing_at",
+          "last_seen_at",
+          "resolved_at",
+          "still_open"
+        ],
+        "title": "RunOrphanIssueOut",
+        "type": "object"
+      },
+      "RunRecordStatus": {
+        "description": "The stored lifecycle of one ``runs`` row.\n\n``OK``, ``PARTIAL``, ``FAILED`` and ``SKIPPED`` are exactly\n:class:`qlabs_catalog_sync.sync.loop.RunStatus`'s four members, by value — a finished\nrun's status is always one of those, copied verbatim from\n:attr:`~qlabs_catalog_sync.sync.loop.SyncRunReport.status`, never re-decided here.\n\n``RUNNING`` is the one value :class:`RunStatus` has no member for, because it is not a\nverdict the loop ever reaches: it exists only between\n:meth:`~qlabs_catalog_sync.runs.recorder.RunRecorder.start` and\n:meth:`~qlabs_catalog_sync.runs.recorder.RunRecorder.finish`/:meth:`~qlabs_catalog_sync.runs.recorder.RunRecorder.fail`,\ni.e. for exactly as long as a cycle is actually in flight. A row a reader finds still\n``RUNNING`` long after it started is not a fifth kind of outcome — it is evidence the\nprocess that started it died before it could record one. See the recorder module\ndocstring for what closes that row out.",
+        "enum": [
+          "running",
+          "ok",
+          "partial",
+          "failed",
+          "skipped"
+        ],
+        "title": "RunRecordStatus",
+        "type": "string"
+      },
+      "RunReportsOut": {
+        "description": "One or more entity types' cycle reports for one pair -- a dry run's plan, or what\n``run-now`` actually did.",
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "pair_id": {
+            "format": "uuid",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "pair_name": {
+            "title": "Pair Name",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SyncRunReportOut"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_id",
+          "pair_name",
+          "generated_at",
+          "runs"
+        ],
+        "title": "RunReportsOut",
+        "type": "object"
+      },
+      "RunStatus": {
+        "description": "The cycle's overall verdict.",
+        "enum": [
+          "ok",
+          "partial",
+          "failed",
+          "skipped"
+        ],
+        "title": "RunStatus",
+        "type": "string"
+      },
+      "RunSummaryOut": {
+        "description": "One ``runs`` row -- the shape ``GET /runs`` lists and ``GET /runs/{run_id}``\nextends with items and errors. ``in_progress`` is ``status is RunRecordStatus.RUNNING``,\nmade explicit rather than left for a client to infer from the string value.",
+        "properties": {
+          "committed": {
+            "title": "Committed",
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/qlabs_catalog_sync__api__routes__history__RunCountsOut"
+          },
+          "create_enabled": {
+            "title": "Create Enabled",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "boolean"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "pair": {
+            "title": "Pair",
+            "type": "string"
+          },
+          "quarantined_endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quarantined Endpoints",
+            "type": "array"
+          },
+          "source_endpoint": {
+            "title": "Source Endpoint",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunRecordStatus"
+          },
+          "target_endpoint": {
+            "title": "Target Endpoint",
+            "type": "string"
+          },
+          "watermark_advanced": {
+            "title": "Watermark Advanced",
+            "type": "boolean"
+          },
+          "watermark_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watermark After"
+          },
+          "watermark_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watermark Before"
+          }
+        },
+        "required": [
+          "id",
+          "pair",
+          "source_endpoint",
+          "target_endpoint",
+          "entity_type",
+          "status",
+          "in_progress",
+          "dry_run",
+          "committed",
+          "create_enabled",
+          "watermark_before",
+          "watermark_after",
+          "watermark_advanced",
+          "has_more",
+          "pages",
+          "started_at",
+          "finished_at",
+          "duration_seconds",
+          "counts",
+          "quarantined_endpoints"
+        ],
+        "title": "RunSummaryOut",
+        "type": "object"
+      },
+      "SchemaNodeOut": {
+        "description": "One object-scope (``catalog.schema``) tree node.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "qualified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualified Name"
+          },
+          "result": {
+            "$ref": "#/components/schemas/SelectionResultOut"
+          },
+          "scope": {
+            "const": "object",
+            "default": "object",
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_id",
+          "qualified_name",
+          "display_name",
+          "result"
+        ],
+        "title": "SchemaNodeOut",
+        "type": "object"
+      },
+      "ScopeCountsOut": {
+        "description": "Included/excluded/undetermined tallies for one scope.\n\n``included + excluded == total`` always -- every candidate decides one way or the\nother. ``undetermined`` is a separate, possibly-overlapping count over that same\n``total`` (a candidate can be excluded *and* undetermined at once): never a third\npartition member, and never a way for an undetermined result to disappear from\n``excluded`` -- see the module docstring's \"Undetermined\" section.",
+        "properties": {
+          "excluded": {
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "included": {
+            "title": "Included",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "undetermined": {
+            "title": "Undetermined",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "included",
+          "excluded",
+          "undetermined"
+        ],
+        "title": "ScopeCountsOut",
+        "type": "object"
+      },
+      "SecretResolveOut": {
+        "description": "Whether an endpoint's ``secret_ref`` resolves (C2) -- ``resolvable``/``reason``\nand nothing else. Mirrors\n:class:`~qlabs_catalog_sync.configstore.secrets.SecretResolveStatus` field for\nfield: that type carries no field capable of holding a resolved value, and neither\ndoes this one.",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolvable": {
+            "title": "Resolvable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "resolvable",
+          "reason"
+        ],
+        "title": "SecretResolveOut",
+        "type": "object"
+      },
+      "SelectionDecision": {
+        "description": "Include or exclude. Shared by ``selection_rules`` and ``selection_overrides``.",
+        "enum": [
+          "include",
+          "exclude"
+        ],
+        "title": "SelectionDecision",
+        "type": "string"
+      },
+      "SelectionOverrideCreateRequest": {
+        "additionalProperties": false,
+        "description": "Pin one object's decision. ``object_id`` must be a literal qualified name for\n``scope`` (``catalog.schema``/``catalog.schema.table``) -- see the module docstring\nfor why an opaque stable id is refused here rather than silently accepted.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "object_id": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Object Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          }
+        },
+        "required": [
+          "scope",
+          "object_id",
+          "decision"
+        ],
+        "title": "SelectionOverrideCreateRequest",
+        "type": "object"
+      },
+      "SelectionOverrideOut": {
+        "description": "One per-object pin that beats every rule (C3).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "pair_id": {
+            "format": "uuid",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pair_id",
+          "scope",
+          "object_id",
+          "decision",
+          "reason",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SelectionOverrideOut",
+        "type": "object"
+      },
+      "SelectionOverrideUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Update an override's ``decision``/``reason``. Excludes ``scope``/``object_id``:\ntogether with the pair, they are this override's identity -- moving a pin to a\ndifferent object is a delete-and-recreate (mirrors\n``ConfigService.update_selection_override``'s own contract).",
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "SelectionOverrideUpdateRequest",
+        "type": "object"
+      },
+      "SelectionResultOut": {
+        "description": "One candidate's decision and what produced it -- the wire form of\n:class:`~qlabs_catalog_sync.selection.evaluator.SelectionResult`.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "explain": {
+            "title": "Explain",
+            "type": "string"
+          },
+          "included": {
+            "title": "Included",
+            "type": "boolean"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DecisionSource"
+          },
+          "undetermined": {
+            "items": {
+              "$ref": "#/components/schemas/UndeterminedRuleOut"
+            },
+            "title": "Undetermined",
+            "type": "array"
+          }
+        },
+        "required": [
+          "decision",
+          "included",
+          "source",
+          "rule_id",
+          "explain",
+          "undetermined"
+        ],
+        "title": "SelectionResultOut",
+        "type": "object"
+      },
+      "SelectionRuleCreateRequest": {
+        "additionalProperties": false,
+        "description": "Create one rule. ``ordinal`` defaults to \"append at the end\" of this pair's\n``(scope)`` rule set -- omit it unless placing the rule at a specific position\nmatters.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "matcher_kind": {
+            "$ref": "#/components/schemas/MatcherKind"
+          },
+          "ordinal": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordinal"
+          },
+          "pattern": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Pattern",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          }
+        },
+        "required": [
+          "scope",
+          "decision",
+          "matcher_kind",
+          "pattern"
+        ],
+        "title": "SelectionRuleCreateRequest",
+        "type": "object"
+      },
+      "SelectionRuleOut": {
+        "description": "One ordered include/exclude rule (C3). ``ordinal`` is the explicit evaluation-order\nsignal -- see the module docstring.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "matcher_kind": {
+            "$ref": "#/components/schemas/MatcherKind"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "pair_id": {
+            "format": "uuid",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "pattern": {
+            "title": "Pattern",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pair_id",
+          "ordinal",
+          "scope",
+          "decision",
+          "matcher_kind",
+          "pattern",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SelectionRuleOut",
+        "type": "object"
+      },
+      "SelectionRuleReorderRequest": {
+        "additionalProperties": false,
+        "description": "Rewrite one ``(pair, scope)``'s rule order to exactly ``rule_ids`` -- see the\nmodule docstring for why this is a complete list, never a delta.",
+        "properties": {
+          "rule_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Rule Ids",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/RuleScope"
+          }
+        },
+        "required": [
+          "scope",
+          "rule_ids"
+        ],
+        "title": "SelectionRuleReorderRequest",
+        "type": "object"
+      },
+      "SelectionRuleUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Update a rule's ``decision``/``matcher_kind``/``pattern``. Deliberately excludes\n``ordinal`` and ``scope`` -- position is :class:`SelectionRuleReorderRequest`'s job,\nnever an implicit side effect of an unrelated field edit (mirrors\n``ConfigService.update_selection_rule``'s own contract).",
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "matcher_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatcherKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pattern"
+          }
+        },
+        "title": "SelectionRuleUpdateRequest",
+        "type": "object"
+      },
+      "SessionInfo": {
+        "description": "What the console learns about its own session.\n\n``csrf_token`` is here, and only here, because the session cookie is ``HttpOnly``:\nthe SPA cannot read the cookie, so this is how it obtains the token it must echo in\n:data:`CSRF_HEADER`. Fetching it needs a valid session already, and ``SameSite=Lax``\nkeeps a cross-site page from making that request with the operator's cookie.",
+        "properties": {
+          "csrf_token": {
+            "title": "Csrf Token",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "csrf_token",
+          "expires_at"
+        ],
+        "title": "SessionInfo",
+        "type": "object"
+      },
+      "SignInRequest": {
+        "additionalProperties": false,
+        "description": "The sign-in body. ``password`` is a ``SecretStr`` so that neither a pydantic\nvalidation error, a ``repr`` nor a structured log field can ever carry its value.",
+        "properties": {
+          "password": {
+            "format": "password",
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "SignInRequest",
+        "type": "object"
+      },
+      "SkipReason": {
+        "description": "Machine-readable reason a record was skipped. Stable: T2.8 and T8.1 assert on these.",
+        "enum": [
+          "no_target_binding",
+          "unconfirmed_target_binding",
+          "nothing_to_write",
+          "target_not_found",
+          "capability_refused",
+          "conflict_unresolved",
+          "deleted_unknown_object",
+          "no_source_envelopes",
+          "not_selected"
+        ],
+        "title": "SkipReason",
+        "type": "string"
+      },
+      "SourceTreePageOut": {
+        "description": "One lazily-fetched page of a pair's source tree, evaluated against its stored\nrules -- see the module docstring's \"Laziness\" section for what ``has_more`` /\n``next_offset`` promise and what they do not.",
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "nodes": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "dataset": "#/components/schemas/DatasetNodeOut",
+                  "object": "#/components/schemas/SchemaNodeOut"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SchemaNodeOut"
+                },
+                {
+                  "$ref": "#/components/schemas/DatasetNodeOut"
+                }
+              ]
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nodes",
+          "offset",
+          "limit",
+          "has_more",
+          "next_offset"
+        ],
+        "title": "SourceTreePageOut",
+        "type": "object"
+      },
+      "SyncPairCreateRequest": {
+        "additionalProperties": false,
+        "description": "Create a sync pair. ``source``/``target`` name already-registered endpoints\n(``routes/endpoints.py``, T12.3); the v1 direction guardrail and the disabled-endpoint\ncheck (see the module docstring) both apply here.",
+        "properties": {
+          "activation_opt_in": {
+            "default": false,
+            "title": "Activation Opt In",
+            "type": "boolean"
+          },
+          "cadence_seconds": {
+            "default": 900,
+            "exclusiveMinimum": 0.0,
+            "title": "Cadence Seconds",
+            "type": "integer"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "entity_types": {
+            "items": {
+              "$ref": "#/components/schemas/EntityType"
+            },
+            "title": "Entity Types",
+            "type": "array"
+          },
+          "jitter_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Seconds"
+          },
+          "manual_edit_policy": {
+            "$ref": "#/components/schemas/ManualEditPolicy"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Target",
+            "type": "string"
+          },
+          "target_space": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Target Space",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "target",
+          "target_space"
+        ],
+        "title": "SyncPairCreateRequest",
+        "type": "object"
+      },
+      "SyncPairOut": {
+        "description": "One configured sync pair.",
+        "properties": {
+          "activation_opt_in": {
+            "title": "Activation Opt In",
+            "type": "boolean"
+          },
+          "cadence_seconds": {
+            "title": "Cadence Seconds",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "entity_types": {
+            "items": {
+              "$ref": "#/components/schemas/EntityType"
+            },
+            "title": "Entity Types",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "jitter_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Seconds"
+          },
+          "manual_edit_policy": {
+            "$ref": "#/components/schemas/ManualEditPolicy"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "target_space": {
+            "title": "Target Space",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "target",
+          "target_space",
+          "entity_types",
+          "cadence_seconds",
+          "jitter_seconds",
+          "manual_edit_policy",
+          "activation_opt_in",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SyncPairOut",
+        "type": "object"
+      },
+      "SyncPairUpdateRequest": {
+        "additionalProperties": false,
+        "description": "A partial update. A field omitted from the request body keeps its current value.\n``jitter_seconds`` is the one nullable field: sending it explicitly as ``null``\nclears the per-pair override back to \"use the scheduler's computed default\";\nomitting it leaves whatever is currently set alone -- same convention as\n``EndpointUpdateRequest.secret_ref`` (``routes/endpoints.py``).\n\nTouching ``source`` and/or ``target`` re-runs both the v1 direction guardrail\n(``ConfigService``) and the disabled-endpoint check (this module) against the\n*effective* endpoints, mirroring ``ConfigService.update_sync_pair``'s own \"only\nre-check what changed\" behavior.",
+        "properties": {
+          "activation_opt_in": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Opt In"
+          },
+          "cadence_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cadence Seconds"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "entity_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EntityType"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Types"
+          },
+          "jitter_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Seconds"
+          },
+          "manual_edit_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManualEditPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "target_space": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Space"
+          }
+        },
+        "title": "SyncPairUpdateRequest",
+        "type": "object"
+      },
+      "SyncRunReportOut": {
+        "description": "One entity type's cycle report -- ``SyncRunReport.to_json()``, typed.\n\nBuilt with :meth:`of`, never by hand: this is ``report.to_json()`` validated into a\nconcrete shape, not a redescription of it. See the module docstring.",
+        "properties": {
+          "committed": {
+            "title": "Committed",
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/qlabs_catalog_sync__api__routes__run_control__RunCountsOut"
+          },
+          "create_enabled": {
+            "title": "Create Enabled",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorReportOut"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "title": "Finished At",
+            "type": "string"
+          },
+          "orphans": {
+            "items": {
+              "$ref": "#/components/schemas/OrphanReportOut"
+            },
+            "title": "Orphans",
+            "type": "array"
+          },
+          "pair": {
+            "title": "Pair",
+            "type": "string"
+          },
+          "quarantined_endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quarantined Endpoints",
+            "type": "array"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReportOut"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "source_endpoint": {
+            "title": "Source Endpoint",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "target_endpoint": {
+            "title": "Target Endpoint",
+            "type": "string"
+          },
+          "watermark": {
+            "$ref": "#/components/schemas/WatermarkOut"
+          }
+        },
+        "required": [
+          "pair",
+          "source_endpoint",
+          "target_endpoint",
+          "entity_type",
+          "status",
+          "dry_run",
+          "committed",
+          "create_enabled",
+          "started_at",
+          "finished_at",
+          "duration_seconds",
+          "watermark",
+          "counts",
+          "records",
+          "orphans",
+          "errors",
+          "quarantined_endpoints"
+        ],
+        "title": "SyncRunReportOut",
+        "type": "object"
+      },
+      "UndeterminedRuleOut": {
+        "description": "One rule that could not be evaluated against a candidate (RM-01 D6) -- never\nfolded into the decision, always listed.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/SelectionDecision"
+          },
+          "explain": {
+            "title": "Explain",
+            "type": "string"
+          },
+          "matcher_kind": {
+            "$ref": "#/components/schemas/MatcherKind"
+          },
+          "missing": {
+            "$ref": "#/components/schemas/CandidateFact"
+          },
+          "pattern": {
+            "title": "Pattern",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matcher_kind",
+          "pattern",
+          "decision",
+          "missing",
+          "explain"
+        ],
+        "title": "UndeterminedRuleOut",
+        "type": "object"
+      },
+      "WatermarkOut": {
+        "description": "The cycle's watermark movement for one entity type.",
+        "properties": {
+          "advanced": {
+            "title": "Advanced",
+            "type": "boolean"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "held_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Held By",
+            "type": "array"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "advanced",
+          "held_by",
+          "has_more",
+          "pages"
+        ],
+        "title": "WatermarkOut",
+        "type": "object"
+      },
+      "WithheldFieldOut": {
+        "description": "One field engine policy held back (D7 activation, or an injected manual-edit policy).",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "title": "WithheldFieldOut",
+        "type": "object"
+      },
+      "qlabs_catalog_sync__api__routes__history__RunCountsOut": {
+        "description": "Per-outcome counts for one run, mirroring ``RunRow``'s own count columns exactly\n(``runs/models.py``'s module docstring: \"the DoD's 'counts reconcile with what the\nloop actually wrote', made a queryable column per outcome rather than a JSON blob\").\n``write`` is ``created + written``, derived here exactly as :attr:`RunRecord.write_count`\nderives it -- never a second stored value to drift from the two it is computed from.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "error": {
+            "title": "Error",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "filtered": {
+            "title": "Filtered",
+            "type": "integer"
+          },
+          "no_op": {
+            "title": "No Op",
+            "type": "integer"
+          },
+          "orphaned": {
+            "title": "Orphaned",
+            "type": "integer"
+          },
+          "read": {
+            "title": "Read",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "write": {
+            "title": "Write",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "read",
+          "created",
+          "written",
+          "write",
+          "unchanged",
+          "no_op",
+          "skipped",
+          "orphaned",
+          "filtered",
+          "failed",
+          "error"
+        ],
+        "title": "RunCountsOut",
+        "type": "object"
+      },
+      "qlabs_catalog_sync__api__routes__run_control__RunCountsOut": {
+        "description": "Per-outcome record counts for one cycle.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "filtered": {
+            "title": "Filtered",
+            "type": "integer"
+          },
+          "no_op": {
+            "title": "No Op",
+            "type": "integer"
+          },
+          "orphaned": {
+            "title": "Orphaned",
+            "type": "integer"
+          },
+          "read": {
+            "title": "Read",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "read",
+          "created",
+          "written",
+          "unchanged",
+          "no_op",
+          "skipped",
+          "orphaned",
+          "filtered",
+          "failed"
+        ],
+        "title": "RunCountsOut",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "QLabs Catalog Sync API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/auth/session": {
+      "delete": {
+        "description": "Invalidate the session server-side and clear the cookie.\n\nMutating, so it needs a valid :data:`CSRF_HEADER` like every other mutating\nrequest — being forcibly signed out by a cross-site page is a small harm, but it\nis still a harm, and \"every mutating request\" is easier to keep true than a list\nof exceptions.",
+        "operationId": "sign_out_api_auth_session_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Sign out",
+        "tags": [
+          "auth"
+        ]
+      },
+      "get": {
+        "description": "What the SPA calls on boot to find out whether it is signed in, and to recover\nthe CSRF token it cannot read from the ``HttpOnly`` cookie.",
+        "operationId": "read_session_api_auth_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Describe the current administrator session",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "description": "Exchange the administrator credential for a session cookie and a CSRF token.\n\nThe refusal is one shape for every failure — wrong username, wrong password,\nwrong both — because :meth:`ConsoleAuth.sign_in` gives this route nothing finer\nto report.",
+        "operationId": "sign_in_api_auth_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Sign in as the administrator",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/config-changes": {
+      "get": {
+        "operationId": "list_config_changes_api_config_changes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "entity_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ChangeEntityKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entity_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ChangeAction"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Field"
+            }
+          },
+          {
+            "description": "Page size, 1-200.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Page size, 1-200.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor from a previous page's next_cursor.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page's next_cursor.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigChangeListPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "The configuration change log -- answers \"when did this schema start syncing\"",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/connectors": {
+      "get": {
+        "description": "Everything entry-point discovery found (C6): every successfully registered\nconnector with its live capability manifest, plus every entry point discovery\ncould not turn into one, with its reason. Installs, fetches and executes\nnothing beyond what process startup already did -- see the module docstring.",
+        "operationId": "list_connectors_api_connectors_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorInfo"
+                  },
+                  "title": "Response List Connectors Api Connectors Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "List connectors discovery found in this running image",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/api/endpoints": {
+      "get": {
+        "operationId": "list_endpoints_api_endpoints_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EndpointOut"
+                  },
+                  "title": "Response List Endpoints Api Endpoints Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "List configured endpoints",
+        "tags": [
+          "endpoints"
+        ]
+      },
+      "post": {
+        "operationId": "create_endpoint_api_endpoints_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Register an instance of a discovered connector (C6)",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/endpoints/{name}": {
+      "delete": {
+        "operationId": "delete_endpoint_api_endpoints__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Delete an endpoint",
+        "tags": [
+          "endpoints"
+        ]
+      },
+      "get": {
+        "operationId": "get_endpoint_api_endpoints__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Read one endpoint",
+        "tags": [
+          "endpoints"
+        ]
+      },
+      "patch": {
+        "operationId": "update_endpoint_api_endpoints__name__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Edit an endpoint: settings, secret reference, role, or enabled",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/endpoints/{name}/healthcheck": {
+      "post": {
+        "operationId": "run_healthcheck_api_endpoints__name__healthcheck_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointHealthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Run this endpoint's connector healthcheck() (C6)",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/endpoints/{name}/secret-resolve": {
+      "get": {
+        "operationId": "secret_resolve_api_endpoints__name__secret_resolve_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResolveOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Whether this endpoint's secret reference resolves (C2)",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/pairs": {
+      "get": {
+        "operationId": "list_pairs_api_pairs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SyncPairOut"
+                  },
+                  "title": "Response List Pairs Api Pairs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "List configured sync pairs",
+        "tags": [
+          "pairs"
+        ]
+      },
+      "post": {
+        "operationId": "create_pair_api_pairs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncPairCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncPairOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Create a sync pair",
+        "tags": [
+          "pairs"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}": {
+      "delete": {
+        "operationId": "delete_pair_api_pairs__pair_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Delete a sync pair (cascades its selection rules and overrides)",
+        "tags": [
+          "pairs"
+        ]
+      },
+      "get": {
+        "operationId": "get_pair_api_pairs__pair_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncPairOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Read one sync pair",
+        "tags": [
+          "pairs"
+        ]
+      },
+      "patch": {
+        "operationId": "update_pair_api_pairs__pair_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncPairUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncPairOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Edit a sync pair",
+        "tags": [
+          "pairs"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/dry-run": {
+      "post": {
+        "operationId": "dry_run_api_pairs__pair_id__dry_run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DryRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunReportsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Plan this pair's next cycle: the writes it would make, zero mutations",
+        "tags": [
+          "run-control"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/overrides": {
+      "get": {
+        "operationId": "list_overrides_api_pairs__pair_id__overrides_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "object or dataset",
+            "in": "query",
+            "name": "scope",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RuleScope",
+              "description": "object or dataset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SelectionOverrideOut"
+                  },
+                  "title": "Response List Overrides Api Pairs  Pair Id  Overrides Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "List one pair's per-object overrides for one scope",
+        "tags": [
+          "selection"
+        ]
+      },
+      "post": {
+        "operationId": "create_override_api_pairs__pair_id__overrides_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionOverrideCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionOverrideOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Pin one object's selection decision (C3)",
+        "tags": [
+          "selection"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/overrides/{override_id}": {
+      "delete": {
+        "operationId": "delete_override_api_pairs__pair_id__overrides__override_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "override_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Override Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Delete an override",
+        "tags": [
+          "selection"
+        ]
+      },
+      "get": {
+        "operationId": "get_override_api_pairs__pair_id__overrides__override_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "override_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Override Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionOverrideOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Read one override",
+        "tags": [
+          "selection"
+        ]
+      },
+      "patch": {
+        "operationId": "update_override_api_pairs__pair_id__overrides__override_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "override_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Override Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionOverrideUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionOverrideOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Edit an override's decision or reason",
+        "tags": [
+          "selection"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/pause": {
+      "post": {
+        "operationId": "pause_api_pairs__pair_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunControlStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Pause this pair (see run_control.py's module docstring for the scope of this)",
+        "tags": [
+          "run-control"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/preview": {
+      "post": {
+        "operationId": "preview_api_pairs__pair_id__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Evaluate stored or draft rules to counts and a sample (C3, C4)",
+        "tags": [
+          "preview"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/resume": {
+      "post": {
+        "operationId": "resume_api_pairs__pair_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunControlStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Resume a paused pair",
+        "tags": [
+          "run-control"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/rules": {
+      "get": {
+        "operationId": "list_rules_api_pairs__pair_id__rules_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "object or dataset",
+            "in": "query",
+            "name": "scope",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RuleScope",
+              "description": "object or dataset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SelectionRuleOut"
+                  },
+                  "title": "Response List Rules Api Pairs  Pair Id  Rules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "List one pair's selection rules for one scope, in evaluation order",
+        "tags": [
+          "selection"
+        ]
+      },
+      "post": {
+        "operationId": "create_rule_api_pairs__pair_id__rules_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionRuleCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionRuleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Create one selection rule",
+        "tags": [
+          "selection"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/rules/reorder": {
+      "post": {
+        "operationId": "reorder_rules_api_pairs__pair_id__rules_reorder_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionRuleReorderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SelectionRuleOut"
+                  },
+                  "title": "Response Reorder Rules Api Pairs  Pair Id  Rules Reorder Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Rewrite one (pair, scope)'s rule order atomically (C3)",
+        "tags": [
+          "selection"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/rules/{rule_id}": {
+      "delete": {
+        "operationId": "delete_rule_api_pairs__pair_id__rules__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Delete a selection rule",
+        "tags": [
+          "selection"
+        ]
+      },
+      "get": {
+        "operationId": "get_rule_api_pairs__pair_id__rules__rule_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionRuleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Read one selection rule",
+        "tags": [
+          "selection"
+        ]
+      },
+      "patch": {
+        "operationId": "update_rule_api_pairs__pair_id__rules__rule_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionRuleUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionRuleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Edit a selection rule's decision, matcher kind, or pattern",
+        "tags": [
+          "selection"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/run-now": {
+      "post": {
+        "operationId": "run_now_api_pairs__pair_id__run_now_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunNowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunReportsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Run one real cycle now; refused if this pair is paused or already running",
+        "tags": [
+          "run-control"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/run-status": {
+      "get": {
+        "operationId": "run_status_api_pairs__pair_id__run_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunControlStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Whether this pair is paused and/or has a run-now cycle in flight",
+        "tags": [
+          "run-control"
+        ]
+      }
+    },
+    "/api/pairs/{pair_id}/source-tree": {
+      "get": {
+        "operationId": "browse_source_tree_api_pairs__pair_id__source_tree_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Restrict to one scope; omit for both, schemas before datasets",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RuleScope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to one scope; omit for both, schemas before datasets",
+              "title": "Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read each node's real tags (one extra read() per node)",
+            "in": "query",
+            "name": "resolve_tags",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Read each node's real tags (one extra read() per node)",
+              "title": "Resolve Tags",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Read each node's real owners (one extra read() per node)",
+            "in": "query",
+            "name": "resolve_owners",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Read each node's real owners (one extra read() per node)",
+              "title": "Resolve Owners",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceTreePageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Browse one page of a pair's source tree against its stored rules (C4, C5)",
+        "tags": [
+          "preview"
+        ]
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "operationId": "list_runs_api_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pair",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pair"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entity_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EntityType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunRecordStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Page size, 1-200.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Page size, 1-200.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor from a previous page's next_cursor.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page's next_cursor.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "List run history, newest first, paginated",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_api_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Read one run: counts, items and errors",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/runs/{run_id}/issues": {
+      "get": {
+        "operationId": "get_run_issues_api_runs__run_id__issues_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunIssuesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "What this run could not resolve: unresolved dataset members (D2), unresolvable owners (D3), orphans (D4) and errors, as one answer",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Byte-identical to ``ObservabilityServer``'s ``/healthz`` (T2.7): same status\ncode, same JSON body, same content type -- rendered by the same function.",
+        "operationId": "_healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": " Healthz"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Byte-identical to ``ObservabilityServer``'s ``/metrics`` (T2.7): the same\nPrometheus text-exposition body, rendered by the same function.",
+        "operationId": "_metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": " Metrics"
+      }
+    }
+  }
+}
