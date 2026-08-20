@@ -1,0 +1,53 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant. RM-01 is built without live
+# tenants (planning/Roadmap/RM-01-one-way-sync-mvp/decision-databricks-to-qlik-mvp.md,
+# D8). Every field/value/URL below is typed by hand from
+# planning/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md
+# sections 3.1 (data-governance paths -- no /v1 segment), 3.2 (OAuth2 client-credentials
+# grant) and 4.1 (data-product fields), plus
+# planning/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md
+# section 2 (the full data-product envelope: keyContacts, activatedOn, quality, ...).
+#
+# Exercised by test_qlik_contract_vcr_reads.py's
+# test_connector_setup_and_read_pins_oauth_and_data_product_shape: a real
+# Connector.setup() followed by Connector.read() on a DATA_PRODUCT ref -- the connector's
+# own two public entry points, called exactly as the engine would call them. setup()
+# itself does no I/O (the OAuth2 token is fetched lazily on read()'s first real
+# request), so the token POST below is triggered by read(), not by setup().
+#
+# What this pins: the OAuth2 client-credentials token exchange shape (JSON body,
+# grant_type/client_id/client_secret/scope), and the data-governance data-product GET
+# shape -- crucially **no /v1 segment** in the path, which is a real trap since the
+# Items/Users API family one line below does carry /v1.
+version: 1
+interactions:
+  - request:
+      method: POST
+      uri: https://contract-vcr.eu.qlikcloud.example/oauth/token
+      body: '{"grant_type": "client_credentials", "client_id": "contract-vcr-client", "client_secret": "contract-vcr-secret", "scope": "user_default"}'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"access_token": "contract-vcr-token-1", "token_type": "bearer", "expires_in": 3600}'
+  - request:
+      method: GET
+      uri: https://contract-vcr.eu.qlikcloud.example/api/data-governance/data-products/9a1b2c3d4e5f60718293a4b6
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-token-1"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+        etag: ['W/"contract-vcr-rev-1"']
+      body:
+        string: '{"id": "9a1b2c3d4e5f60718293a4b6", "qri": "qri:data-product://9a1b2c3d4e5f60718293a4b6", "mainId": "9a1b2c3d4e5f60718293a4b6-main", "name": "Contract VCR Data Product", "description": "Pinned by T8.5", "readMe": "# Contract VCR\nPinned by T8.5.", "spaceId": "710b3f4c5d6e7f8a9b0c1d2e", "tags": ["sales", "revenue"], "ownerId": "user-ada-001", "tenantId": "contract-vcr-tenant", "activated": true, "activatedOn": ["2026-08-01T00:00:00Z"], "datasetIds": [], "apiConsumableDatasetIds": [], "glossaryIds": [], "keyContacts": [{"userId": "user-ada-001", "role": "owner"}], "pendingChangesCount": 0, "quality": {"validity": 0, "completeness": 0}, "createdAt": "2026-08-01T00:00:00Z", "createdBy": "user-ada-001", "updatedAt": "2026-08-10T00:00:00Z", "updatedBy": "user-ada-001"}'

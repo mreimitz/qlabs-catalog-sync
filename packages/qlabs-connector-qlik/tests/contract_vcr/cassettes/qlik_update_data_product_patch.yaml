@@ -1,0 +1,53 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant -- see
+# qlik_setup_and_read_data_product.yaml's header comment for the conventions this
+# follows. Every field/value/URL is typed by hand from
+# planning/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md
+# section 2 ("PATCH ... uses JSON Patch (array of operations)", the closed
+# eight-path enum, ETag concurrency via if-match). No OAuth interaction: this cassette
+# backs a test that drives qlabs_connector_qlik.write.QlikWriter.update() directly
+# against a plain HttpEndpoint with a static bearer token, exactly like
+# tests/write/*.py's own respx-based tests do -- the same update() the connector calls
+# at runtime, exercised without the connector's OAuth wiring around it.
+#
+# What this pins, in call order (write.py's own module docstring, point 12a):
+# 1. an idempotency pre-read GET on the same resource -- one Tier-1 GET before any
+#    Tier-2 write, so a diff that is already applied never reaches the wire;
+# 2. PATCH /api/data-governance/data-products/{id} (no /v1 segment) carrying a
+#    **replace-only** JSON Patch array (never add/remove) and an if-match header
+#    carrying FieldDiff.expected_revision -- and the 204 No Content plus a fresh ETag
+#    response header that becomes the new source_revision.
+version: 1
+interactions:
+  - request:
+      method: GET
+      uri: https://contract-vcr.eu.qlikcloud.example/api/data-governance/data-products/d4e5f6a7b8c9d0e1f2a3b4c5
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-static-token"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+        etag: ['W/"contract-vcr-update-rev-1"']
+      body:
+        string: '{"id": "d4e5f6a7b8c9d0e1f2a3b4c5", "qri": "qri:data-product://d4e5f6a7b8c9d0e1f2a3b4c5", "mainId": "d4e5f6a7b8c9d0e1f2a3b4c5-main", "name": "Old Product Name", "spaceId": "710b3f4c5d6e7f8a9b0c1d2e", "tags": [], "ownerId": "user-ada-001", "tenantId": "contract-vcr-tenant", "activated": false, "activatedOn": [], "datasetIds": [], "apiConsumableDatasetIds": [], "glossaryIds": [], "keyContacts": [], "pendingChangesCount": 0, "createdAt": "2026-08-01T00:00:00Z", "createdBy": "user-ada-001", "updatedAt": "2026-08-01T00:00:00Z", "updatedBy": "user-ada-001"}'
+  - request:
+      method: PATCH
+      uri: https://contract-vcr.eu.qlikcloud.example/api/data-governance/data-products/d4e5f6a7b8c9d0e1f2a3b4c5
+      body: '[{"op": "replace", "path": "/name", "value": "Updated Product Name"}]'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-static-token"]
+        if-match: ['W/"contract-vcr-update-rev-1"']
+    response:
+      status:
+        code: 204
+        message: No Content
+      headers:
+        etag: ['W/"contract-vcr-update-rev-2"']
+      body:
+        string: ""

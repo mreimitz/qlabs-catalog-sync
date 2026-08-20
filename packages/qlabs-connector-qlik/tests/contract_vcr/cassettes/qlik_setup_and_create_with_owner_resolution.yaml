@@ -1,0 +1,68 @@
+# Hand-authored, NOT captured from a live Qlik Cloud tenant -- see
+# qlik_setup_and_read_data_product.yaml's header comment for the conventions this
+# follows. Every field/value/URL is typed by hand from
+# planning/Research/RS-02-qlik-catalog-api/notes/qlik-two-way-sync-readiness.md
+# section 2 (the create POST body and its identity/audit response fields) and
+# planning/Research/RS-02-qlik-catalog-api/outputs/qlik-catalog-api-reference.md
+# section 1.1 (the users-API list envelope).
+#
+# Exercised by test_qlik_contract_vcr_writes.py's
+# test_setup_and_create_pins_owner_resolution_and_post_body: a real Connector.setup()
+# followed by Connector.create() on a DataProduct carrying one owner email -- the
+# connector's own two public entry points, called exactly as the engine would call them.
+#
+# What this pins, in the order the requests actually happen (decision D3, write.py):
+# 1. the OAuth2 token exchange (same shape as qlik_setup_and_read_data_product.yaml);
+# 2. GET /api/v1/users?filter=email eq '<email>'&limit=100 -- the users-API lookup that
+#    turns an owner email into a Qlik userId, never invented, never guessed;
+# 3. POST /api/data-governance/data-products (no /v1 segment) -- the create body, with
+#    keyContacts built from step 2's resolved userId, never from the raw email.
+version: 1
+interactions:
+  - request:
+      method: POST
+      uri: https://contract-vcr.eu.qlikcloud.example/oauth/token
+      body: '{"grant_type": "client_credentials", "client_id": "contract-vcr-client", "client_secret": "contract-vcr-secret", "scope": "user_default"}'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"access_token": "contract-vcr-token-3", "token_type": "bearer", "expires_in": 3600}'
+  - request:
+      method: GET
+      uri: "https://contract-vcr.eu.qlikcloud.example/api/v1/users?filter=email+eq+%27ada%40acme.example%27&limit=100"
+      body: null
+      headers:
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-token-3"]
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        content-type: ["application/json"]
+      body:
+        string: '{"data": [{"id": "user-ada-001", "email": "ada@acme.example"}], "links": {}}'
+  - request:
+      method: POST
+      uri: https://contract-vcr.eu.qlikcloud.example/api/data-governance/data-products
+      body: '{"name": "Contract VCR Create Product", "spaceId": "710b3f4c5d6e7f8a9b0c1d2e", "description": "Created by T8.5", "readMe": "# Contract VCR\nCreated by T8.5.", "tags": ["sales"], "keyContacts": [{"userId": "user-ada-001", "role": "owner"}]}'
+      headers:
+        content-type: ["application/json"]
+        accept: ["*/*"]
+        authorization: ["Bearer contract-vcr-token-3"]
+    response:
+      status:
+        code: 201
+        message: Created
+      headers:
+        content-type: ["application/json"]
+        etag: ['W/"contract-vcr-create-rev-1"']
+      body:
+        string: '{"id": "c1a2b3c4d5e6f7a8b9c0d1e2", "qri": "qri:data-product://c1a2b3c4d5e6f7a8b9c0d1e2", "mainId": "c1a2b3c4d5e6f7a8b9c0d1e2-main", "name": "Contract VCR Create Product", "description": "Created by T8.5", "readMe": "# Contract VCR\nCreated by T8.5.", "spaceId": "710b3f4c5d6e7f8a9b0c1d2e", "tags": ["sales"], "ownerId": "user-ada-001", "tenantId": "contract-vcr-tenant", "activated": false, "activatedOn": [], "datasetIds": [], "apiConsumableDatasetIds": [], "glossaryIds": [], "keyContacts": [{"userId": "user-ada-001", "role": "owner"}], "pendingChangesCount": 0, "quality": {"validity": 0, "completeness": 0}, "createdAt": "2026-08-20T09:00:00Z", "createdBy": "user-ada-001", "updatedAt": "2026-08-20T09:00:00Z", "updatedBy": "user-ada-001"}'
