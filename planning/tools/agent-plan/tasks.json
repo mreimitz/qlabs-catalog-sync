@@ -294,7 +294,7 @@
       ],
       "dod": "Config base loads from env, ConnectorContext is wired, all typed exceptions are defined and raisable, and the redaction processor drops known secret keys from log output.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/config -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.10",
