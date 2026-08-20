@@ -1,6 +1,6 @@
 {
   "profile_name": "Research Scaffold OKF Profile",
-  "profile_version": "1.0.0",
+  "profile_version": "1.1.0",
   "okf_version": "0.1",
   "okf_spec": "https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md",
   "okf_spec_revision": "ee67a5ca27044ebe7c38385f5b6cffc2305a9c1a",
@@ -24,6 +24,7 @@
     "Source Reference": ["captured", "verified", "superseded", "archived"],
     "Roadmap": ["planned", "active", "blocked", "done", "archived"],
     "Roadmap Item": ["planned", "active", "blocked", "done", "archived"],
+    "Documentation": ["draft", "review", "current", "superseded", "archived"],
     "Decision": ["proposed", "accepted", "superseded", "reversed"],
     "Agent Instruction": ["active", "deprecated"],
     "Agent Skill": ["active", "deprecated"],

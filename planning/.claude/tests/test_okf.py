@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 
@@ -120,6 +123,192 @@ class OkfValidationTests(unittest.TestCase):
             issues = okf.validate_source_attachments(root)
             self.assertIn("PROFILE019", {issue.code for issue in issues})
 
+    def concept(self, **overrides: object) -> str:
+        metadata = {
+            "type": "Roadmap Item",
+            "title": "Test",
+            "description": "A test concept.",
+            "tags": ["test"],
+            "timestamp": "2026-07-24T00:00:00Z",
+            "status": "active",
+        }
+        metadata.update(overrides)
+        body = overrides.pop("_body", None) or "# Test\n\nBody."
+        metadata.pop("_body", None)
+        return okf.render_frontmatter(metadata, str(body))
+
+    def codes(self, path: Path, content: str) -> set[str]:
+        profile = okf.load_profile(ROOT)
+        issues, _, _ = okf.validate_concept(ROOT, path, content, profile)
+        return {issue.code for issue in issues}
+
+    def test_done_roadmap_item_outside_completed_is_rejected(self) -> None:
+        content = self.concept(status="done")
+        path = ROOT / "Roadmap" / "RM-99-example" / "item.md"
+        self.assertIn("PROFILE032", self.codes(path, content))
+
+    def test_completed_roadmap_item_must_be_done(self) -> None:
+        path = ROOT / "Roadmap" / "completed" / "RM-99-example" / "item.md"
+        self.assertIn("PROFILE035", self.codes(path, self.concept(status="active")))
+        done = self.codes(path, self.concept(status="done"))
+        self.assertNotIn("PROFILE035", done)
+        self.assertNotIn("PROFILE032", done)
+
+    def test_lifecycle_checks_ignore_other_concept_types(self) -> None:
+        # RM folders also hold decisions, guides and outputs; they must not be
+        # dragged into the roadmap-item lifecycle rules.
+        path = ROOT / "Roadmap" / "completed" / "RM-99-example" / "decision.md"
+        content = self.concept(
+            type="Decision",
+            status="accepted",
+            _body="# Test\n\nBody.\n\n# Citations\n\nNone.",
+        )
+        codes = self.codes(path, content)
+        self.assertNotIn("PROFILE035", codes)
+        self.assertNotIn("PROFILE032", codes)
+
+    def test_documentation_requires_delivered_increments_section(self) -> None:
+        path = ROOT / "Docu" / "DC-99-example" / "doc.md"
+        content = self.concept(type="Documentation", status="draft")
+        self.assertIn("PROFILE039", self.codes(path, content))
+
+    def test_draft_documentation_may_have_no_increments(self) -> None:
+        path = ROOT / "Docu" / "DC-99-example" / "doc.md"
+        body = f"# Test\n\n{okf.DELIVERED_HEADING}\n\n{okf.INCREMENT_PLACEHOLDER}"
+        draft = self.codes(path, self.concept(type="Documentation", status="draft", _body=body))
+        self.assertNotIn("PROFILE037", draft)
+        self.assertNotIn("PROFILE039", draft)
+        current = self.codes(
+            path, self.concept(type="Documentation", status="current", _body=body)
+        )
+        self.assertIn("PROFILE037", current)
+
+    def test_docu_path_policy(self) -> None:
+        def codes(*parts: str) -> set[str]:
+            return {
+                issue.code for issue in okf.path_policy_issues(ROOT, ROOT.joinpath(*parts))
+            }
+
+        self.assertEqual(set(), codes("Docu", "index.md"))
+        self.assertEqual(set(), codes("Docu", "DC-01-connector-sdk", "doc.md"))
+        self.assertIn("PROFILE034", codes("Docu", "loose.md"))
+        self.assertIn("PROFILE034", codes("Docu", "DC-1-bad", "doc.md"))
+
+    def test_roadmap_completed_paths_are_allowed(self) -> None:
+        def codes(*parts: str) -> set[str]:
+            return {
+                issue.code for issue in okf.path_policy_issues(ROOT, ROOT.joinpath(*parts))
+            }
+
+        self.assertEqual(set(), codes("Roadmap", "completed", "index.md"))
+        self.assertEqual(set(), codes("Roadmap", "completed", "RM-01-x", "item.md"))
+        self.assertIn("PROFILE027", codes("Roadmap", "completed", "loose.md"))
+        self.assertIn("PROFILE027", codes("Roadmap", "completed", "RM-1-x", "item.md"))
+
+    def test_delivery_documentation_requires_cross_links(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            item = root / "Roadmap" / "completed" / "RM-01-example"
+            item.mkdir(parents=True)
+            (item / "item.md").write_text(
+                self.concept(status="done"), encoding="utf-8"
+            )
+            doc_dir = root / "Docu" / "DC-01-subject"
+            doc_dir.mkdir(parents=True)
+            doc = doc_dir / "doc.md"
+
+            def write(body: str) -> None:
+                doc.write_text(
+                    self.concept(type="Documentation", status="draft", _body=body),
+                    encoding="utf-8",
+                )
+
+            write(f"# Subject\n\n{okf.DELIVERED_HEADING}\n\n{okf.INCREMENT_PLACEHOLDER}")
+            self.assertIn(
+                "PROFILE036",
+                {issue.code for issue in okf.validate_delivery_documentation(root)},
+            )
+
+            write(f"# Subject\n\n{okf.DELIVERED_HEADING}\n\n### RM-01 — Example\n\nNo link.")
+            codes = {issue.code for issue in okf.validate_delivery_documentation(root)}
+            self.assertIn("PROFILE038", codes)
+            self.assertIn("PROFILE036", codes)
+
+            write(
+                f"# Subject\n\n{okf.DELIVERED_HEADING}\n\n### RM-01 — Example\n\n"
+                "Roadmap item: [RM-01](/Roadmap/completed/RM-01-example/item.md)."
+            )
+            self.assertEqual([], okf.validate_delivery_documentation(root))
+
+    def test_tag_dir_re_accepts_dc(self) -> None:
+        self.assertTrue(okf.TAG_DIR_RE.fullmatch("DC-01-connector-sdk"))
+        self.assertFalse(okf.TAG_DIR_RE.fullmatch("DX-01-nope"))
+        self.assertEqual("DC-01", okf.item_tag("DC-01-connector-sdk"))
+
+    def test_registry_migrates_missing_dc_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".claude").mkdir()
+            (root / ".claude" / "tag-registry.json").write_text(
+                json.dumps({"next_rs": 3, "next_rm": 2, "allocated_rs": [], "allocated_rm": []}),
+                encoding="utf-8",
+            )
+            registry = okf.load_registry(root)
+        self.assertEqual(1, registry["next_dc"])
+        self.assertEqual([], registry["allocated_dc"])
+        self.assertEqual(3, registry["next_rs"])
+
+    def test_hook_blocks_in_place_done_flip(self) -> None:
+        """An agent must not be able to hand-complete a roadmap item."""
+        item = ROOT / "Roadmap" / "RM-01-one-way-sync-mvp" / "item.md"
+        original = item.read_text(encoding="utf-8")
+        metadata, body = okf.parse_frontmatter(original)
+        assert metadata is not None
+        metadata["status"] = "done"
+        metadata["timestamp"] = "2030-01-01T00:00:00Z"
+        payload = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(item),
+                "content": okf.render_frontmatter(metadata, body),
+            },
+        }
+        self.assertIn("PROFILE032", {issue.code for issue in okf.hook_pre(ROOT, payload)})
+        self.assertEqual(original, item.read_text(encoding="utf-8"))
+
+    def test_hook_rejects_markdown_directly_under_docu(self) -> None:
+        payload = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(ROOT / "Docu" / "notes.md"), "content": "# No"},
+        }
+        self.assertIn("PROFILE034", {issue.code for issue in okf.hook_pre(ROOT, payload)})
+
+    def test_tag_uniqueness_spans_roadmap_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Roadmap" / "RM-01-active").mkdir(parents=True)
+            (root / "Roadmap" / "completed" / "RM-01-shipped").mkdir(parents=True)
+            issues = okf.validate_tag_uniqueness(root)
+        self.assertIn("PROFILE023", {issue.code for issue in issues})
+
+    def test_increment_insertion_keeps_ascending_order(self) -> None:
+        body = f"# Subject\n\n{okf.DELIVERED_HEADING}\n\n{okf.INCREMENT_PLACEHOLDER}\n"
+        body = okf.insert_increment(body, "RM-03", "### RM-03 — Third\n\nThird.")
+        body = okf.insert_increment(body, "RM-01", "### RM-01 — First\n\nFirst.")
+        self.assertNotIn(okf.INCREMENT_PLACEHOLDER, body)
+        self.assertEqual(["RM-01", "RM-03"], list(okf.delivered_increments(body)))
+        with self.assertRaises(ValueError):
+            okf.insert_increment(body, "RM-01", "### RM-01 — Again\n\nAgain.")
+
+    def test_log_append_preserves_newest_first(self) -> None:
+        text = "# Log\n\n## 2026-01-02\n\n* Older entry.\n"
+        updated = okf.append_log_entry(text, "* New entry.")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "log.md"
+            path.write_text(updated, encoding="utf-8")
+            self.assertEqual([], okf.validate_log(Path(temp), path, updated))
+        self.assertIn("* New entry.", updated)
+
 
 class GeneratorIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -135,9 +324,7 @@ class GeneratorIntegrationTests(unittest.TestCase):
         self.temp.cleanup()
 
     def registry(self) -> dict:
-        return json.loads(
-            (self.root / ".claude" / "tag-registry.json").read_text(encoding="utf-8")
-        )
+        return okf.load_registry(self.root)
 
     def test_research_and_roadmap_generation_remain_conformant(self) -> None:
         before = self.registry()
@@ -171,6 +358,180 @@ class GeneratorIntegrationTests(unittest.TestCase):
         after = self.registry()
         self.assertEqual(before["allocated_rs"] + [expected_rs], after["allocated_rs"])
         self.assertEqual(before["allocated_rm"] + [expected_rm], after["allocated_rm"])
+
+    def ensure_domains(self) -> None:
+        """Create the newer domain roots the way the one-time bootstrap does."""
+        (self.root / "Docu").mkdir(exist_ok=True)
+        (self.root / "Roadmap" / "completed").mkdir(exist_ok=True)
+        okf.sync_indexes(self.root)
+        self.assertEqual([], okf.validate(self.root))
+
+    def snapshot(self) -> dict[str, str]:
+        digests: dict[str, str] = {}
+        for current, dirs, files in os.walk(self.root):
+            dirs[:] = [
+                name
+                for name in dirs
+                if name not in {"__pycache__", ".git"} and not name.startswith(".okf-staging-")
+            ]
+            for name in files:
+                path = Path(current) / name
+                if name == ".tag-allocation.lock":
+                    continue
+                digests[str(path.relative_to(self.root))] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+        return digests
+
+    def make_docu(self, title: str = "Connector SDK") -> str:
+        target = okf.new_docu(
+            self.root,
+            argparse.Namespace(
+                title=title,
+                subject="The connector plugin SDK: contract, model, helpers.",
+                scope_in="The SDK package and its conformance kit.",
+                scope_out="Engine internals and connector implementations.",
+                code_location=["packages/qlabs-catalog-sync-sdk/"],
+                slug=None,
+            ),
+        )
+        return okf.item_tag(target.name) or target.name
+
+    def finish_task_board(self) -> None:
+        board_path = self.root / "tools" / "agent-plan" / "tasks.json"
+        board = json.loads(board_path.read_text(encoding="utf-8"))
+        for task in board["tasks"]:
+            task["status"] = "done"
+        board_path.write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
+
+    def completion_args(self, **overrides: object) -> argparse.Namespace:
+        defaults = dict(
+            tag="RM-01",
+            docu=["DC-01"],
+            shipped="The upstream sync path from source catalogs into Qlik.",
+            deviation=[],
+            gap=[],
+            code_path=["packages/"],
+            summary=None,
+            tasks_file=[],
+            no_task_board=False,
+            keep_milestones=False,
+            docu_status="current",
+            require_clean_tree=False,
+            scan_root=None,
+            no_scan=True,
+            strict_references=False,
+        )
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_new_docu_generates_conformant_documentation(self) -> None:
+        self.ensure_domains()
+        before = self.registry()
+        tag = self.make_docu()
+        self.assertEqual(f"DC-{before['next_dc']:02d}", tag)
+        self.assertEqual([], okf.validate(self.root))
+        self.assertEqual(before["allocated_dc"] + [tag], self.registry()["allocated_dc"])
+
+    def test_complete_roadmap_moves_item_and_records_increment(self) -> None:
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        self.finish_task_board()
+        result = okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
+
+        source = self.root / "Roadmap" / "RM-01-one-way-sync-mvp"
+        destination = self.root / "Roadmap" / "completed" / "RM-01-one-way-sync-mvp"
+        self.assertFalse(source.exists())
+        self.assertTrue(destination.is_dir())
+        self.assertEqual(destination, result.destination)
+
+        item = okf.concept_metadata(destination / "item.md")
+        self.assertEqual("done", item["status"])
+        self.assertNotIn("- [ ] ", (destination / "item.md").read_text(encoding="utf-8"))
+        self.assertGreater(result.milestones_ticked, 0)
+
+        doc_path = next((self.root / "Docu").glob(f"{docu_tag}-*/doc.md"))
+        doc_body = doc_path.read_text(encoding="utf-8")
+        self.assertIn("### RM-01", doc_body)
+        self.assertIn("/Roadmap/completed/RM-01-one-way-sync-mvp/item.md", doc_body)
+        self.assertEqual("current", okf.concept_metadata(doc_path)["status"])
+
+        roadmap = (self.root / "Roadmap" / "roadmap.md").read_text(encoding="utf-8")
+        self.assertIn("completed/RM-01-one-way-sync-mvp/item.md", roadmap)
+        self.assertIn(
+            "RM-01-one-way-sync-mvp",
+            (self.root / "Roadmap" / "completed" / "index.md").read_text(encoding="utf-8"),
+        )
+        self.assertEqual([], okf.validate(self.root))
+
+    def test_complete_roadmap_refuses_while_tasks_pending(self) -> None:
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        before = self.snapshot()
+        with self.assertRaisesRegex(RuntimeError, "task board is not finished"):
+            okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
+        self.assertEqual(before, self.snapshot())
+
+    def test_complete_roadmap_requires_a_task_board_or_an_explicit_waiver(self) -> None:
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        with self.assertRaisesRegex(RuntimeError, "no task board declares roadmap_item RM-02"):
+            okf.complete_roadmap(
+                self.root, self.completion_args(tag="RM-02", docu=[docu_tag])
+            )
+
+    def test_complete_roadmap_rolls_back_on_late_failure(self) -> None:
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        self.finish_task_board()
+        for target, patch in (
+            ("sync_master_roadmap", RuntimeError("boom")),
+            ("validate", None),
+        ):
+            with self.subTest(failure=target):
+                before = self.snapshot()
+                if patch is None:
+                    fake = [okf.Issue("profile", "PROFILE999", "x", "injected")]
+                    context = unittest.mock.patch.object(okf, target, return_value=fake)
+                else:
+                    context = unittest.mock.patch.object(okf, target, side_effect=patch)
+                with context:
+                    with self.assertRaises(RuntimeError):
+                        okf.complete_roadmap(
+                            self.root, self.completion_args(docu=[docu_tag])
+                        )
+                self.assertEqual(before, self.snapshot())
+
+    def test_complete_roadmap_is_idempotent_guarded(self) -> None:
+        self.ensure_domains()
+        docu_tag = self.make_docu()
+        self.finish_task_board()
+        okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
+        after = self.snapshot()
+        with self.assertRaisesRegex(RuntimeError, "already completed"):
+            okf.complete_roadmap(self.root, self.completion_args(docu=[docu_tag]))
+        self.assertEqual(after, self.snapshot())
+
+    def test_stale_reference_report_finds_outside_root_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            bundle = repo / "planning"
+            (bundle / "Roadmap" / "completed" / "RM-01-x").mkdir(parents=True)
+            (repo / "README.md").write_text(
+                "See planning/Roadmap/RM-01-x/plan.md for the plan.\n"
+                "Already moved: planning/Roadmap/completed/RM-01-x/plan.md\n",
+                encoding="utf-8",
+            )
+            before = {
+                path: path.read_bytes() for path in repo.rglob("*") if path.is_file()
+            }
+            stale = okf.stale_reference_report(
+                bundle, "Roadmap/RM-01-x", "Roadmap/completed/RM-01-x", repo
+            )
+            after = {path: path.read_bytes() for path in repo.rglob("*") if path.is_file()}
+        self.assertEqual(before, after)
+        self.assertEqual(1, len(stale))
+        self.assertIn("planning/Roadmap/completed/RM-01-x/plan.md", stale[0].suggestion)
 
 
 if __name__ == "__main__":

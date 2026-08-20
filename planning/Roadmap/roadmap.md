@@ -3,7 +3,7 @@ type: "Roadmap"
 title: "Master Roadmap"
 description: "The live project-level index of roadmap items and research topics."
 tags: ["roadmap", "planning"]
-timestamp: "2026-08-06T15:59:54Z"
+timestamp: "2026-08-20T10:29:20Z"
 status: "active"
 ---
 
@@ -18,6 +18,10 @@ This concept is the live project-level index of roadmap items and research topic
 * [RM-03-pluggable-endpoints](RM-03-pluggable-endpoints/item.md) — Pluggable endpoint framework for future catalogs · `planned`
 * [RM-04-access-observe-report](RM-04-access-observe-report/item.md) — Access observe and report (post-v1) · `planned`
 
+## Completed Roadmap Items
+
+No roadmap items have been completed yet.
+
 ## Research Topics
 
 * [RS-01-databricks-catalog-api](../Research/RS-01-databricks-catalog-api/topic.md) — Databricks Unity Catalog metadata API · `active`
@@ -29,6 +33,10 @@ This concept is the live project-level index of roadmap items and research topic
 * [RS-07-architecture-techstack-references](../Research/RS-07-architecture-techstack-references/topic.md) — Architecture, tech stack, and reference implementations · `active`
 * [RS-08-connector-plugin-sdk](../Research/RS-08-connector-plugin-sdk/topic.md) — Connector plugin SDK and extensibility · `active`
 * [RS-09-access-control-sync](../Research/RS-09-access-control-sync/topic.md) — Access control and authorization sync · `active`
+
+## Documentation
+
+No documentation subjects have been created yet.
 
 ## Now / Next / Later
 
