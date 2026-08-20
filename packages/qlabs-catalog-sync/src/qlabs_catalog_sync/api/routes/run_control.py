@@ -20,27 +20,34 @@ holds ordered rules and overrides per pair... wiring the loop to load them is th
 and scheduler work, not this function's [``rule_set_for_pair``'s]."* A pair created
 through ``routes/pairs.py`` has no ``catalog_schema_patterns`` at all — C3 moved
 selection into the ``selection_rules``/``selection_overrides`` tables — so
-:func:`_pair_config` below fills :class:`~qlabs_catalog_sync.config.SyncPairConfig`'s
-required-non-empty ``catalog_schema_patterns`` with an inert placeholder
-(:data:`_PLACEHOLDER_CATALOG_SCHEMA_PATTERNS`) and every loop built here is constructed
-with an explicit ``selection_rules=`` (:func:`_load_selection_rules`,
-``SelectionRuleSet.from_rows`` over both scopes), which is what makes the placeholder
-never consulted: :class:`~qlabs_catalog_sync.sync.loop.SyncLoop` only falls back to
-``rule_set_for_pair(pair)`` when ``selection_rules`` is omitted.
+:func:`~qlabs_catalog_sync.configstore.runtime.sync_pair_config_for_row` fills
+:class:`~qlabs_catalog_sync.config.SyncPairConfig`'s required-non-empty
+``catalog_schema_patterns`` with a projection of the pair's own include rules (falling
+back to :data:`~qlabs_catalog_sync.configstore.runtime.INERT_CATALOG_SCHEMA_PATTERN`),
+and every loop built here is constructed with an explicit ``selection_rules=``, which is
+what makes that field never consulted: :class:`~qlabs_catalog_sync.sync.loop.SyncLoop`
+only falls back to ``rule_set_for_pair(pair)`` when ``selection_rules`` is omitted.
 
-**Connectors are built fresh per request, the way ``routes/endpoints.py``'s
-``_run_connector_healthcheck`` already does** — ``registry.get_connector(row.connector)``,
-``ConfigModel.for_endpoint(...)`` with secrets resolved through ``configstore.secrets``,
-``ConnectorContext.build``, ``setup()`` — rather than through ``cli/wiring.py``'s
-``build_connector_pool``/``build_sync_loop``, which are keyed to a static, YAML-loaded
-``EngineConfig`` and cannot see a database-backed pair's endpoints or its selection
-rules, and (``build_sync_loop`` specifically) accept no ``selection_rules`` parameter at
-all to pass one through even if they could. Mirroring ``endpoints.py``'s established
-per-request pattern is what "reuse the same construction path" means here in practice —
-``routes/`` never imports ``cli/`` (the reverse import already exists,
-``cli/serve_command.py`` -> ``api/app.py``, and a route module reaching back into the
-CLI layer would risk a cycle for no benefit: none of ``cli/wiring.py``'s functions are
-actually usable unmodified against a ``ConfigService``-backed pair anyway).
+**Turning stored rows into live objects is ``configstore/runtime.py``'s job, not this
+module's.** Connectors are still built fresh per request and closed when it finishes —
+that has not changed — but the construction itself
+(:func:`~qlabs_catalog_sync.configstore.runtime.build_connector_for_endpoint`), the pair
+translation (:func:`~qlabs_catalog_sync.configstore.runtime.sync_pair_config_for_row`)
+and the rule-set load (:func:`~qlabs_catalog_sync.configstore.runtime.
+selection_rows_for_pair`) now live in one shared module below both ``api/`` and ``cli/``.
+This module originally carried private copies of all three, because ``cli/wiring.py``'s
+``build_connector_pool``/``build_sync_loop`` are keyed to a static, YAML-loaded
+``EngineConfig`` and cannot see a database-backed pair's endpoints, and because
+``routes/`` must not import ``cli/`` (the reverse import already exists,
+``cli/serve_command.py`` -> ``api/app.py``). The scheduler's reconcile needed the same
+three things and could not reach them here either. ``configstore/runtime.py`` is the
+answer to that: one implementation, imported by both, with the dependency arrow pointing
+one way. All this module keeps is the translation of that module's layer-neutral
+:class:`~qlabs_catalog_sync.configstore.runtime.EndpointSetupError` into the same 422
+``endpoint_setup_failed`` :class:`~qlabs_catalog_sync.api.errors.APIError` it raised
+before — a connector that is unregistered or broken still propagates as
+``ConnectorLookupError``'s own subclasses, and a malformed ``secret_ref`` still as
+``SecretRefFormatError``, both already mapped by ``api/errors.py``.
 
 Synchronous, with a bounded timeout — not start-and-poll
 ----------------------------------------------------------
@@ -197,21 +204,19 @@ import contextlib
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Any, Final, cast
+from typing import Final
 
 from fastapi import APIRouter, Request, status
 from pydantic import BaseModel, ConfigDict
 
-from qlabs_catalog_sync.config import SyncPairConfig
-from qlabs_catalog_sync.configstore.models import (
-    EndpointRow,
-    SelectionOverrideRow,
-    SelectionRuleRow,
-    SyncPairRow,
+from qlabs_catalog_sync.configstore.models import EndpointRow, SyncPairRow
+from qlabs_catalog_sync.configstore.runtime import (
+    EndpointSetupError,
+    build_connector_for_endpoint,
+    selection_rows_for_pair,
+    sync_pair_config_for_row,
 )
-from qlabs_catalog_sync.configstore.secrets import SecretRef, resolve_connector_kwargs
 from qlabs_catalog_sync.configstore.service import ConfigService, SyncPairNotFoundError
-from qlabs_catalog_sync.configstore.types import RuleScope
 from qlabs_catalog_sync.discovery import ConnectorRegistry
 from qlabs_catalog_sync.identity import IdentityResolver
 from qlabs_catalog_sync.observability import HealthRegistry, get_logger
@@ -225,9 +230,8 @@ from qlabs_catalog_sync.sync.loop import (
     SyncLoop,
     SyncRunReport,
 )
-from qlabs_catalog_sync_sdk.config import ConnectorConfig, ConnectorContext, MetricsHandle
+from qlabs_catalog_sync_sdk.config import MetricsHandle
 from qlabs_catalog_sync_sdk.contract import Connector
-from qlabs_catalog_sync_sdk.exceptions import ConnectorError
 from qlabs_catalog_sync_sdk.models import EntityType
 
 from ..auth import require_session
@@ -246,15 +250,6 @@ DEFAULT_DRY_RUN_TIMEOUT_SECONDS: Final[float] = 120.0
 #: Same bound, for ``run-now``. A separate constant (even though the value matches today)
 #: because a real cycle and a dry-run one may reasonably want different budgets later.
 DEFAULT_RUN_NOW_TIMEOUT_SECONDS: Final[float] = 120.0
-
-#: ``SyncPairConfig.catalog_schema_patterns`` is required and non-empty, but a
-#: ``ConfigService``-backed pair has no such field at all (C3 moved selection into the
-#: ``selection_rules``/``selection_overrides`` tables). This placeholder satisfies the
-#: pydantic model's own validation and is never consulted: every loop built by this
-#: module is given an explicit ``selection_rules=`` (see the module docstring), and
-#: ``SyncLoop`` only falls back to ``catalog_schema_patterns`` when that argument is
-#: omitted.
-_PLACEHOLDER_CATALOG_SCHEMA_PATTERNS: Final[tuple[str, ...]] = ("*.*",)
 
 #: Pair ids with a ``run-now`` cycle currently executing through this router, process-wide
 #: (module-level, shared by every app/router instance in this process -- deliberately
@@ -461,8 +456,10 @@ class RunControlStatusOut(BaseModel):
 
 
 # --------------------------------------------------------------------------------------
-# Connector construction -- mirrors routes/endpoints.py's _run_connector_healthcheck
-# (see the module docstring for why this is not routed through cli/wiring.py instead).
+# Connector construction -- delegated to configstore/runtime.py, which owns the one
+# implementation of "a stored row becomes something the engine can run" (see the module
+# docstring). All that is left here is the layer translation: that module's neutral
+# EndpointSetupError becomes this router's 422, unchanged in code, message and entity.
 # --------------------------------------------------------------------------------------
 
 
@@ -472,70 +469,24 @@ async def _build_connector(
     *,
     metrics: MetricsHandle | None,
 ) -> Connector:
-    """Build, ``setup()`` and return a live connector for ``row``.
+    """:func:`~qlabs_catalog_sync.configstore.runtime.build_connector_for_endpoint`, with
+    its :class:`~qlabs_catalog_sync.configstore.runtime.EndpointSetupError` translated
+    into the 422 this route has always raised for it.
 
-    Raises :class:`APIError` (422) for a resolution failure this route cannot recover
-    from -- an unresolvable ``secret_ref`` or a connector that raised during ``setup()``
-    -- rather than letting either reach the generic 500 handler; a connector actually
-    broken/unregistered still propagates as ``ConnectorLookupError``'s own subclasses,
-    already mapped by ``api/errors.py``.
+    A connector that is unregistered or broken still propagates as
+    ``ConnectorLookupError``'s own subclasses, and a malformed ``secret_ref`` still as
+    ``SecretRefFormatError`` -- both already mapped by ``api/errors.py``, and neither is a
+    setup failure.
     """
-    connector_cls = registry.get_connector(row.connector)
-    config_model_cls = cast(type[ConnectorConfig], connector_cls.ConfigModel)
-    kwargs: dict[str, Any]
-    if row.secret_ref is not None:
-        ref = SecretRef.parse(row.secret_ref)
-        kwargs = resolve_connector_kwargs(ref, config_model_cls, settings=row.settings)
-        locator = ref.locator
-    else:
-        kwargs = dict(row.settings)
-        locator = row.name
-    connector_config = config_model_cls.for_endpoint(locator, **kwargs)
-
-    connector = connector_cls()
-    ctx = ConnectorContext.build(config=connector_config, endpoint=row.name, metrics=metrics)
     try:
-        await connector.setup(ctx)
-    except ConnectorError as exc:
+        return await build_connector_for_endpoint(row, registry, metrics=metrics)
+    except EndpointSetupError as exc:
         raise APIError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "endpoint_setup_failed",
-            f"endpoint {row.name!r} could not be set up: {exc.message}",
-            entity=row.name,
+            str(exc),
+            entity=exc.endpoint,
         ) from exc
-    return connector
-
-
-# --------------------------------------------------------------------------------------
-# Pair config + selection rules -- see the module docstring's second section
-# --------------------------------------------------------------------------------------
-
-
-def _pair_config(row: SyncPairRow) -> SyncPairConfig:
-    """``SyncPairConfig`` for ``row`` -- see :data:`_PLACEHOLDER_CATALOG_SCHEMA_PATTERNS`."""
-    return SyncPairConfig(
-        name=row.name,
-        source=row.source,
-        target=row.target,
-        catalog_schema_patterns=list(_PLACEHOLDER_CATALOG_SCHEMA_PATTERNS),
-        target_space=row.target_space,
-        entity_types=list(row.entity_types),
-        cadence_seconds=row.cadence_seconds,
-        manual_edit_policy=row.manual_edit_policy,
-        activation_opt_in=row.activation_opt_in,
-    )
-
-
-async def _load_selection_rules(
-    config_service: ConfigService, pair_id: uuid.UUID
-) -> SelectionRuleSet:
-    """This pair's full, ordered selection rule set (C3), across every rule scope."""
-    rule_rows: list[SelectionRuleRow] = []
-    override_rows: list[SelectionOverrideRow] = []
-    for scope in RuleScope:
-        rule_rows.extend(await config_service.list_selection_rules(pair_id, scope))
-        override_rows.extend(await config_service.list_selection_overrides(pair_id, scope))
-    return SelectionRuleSet.from_rows(rule_rows, override_rows)
 
 
 def _select_entity_types(
@@ -592,11 +543,12 @@ def build_run_control_router(
     ) -> tuple[SyncLoop, Connector, Connector]:
         source_row = await _load_pair_endpoint(pair_row.source)
         target_row = await _load_pair_endpoint(pair_row.target)
-        selection_rules = await _load_selection_rules(config_service, pair_row.id)
+        rule_rows, override_rows = await selection_rows_for_pair(config_service, pair_row.id)
+        selection_rules = SelectionRuleSet.from_rows(rule_rows, override_rows)
         source = await _build_connector(source_row, registry, metrics=metrics)
         target = await _build_connector(target_row, registry, metrics=metrics)
         loop = SyncLoop(
-            pair=_pair_config(pair_row),
+            pair=sync_pair_config_for_row(pair_row, rule_rows),
             source=source,
             target=target,
             store=store,

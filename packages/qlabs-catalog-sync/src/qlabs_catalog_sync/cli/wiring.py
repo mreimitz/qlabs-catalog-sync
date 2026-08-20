@@ -42,6 +42,7 @@ from qlabs_catalog_sync.config import EngineConfig, SyncPairConfig
 from qlabs_catalog_sync.discovery import ConnectorLookupError, ConnectorRegistry
 from qlabs_catalog_sync.identity import IdentityResolver
 from qlabs_catalog_sync.observability import HealthRegistry
+from qlabs_catalog_sync.selection.rules import SelectionRuleSet
 from qlabs_catalog_sync.state.migrate import upgrade_to_head
 from qlabs_catalog_sync.state.store import StateStore
 from qlabs_catalog_sync.sync.loop import SyncLoop, WritePolicy
@@ -248,10 +249,22 @@ def build_sync_loop(
     dry_run: bool,
     create_missing: bool,
     write_policy: WritePolicy | None = None,
+    selection_rules: SelectionRuleSet | None = None,
 ) -> SyncLoop:
     """One :class:`SyncLoop` for ``pair``, over the connectors already in ``pool``.
 
     See the module docstring for exactly how T2.6's scheduler is meant to reuse this.
+
+    ``selection_rules`` is passed straight through to
+    :class:`~qlabs_catalog_sync.sync.loop.SyncLoop`, which falls back to
+    ``rule_set_for_pair(pair)`` -- D1's flat ``catalog_schema_patterns`` -- only when it is
+    omitted. That fallback is right for a YAML-configured pair and wrong for a
+    console-configured one: C3 moved selection into the ``selection_rules``/
+    ``selection_overrides`` tables, so a database-backed pair's real rule set (built with
+    :func:`~qlabs_catalog_sync.configstore.runtime.selection_rule_set_for_pair`) has to
+    reach the cycle somehow, and T11.3 built exactly this seam on ``SyncLoop.__init__``
+    for it. Without the parameter here, a caller wiring a store-backed pair could not use
+    this function at all and would have to construct ``SyncLoop`` by hand.
     """
     return SyncLoop(
         pair=pair,
@@ -259,6 +272,7 @@ def build_sync_loop(
         target=pool.get(pair.target),
         store=store,
         resolver=resolver,
+        selection_rules=selection_rules,
         metrics=metrics,
         health=health,
         write_policy=write_policy,
