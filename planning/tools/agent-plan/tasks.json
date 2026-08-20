@@ -338,7 +338,7 @@
       ],
       "dod": "Conformance kit runs green against FakeConnector in both read and write modes and fails a deliberately dishonest manifest.",
       "verify": "uv run pytest packages/qlabs-catalog-sync-sdk/tests/conformance -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T1.9",
