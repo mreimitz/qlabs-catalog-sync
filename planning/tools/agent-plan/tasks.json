@@ -1168,7 +1168,7 @@
       ],
       "dod": "A per-tenant config and secret template exist and load through the configured secret backend without any secret in the repository.",
       "verify": "uv run python -c 'import qlabs_catalog_sync'",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T9.3",
