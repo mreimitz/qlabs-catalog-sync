@@ -195,7 +195,7 @@
       ],
       "dod": "/healthz and /metrics behave exactly as before; an unknown API path returns the error model, an unknown non-API path returns the SPA shell; the app boots with no static assets present.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.2",
