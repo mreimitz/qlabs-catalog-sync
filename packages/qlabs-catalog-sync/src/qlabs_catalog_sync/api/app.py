@@ -49,14 +49,21 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry
 
 from qlabs_catalog_sync.configstore.service import ConfigService
 from qlabs_catalog_sync.discovery import ConnectorRegistry
+from qlabs_catalog_sync.identity import IdentityResolver
 from qlabs_catalog_sync.observability import HealthRegistry, render_healthz, render_metrics
+from qlabs_catalog_sync.runs.recorder import RunRecorder
+from qlabs_catalog_sync.state.store import StateStore
+from qlabs_catalog_sync_sdk.config import MetricsHandle
 
 from .auth import ConsoleAuth, install_auth
 from .errors import API_ERROR_RESPONSES, install_error_handlers
 from .routes import (
     build_connectors_router,
     build_endpoints_router,
+    build_history_router,
     build_pairs_router,
+    build_preview_router,
+    build_run_control_router,
     build_selection_router,
 )
 from .static import mount_static
@@ -79,6 +86,10 @@ def create_app(
     auth: ConsoleAuth | None = None,
     config_service: ConfigService | None = None,
     registry: ConnectorRegistry | None = None,
+    store: StateStore | None = None,
+    resolver: IdentityResolver | None = None,
+    recorder: RunRecorder | None = None,
+    metrics: MetricsHandle | None = None,
     title: str = "QLabs Catalog Sync API",
     version: str = "0.1.0",
 ) -> FastAPI:
@@ -141,6 +152,26 @@ def create_app(
         app.include_router(build_endpoints_router(config_service, registry), prefix=API_PREFIX)
         app.include_router(build_pairs_router(config_service), prefix=API_PREFIX)
         app.include_router(build_selection_router(config_service), prefix=API_PREFIX)
+        app.include_router(
+            build_preview_router(config_service, registry), prefix=API_PREFIX
+        )
+        if recorder is not None:
+            app.include_router(
+                build_history_router(recorder, config_service), prefix=API_PREFIX
+            )
+        if store is not None and resolver is not None:
+            app.include_router(
+                build_run_control_router(
+                    config_service=config_service,
+                    registry=registry,
+                    store=store,
+                    resolver=resolver,
+                    metrics=metrics,
+                    health=health,
+                    recorder=recorder,
+                ),
+                prefix=API_PREFIX,
+            )
 
     mount_static(app, static_dir=static_dir, api_prefix=API_PREFIX)
 

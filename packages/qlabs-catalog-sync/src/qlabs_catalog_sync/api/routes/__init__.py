@@ -10,12 +10,18 @@ from __future__ import annotations
 
 from .connectors import build_connectors_router
 from .endpoints import build_endpoints_router
+from .history import build_history_router
 from .pairs import build_pairs_router
+from .preview import build_preview_router
+from .run_control import build_run_control_router
 from .selection import build_selection_router
 
 __all__ = [
     "build_connectors_router",
     "build_endpoints_router",
+    "build_history_router",
     "build_pairs_router",
+    "build_preview_router",
+    "build_run_control_router",
     "build_selection_router",
 ]

@@ -257,8 +257,12 @@ from qlabs_catalog_sync.configstore.models import (
     SelectionRuleRow,
     SyncPairRow,
 )
+from qlabs_catalog_sync.configstore.runtime import (
+    INERT_CATALOG_SCHEMA_PATTERN,
+    sync_pair_config_for_row,
+)
 from qlabs_catalog_sync.configstore.service import ConfigService
-from qlabs_catalog_sync.configstore.types import MatcherKind, RuleScope, SelectionDecision
+from qlabs_catalog_sync.configstore.types import RuleScope
 from qlabs_catalog_sync.observability import HealthRegistry, bind_sync_context, get_logger
 from qlabs_catalog_sync.runs.recorder import RunRecorder
 from qlabs_catalog_sync.selection.rules import SelectionRuleSet
@@ -330,8 +334,6 @@ RECONCILE_JOB_ID: Final[str] = "__reconcile__"
 
 #: The placeholder :attr:`~qlabs_catalog_sync.config.SyncPairConfig.catalog_schema_patterns`
 #: value used for a store-configured pair that has no object-scope include-glob rule to
-#: project back into D1's flat list. See :func:`_derived_catalog_schema_patterns`.
-INERT_CATALOG_SCHEMA_PATTERN: Final[str] = "__rules__.__rules__"
 
 
 def jitter_seconds_for(
@@ -493,42 +495,6 @@ class ReconcileResult:
         return bool(self.added or self.updated or self.removed)
 
 
-def _derived_catalog_schema_patterns(rule_rows: Sequence[SelectionRuleRow]) -> list[str]:
-    """Project a stored rule set back onto D1's flat ``catalog.schema`` pattern list.
-
-    :class:`~qlabs_catalog_sync.config.SyncPairConfig` predates C3 and still requires a
-    non-empty ``catalog_schema_patterns``, while a store-configured pair expresses scope as
-    an ordered rule set instead. Nothing in the sync path reads the field once
-    ``selection_rules`` is supplied explicitly — :func:`~qlabs_catalog_sync.sync.loop
-    .rule_set_for_pair` is the only reader, and passing ``selection_rules`` is precisely what
-    bypasses it — so this is a *label*, kept as honest as the shapes allow rather than
-    invented.
-
-    The projection is the inverse of :func:`~qlabs_catalog_sync.selection.rules
-    .object_rules_from_catalog_schema_patterns`: the object-scope, glob, **include** rules in
-    ordinal order. It is lossy by construction (exclude rules, tag and owner matchers, and
-    per-object overrides have no representation in a flat include list), which is exactly why
-    it is not used to decide anything.
-
-    With no such rule, the pair's rule set includes nothing by glob at all
-    (:data:`~qlabs_catalog_sync.selection.rules.DEFAULT_DECISION` excludes what no rule
-    matched), so the placeholder is one that matches no real Unity Catalog name rather than
-    ``"*.*"``: if some future reader ever does consult this field, it fails closed, the same
-    direction ``sync/loop.py``'s "Selection fails closed" section argues for.
-    """
-    patterns: list[str] = []
-    for row in sorted(rule_rows, key=lambda item: item.ordinal):
-        if row.scope is not RuleScope.OBJECT:
-            continue
-        if row.matcher_kind is not MatcherKind.GLOB:
-            continue
-        if row.decision is not SelectionDecision.INCLUDE:
-            continue
-        if row.pattern not in patterns:
-            patterns.append(row.pattern)
-    return patterns or [INERT_CATALOG_SCHEMA_PATTERN]
-
-
 def _fingerprint(
     pair_row: SyncPairRow,
     source_row: EndpointRow,
@@ -679,17 +645,7 @@ class ConfigStorePairSource:
         # malformed rule fails here rather than surviving into a SyncPairConfig whose
         # projected patterns would then fail a second, less informative validator.
         rules = SelectionRuleSet.from_rows(rule_rows, override_rows)
-        pair = SyncPairConfig(
-            name=pair_row.name,
-            source=pair_row.source,
-            target=pair_row.target,
-            catalog_schema_patterns=_derived_catalog_schema_patterns(rule_rows),
-            target_space=pair_row.target_space,
-            entity_types=list(pair_row.entity_types),
-            cadence_seconds=pair_row.cadence_seconds,
-            manual_edit_policy=pair_row.manual_edit_policy,
-            activation_opt_in=pair_row.activation_opt_in,
-        )
+        pair = sync_pair_config_for_row(pair_row, rule_rows)
         return PairPlan(
             pair=pair,
             selection_rules=rules,

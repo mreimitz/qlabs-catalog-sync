@@ -46,6 +46,9 @@ from qlabs_catalog_sync.configstore.bootstrap import (
     BootstrapPartialFailureError,
     bootstrap_from_environment,
 )
+from qlabs_catalog_sync.configstore.runtime import (
+    StoreConnectorPool,
+)
 from qlabs_catalog_sync.configstore.service import ConfigService
 from qlabs_catalog_sync.observability import (
     HealthRegistry,
@@ -53,11 +56,17 @@ from qlabs_catalog_sync.observability import (
     get_logger,
 )
 from qlabs_catalog_sync.runs.recorder import RunRecorder
-from qlabs_catalog_sync.scheduler import SyncScheduler
+from qlabs_catalog_sync.scheduler import (
+    ConfigStorePairSource,
+    PairPlan,
+    PairRunner,
+    SyncScheduler,
+)
 
 from .config_loading import load_engine_config, resolve_credentials
 from .deps import RuntimeContext
 from .wiring import (
+    ConnectorPool,
     build_connector_pool,
     build_identity_resolver,
     build_state_store,
@@ -92,7 +101,12 @@ async def _serve(
     it is ``None`` this installs ``SIGTERM``/``SIGINT`` handlers and waits on those instead.
     """
     engine_config = load_engine_config(config_path)
-    pairs = select_pairs(engine_config, pair_names)
+    # Unlike `run`/`dry-run`, a config file declaring no pairs is legitimate here: since
+    # C1 the store is authoritative and a console-first deployment declares its pairs in
+    # the browser, not in YAML. `serve` with nothing configured anywhere is a service
+    # waiting to be configured, which is exactly what the console is for -- refusing to
+    # start would mean the operator could never reach the console to configure it.
+    pairs = select_pairs(engine_config, pair_names) if engine_config.pairs else []
     credentials = resolve_credentials(engine_config)
     needed_endpoints = {pair.source for pair in pairs} | {pair.target for pair in pairs}
 
@@ -147,6 +161,10 @@ async def _serve(
             secret_ref_skips=[str(skip) for skip in exc.report.secret_ref_skips],
         )
 
+    # Run history (T11.4). Built here rather than inside the scheduler so a deployment
+    # without it degrades to "no reporting", never to "no sync".
+    recorder = RunRecorder.from_store(store)
+
     api = ApiServer(
         create_app(
             health=health,
@@ -155,13 +173,44 @@ async def _serve(
             auth=auth,
             config_service=config_service,
             registry=runtime.connector_registry(),
+            store=store,
+            resolver=resolver,
+            recorder=recorder,
+            metrics=metrics,
         ),
         host=host,
         port=port,
     )
-    # Run history (T11.4). Built here rather than inside the scheduler so a deployment
-    # without it degrades to "no reporting", never to "no sync".
-    recorder = RunRecorder.from_store(store)
+    # Connectors for endpoints that exist only in the configuration store - the ones an
+    # operator registered in the console (C6). The startup pool above can only build what
+    # the YAML config named, so without this a console-registered endpoint could never
+    # sync. Built lazily and rebuilt when an endpoint's settings or secret_ref change.
+    store_pool = StoreConnectorPool(
+        config_service, runtime.connector_registry(), metrics=metrics
+    )
+
+    async def _build_runner(plan: PairPlan) -> PairRunner:
+        """Build one pair's runner from its stored configuration (C1).
+
+        Called by reconcile whenever a pair is added or its configuration changes. The
+        pair's selection rules come from the store and are handed to the loop through
+        T11.3's ``selection_rules`` seam, which is what connects C1 to C3/C4: a rule
+        edited in the console decides the next cycle's scope.
+        """
+        source = await store_pool.get(plan.pair.source)
+        target = await store_pool.get(plan.pair.target)
+        return build_sync_loop(
+            pair=plan.pair,
+            pool=ConnectorPool(connectors={plan.pair.source: source, plan.pair.target: target}),
+            store=store,
+            resolver=resolver,
+            metrics=metrics,
+            health=health,
+            dry_run=False,
+            create_missing=create_missing,
+            selection_rules=plan.selection_rules,
+        )
+
     scheduler = SyncScheduler(
         recorder=recorder,
         runners=[
@@ -179,6 +228,10 @@ async def _serve(
         ],
         health=health,
         run_immediately=run_immediately,
+        # restrict_to matters: without it, `serve --pair X` would see every other pair
+        # reappear at the first reconcile.
+        config_source=ConfigStorePairSource(config_service, restrict_to=pair_names or None),
+        runner_factory=_build_runner,
     )
 
     waiter = stop if stop is not None else asyncio.Event()
@@ -208,6 +261,7 @@ async def _serve(
         _LOG.info("serve.stopping")
         await scheduler.shutdown(timeout=shutdown_timeout)
         await api.stop()
+        await store_pool.close()
         await pool.close()
         _LOG.info("serve.stopped")
 
