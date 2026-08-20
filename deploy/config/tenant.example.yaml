@@ -1,0 +1,166 @@
+# Per-tenant EngineConfig template for QLabs Catalog Sync (RM-01 MVP: Databricks -> Qlik).
+#
+# This one file is a complete tenant: one Databricks source, one Qlik target, one sync pair.
+# It loads through `EngineConfig.load()` (packages/qlabs-catalog-sync/src/qlabs_catalog_sync/
+# config.py, T2.3) exactly as it is written below -- every value here is either a real default
+# or a syntactically valid placeholder, so the file passes validation before you have touched
+# it. It will not do anything *useful* until you replace the CHANGE_ME values, but it will not
+# fail to load either, which is deliberate: you can prove the shape is right before you have
+# real credentials in hand.
+#
+# CONTAINS NO SECRETS. `settings` below is plain, non-secret configuration written directly
+# into this file. `secrets` is a set of *references* (a name that gets looked up in the
+# environment at startup) -- never a value. See tenant.env.example for the secret half.
+#
+# HOW TO USE
+#   1. Copy this file to a name for your tenant, e.g. `acme.yaml`, next to this template (or
+#      wherever your deployment mounts config from).
+#   2. Search-and-replace the placeholder tenant slug `acme` throughout your copy with your own
+#      tenant's slug. It appears in the two endpoint keys (`databricks_acme`, `qlik_acme`) and
+#      the pair name (`acme-uc-to-qlik`). The endpoint keys become environment-variable
+#      prefixes (see tenant.env.example) -- keep them lower_snake_case so the prefix they
+#      produce is predictable.
+#   3. Fill in the non-secret CHANGE_ME values below: client_id x2, host, base_url, space_id
+#      (x2 -- see the note on target_space), sql_warehouse_id (optional), and
+#      catalog_schema_patterns (see the note there -- do not skip this one).
+#   4. Copy tenant.env.example to `.env` (same directory) and fill in the secret values there.
+#      Never put a secret in this file.
+#   5. Validate before you run anything for real:
+#        uv run python -c \
+#          "from qlabs_catalog_sync.config import EngineConfig; \
+#           print(EngineConfig.load('deploy/config/acme.yaml'))"
+#      This only checks structure and cross-references (e.g. that target_space agrees with the
+#      Qlik endpoint's space_id); it does not need secrets to succeed. Resolving secrets is a
+#      separate step (`EngineConfig.resolve_credentials()`) that needs the environment set --
+#      the CLI (`run`, `dry-run`, `identity-confirm bootstrap`) does both automatically.
+#
+# FIRST RUN AGAINST THIS TENANT, READ THIS FIRST
+#   The engine never guesses which existing Qlik data product corresponds to which Databricks
+#   schema -- identity binds nothing without an explicit human decision. Before the first real
+#   `run`, do exactly one of these two things:
+#     - Target Qlik space is EMPTY (no data products yet for this tenant): pass
+#       `--create-missing` to `run`/`dry-run`. Every matched Databricks schema is created fresh
+#       as a new Qlik data product.
+#     - Target Qlik space ALREADY HAS data products that correspond to your Databricks schemas:
+#       run `identity-confirm bootstrap --config deploy/config/acme.yaml --pair acme-uc-to-qlik`,
+#       review what it proposes with `identity-confirm list`, then bind each one with
+#       `identity-confirm confirm <proposal-id>` (an ambiguous proposal requires an explicit
+#       `--candidate` -- it is never guessed). Only a confirmed/applied binding is written; a
+#       plain `run` without doing this first will try to create duplicates instead of matching
+#       what is already there.
+#   Either way, run `qlabs-catalog-sync dry-run --config deploy/config/acme.yaml` first and read
+#   the plan (also written to --plan-file) before you run for real.
+
+endpoints:
+  # --- Databricks (source; read-only -- source connectors never write) ---
+  databricks_acme:
+    connector: databricks
+    settings:
+      # Workspace host. https://, no trailing slash, no /api suffix -- the connector appends
+      # its own paths.
+      host: "https://adb-1234567890123456.7.azuredatabricks.net"
+
+      # OAuth M2M service-principal application (client) id. Not a secret -- the matching
+      # client_secret goes in .env, never here.
+      client_id: "CHANGE_ME-service-principal-client-id"
+
+      # OPTIONAL, and its absence is load-bearing (decision D6). A SQL warehouse id, used to
+      # read Unity Catalog tags via INFORMATION_SCHEMA.*_TAGS over the Statement Execution API.
+      # Leaving this unset is a real, supported choice: it means `tags` is declared unavailable
+      # ("na") for this tenant -- not synced as empty, genuinely not read at all. Uncomment and
+      # set it only if this tenant should sync tags:
+      # sql_warehouse_id: "0123456789abcdef"
+
+      # OPTIONAL. Endpoint-level allow-list of catalog.schema glob patterns this connector may
+      # read AT ALL -- independent of, and broader than, the pair's own selector below. Defaults
+      # to everything the service principal can see ("*.*") if omitted. Narrow it here only if
+      # the service principal itself must never read certain catalogs, regardless of what any
+      # pair selects; the selector an operator normally edits is the pair's, below.
+      # catalog_schema_patterns: ["*.*"]
+    secrets:
+      # Resolved from DATABRICKS_ACME__CLIENT_SECRET -- see tenant.env.example. The key on the
+      # right ("client_secret") is looked up as <ENDPOINT>__<KEY upper-cased>; keeping it equal
+      # to the field name it fills is the convention every template here follows.
+      client_secret: "client_secret"
+
+  # --- Qlik (target; the ONLY write connector in v1 -- upstream-only, no reverse flow) ---
+  qlik_acme:
+    connector: qlik
+    settings:
+      # Tenant base URL. https://, no trailing slash, and no /api/v1, /api/data-governance or
+      # /oauth/token suffix -- the connector appends those itself.
+      base_url: "https://acme.eu.qlikcloud.com"
+
+      # OAuth2 client-credentials client id (Management Console -> API keys -> OAuth clients).
+      # Not a secret -- the matching client_secret goes in .env, never here.
+      client_id: "CHANGE_ME-qlik-oauth-client-id"
+
+      # OAuth2 scope sent with the token request. "user_default" (act-as-the-user) is the
+      # connector's own default and is correct for most tenants -- a client granted no scope at
+      # all gets no access. Override only if this OAuth client needs something narrower.
+      # scope: "user_default"
+
+      # The Qlik space every synced data product is created in, and the space dataset
+      # references are resolved against (the connector never creates Qlik datasets -- decision
+      # D2). MUST equal the pair's target_space below, exactly. EngineConfig.load() refuses to
+      # start if they disagree, on purpose: without that check, a typo here would make every
+      # write land in the wrong space silently, with the run still reporting green.
+      space_id: "CHANGE_ME-qlik-space-id"
+    secrets:
+      # Resolved from QLIK_ACME__CLIENT_SECRET -- see tenant.env.example.
+      client_secret: "client_secret"
+
+pairs:
+  - name: acme-uc-to-qlik
+    source: databricks_acme
+    target: qlik_acme
+
+    # Unity Catalog `catalog.schema` glob selector(s) -- decision D1. THIS is the setting that
+    # decides what actually gets synced. During a pilot, this pattern silently failed to match
+    # anything expected and the effective behavior was "sync everything" rather than "sync
+    # nothing" -- so be deliberate and specific here. Prefer an explicit list of catalogs/schemas
+    # over a broad "*.*" until you have confirmed the pattern matches exactly what you expect
+    # (a `dry-run` shows you exactly which catalog.schema pairs it selected).
+    catalog_schema_patterns:
+      - "CHANGE_ME_catalog.*"     # every schema in one catalog -- replace CHANGE_ME_catalog
+      # - "sales.*"               # example: every schema under the "sales" catalog
+      # - "prod_*.finance"        # example: a glob on the catalog side too
+
+    # Must equal endpoints.qlik_acme.settings.space_id above, exactly -- see the comment there.
+    target_space: "CHANGE_ME-qlik-space-id"
+
+    # MVP scope: keep this to data_product only. Adding `dataset` here produces permanent
+    # capability_refused skips every cycle, because the Qlik connector resolves dataset
+    # references against datasets that already exist in the target space and never creates them
+    # (decision D2) -- there is no create path for `dataset` to fall back to.
+    entity_types:
+      - data_product
+
+    # Poll interval in seconds. 900 (15 minutes) is this field's own engine default and the
+    # upper end of the architecture doc's suggested range for data-product/glossary-shaped
+    # metadata (5-15 min). Shown explicitly here rather than omitted so it is obvious this is a
+    # tenant-tunable knob. Lower it for a tenant that wants fresher data, bounded below by the
+    # tightest rate limit in play (Databricks and Qlik both); there is little reason to raise it
+    # above 900 for this entity type.
+    cadence_seconds: 900
+
+    # How the engine reacts when a value was hand-edited in Qlik since the last sync.
+    # "source_wins" (the default -- written out explicitly here rather than relying on the
+    # implicit default) means the next sync overwrites the manual edit with Databricks' value:
+    # safe and predictable, but a curator who edits a description in Qlik loses that edit on the
+    # next cycle. Switch specific entity types or fields to "preserve_local" once you know which
+    # fields your Qlik curators actually hand-edit -- per_field is checked before per_entity,
+    # which is checked before default:
+    manual_edit_policy:
+      default: source_wins
+      # per_entity:
+      #   data_product: preserve_local
+      # per_field:
+      #   data_product.description: preserve_local
+
+    # OFF by default, and left off here on purpose (decision D7). Flipping a Qlik data product
+    # to "active" makes it discoverable tenant-wide in Qlik's catalog -- so a pair must opt into
+    # that deliberately, rather than it happening as a side effect of the first sync. Turn this
+    # on only once you have confirmed, for this tenant, that every product this pair would
+    # activate is meant to be publicly discoverable.
+    activation_opt_in: false
