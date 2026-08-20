@@ -214,7 +214,7 @@
       ],
       "dod": "Unauthenticated access to every route except the health surface and the sign-in route is refused; a mutating request without a valid CSRF token is refused; no credential configured means the console does not serve; the credential never appears in a log record.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_auth.py",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T12.3",
@@ -236,7 +236,7 @@
       ],
       "dod": "An endpoint can be registered, healthchecked and enabled end to end against FakeConnector; invalid settings are rejected with field-level errors from the connector's own ConfigModel; no route accepts a secret value.",
       "verify": "uv run pytest -q packages/qlabs-catalog-sync/tests/api/test_endpoints.py",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T12.4",
