@@ -42,6 +42,11 @@ import click
 from qlabs_catalog_sync.api.app import create_app
 from qlabs_catalog_sync.api.auth import console_auth_from_environment
 from qlabs_catalog_sync.api.server import ApiServer
+from qlabs_catalog_sync.configstore.bootstrap import (
+    BootstrapPartialFailureError,
+    bootstrap_from_environment,
+)
+from qlabs_catalog_sync.configstore.service import ConfigService
 from qlabs_catalog_sync.observability import (
     HealthRegistry,
     PrometheusMetrics,
@@ -113,12 +118,43 @@ async def _serve(
     # clear crash with the reason in the logs, whereas a process that boots and serves only
     # /healthz keeps passing its liveness probe forever while the console is unusable.
     auth = console_auth_from_environment()
+
+    # The configuration store the console reads and writes (C1). It shares the state
+    # store's engine -- one database, one connection pool -- and the same connector
+    # registry the pool was built from, so a route validating an endpoint's settings sees
+    # exactly the connectors this image actually has (C6).
+    config_service = ConfigService(store.engine, runtime.connector_registry())
+
+    # Seed it from the environment-declared config on first start, then never again: from
+    # then on the database is authoritative and an operator's console edits stick (C1).
+    # A partial import is reported and does not stop the service - the console is how the
+    # remainder gets fixed, so refusing to start would remove the only tool for the job.
+    try:
+        bootstrap = await bootstrap_from_environment(
+            config_service, engine_config, now=datetime.now(UTC)
+        )
+        if bootstrap.seeded:
+            _LOG.info(
+                "serve.config_store.seeded",
+                endpoints=bootstrap.endpoints_created,
+                pairs=bootstrap.pairs_created,
+                rules=bootstrap.rules_created,
+            )
+    except BootstrapPartialFailureError as exc:
+        _LOG.warning(
+            "serve.config_store.seeded_partially",
+            failures=[str(failure) for failure in exc.report.failures],
+            secret_ref_skips=[str(skip) for skip in exc.report.secret_ref_skips],
+        )
+
     api = ApiServer(
         create_app(
             health=health,
             metrics_registry=metrics.registry,
             static_dir=console_assets,
             auth=auth,
+            config_service=config_service,
+            registry=runtime.connector_registry(),
         ),
         host=host,
         port=port,
