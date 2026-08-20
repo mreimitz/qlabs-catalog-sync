@@ -46,6 +46,7 @@ from .auth import (
     translate_databricks_error,
 )
 from .config import DatabricksConfig
+from .manifest import manifest_for_config
 
 __all__ = ["Connector"]
 
@@ -95,8 +96,24 @@ class Connector(ConnectorABC):
     # -- declaration -----------------------------------------------------------------
 
     def capabilities(self) -> CapabilityManifestBase:
-        """Not this task's scope. T4.2 builds the read-only capability manifest."""
-        raise NotImplementedError("capabilities() is built in T4.2, not T4.1")
+        """What this connector genuinely supports — see ``manifest.py``.
+
+        Every field is ``ro`` or ``na``: this is a read-only source connector, so the
+        base class's write refusals are honest rather than incidental. ``tags`` (and
+        ``classifications``, which Databricks realizes through the same mechanism) are
+        declared readable only when a SQL warehouse is configured, because Unity Catalog
+        object tags are reachable only through ``INFORMATION_SCHEMA`` over the Statement
+        Execution API (D6).
+
+        Depends on ``setup()`` having run, since the manifest varies with the resolved
+        config — that is the order RS-08's connector lifecycle already specifies
+        (discover, configure, ``setup``, then ``capabilities``).
+        """
+        if self._ctx is None:
+            raise RuntimeError(
+                "capabilities() needs the resolved config: call setup(ctx) first"
+            )
+        return manifest_for_config(self._ctx.config)
 
     # -- lifecycle ---------------------------------------------------------------------
 

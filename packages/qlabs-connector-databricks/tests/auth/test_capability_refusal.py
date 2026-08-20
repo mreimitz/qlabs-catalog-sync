@@ -25,8 +25,10 @@ def _ref(entity_type: EntityType = EntityType.DATA_PRODUCT) -> IdentityRef:
     )
 
 
-def test_capabilities_is_not_this_tasks_scope():
-    with pytest.raises(NotImplementedError):
+def test_capabilities_needs_setup_first():
+    """The manifest varies with the resolved config (D6 gates tags on a SQL warehouse),
+    so asking before setup() is a lifecycle error, not an empty manifest."""
+    with pytest.raises(RuntimeError, match="setup"):
         Connector().capabilities()
 
 
