@@ -1,0 +1,44 @@
+{
+  "name": "qlabs-catalog-sync-console",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest",
+    "a11y": "vitest run a11y",
+    "audit:ui": "brand-ui audit src"
+  },
+  "dependencies": {
+    "@elabs-ai/components-data": "4.0.0",
+    "@elabs-ai/components-icons": "4.0.0",
+    "@elabs-ai/components-tokens": "4.0.0",
+    "@elabs-ai/components-ui": "4.0.0",
+    "lucide-react": "0.577.0",
+    "openapi-fetch": "0.17.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.2"
+  },
+  "devDependencies": {
+    "@elabs-ai/components-cli": "4.0.0",
+    "@eslint/js": "9.39.5",
+    "@tailwindcss/vite": "4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.5",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "4.7.0",
+    "axe-core": "4.13.0",
+    "eslint": "9.39.5",
+    "jsdom": "30.0.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0",
+    "vite": "6.4.3",
+    "vitest": "4.1.11"
+  }
+}

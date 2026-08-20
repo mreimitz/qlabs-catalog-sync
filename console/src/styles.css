@@ -1,0 +1,18 @@
+/* brand-ui styling entry.
+ *
+ * 1) The token stylesheet pulls in Tailwind v4, the @theme inline token→utility
+ *    map, a neutral `:root` base and the fonts. The two REFERENCE themes are
+ *    separate, opt-in imports — keep the ones you use, or drop both and import
+ *    your own theme stylesheet instead (see docs/CONSUMING.md §5.1).
+ * 2) Tailwind ignores node_modules unless you @source it — one line per
+ *    @elabs-ai/components-* package you render. Delete a line and those
+ *    components render UNSTYLED. See docs/CONSUMING.md §4.
+ */
+@import "@elabs-ai/components-tokens/styles.css";
+@import "@elabs-ai/components-tokens/themes/light.css";
+@import "@elabs-ai/components-tokens/themes/dark.css";
+
+@source "../node_modules/@elabs-ai/components-data/dist";
+@source "../node_modules/@elabs-ai/components-icons/dist";
+@source "../node_modules/@elabs-ai/components-tokens/dist";
+@source "../node_modules/@elabs-ai/components-ui/dist";
