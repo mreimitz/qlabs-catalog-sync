@@ -49,6 +49,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry
 
 from qlabs_catalog_sync.observability import HealthRegistry, render_healthz, render_metrics
 
+from .auth import ConsoleAuth, install_auth
 from .errors import API_ERROR_RESPONSES, install_error_handlers
 from .static import mount_static
 
@@ -67,6 +68,7 @@ def create_app(
     health: HealthRegistry,
     metrics_registry: CollectorRegistry,
     static_dir: Path | None = None,
+    auth: ConsoleAuth | None = None,
     title: str = "QLabs Catalog Sync API",
     version: str = "0.1.0",
 ) -> FastAPI:
@@ -80,16 +82,21 @@ def create_app(
     stays honest about the console's absence at ``/`` rather than 500ing or returning a
     confusing bare 404.
 
-    No configuration store and no authentication are required to construct or serve this
-    app. T12.2 (C7) adds authentication on top without this factory needing to change
-    shape: whatever dependency or middleware it installs applies to the whole ``app`` (or
-    to every router mounted under :data:`API_PREFIX`), never to one route at a time --
-    that is why routes are added directly to ``app`` here rather than hidden behind a
-    second layer this task would have to guess the shape of.
+    No configuration store is required to construct or serve this app. ``auth`` (T12.2,
+    C7) is a :class:`~qlabs_catalog_sync.api.auth.ConsoleAuth` and is what makes the whole
+    app require an administrator session: :func:`~qlabs_catalog_sync.api.auth.install_auth`
+    adds one ASGI middleware covering every route, present and future, plus the sign-in
+    routes -- exactly the whole-app shape this factory was built for, never a per-route
+    opt-in. A **deployment** obtains it from
+    :func:`~qlabs_catalog_sync.api.auth.console_auth_from_environment`, which refuses to
+    return one when no credential is configured, so the process cannot start unauthenticated
+    (C7). Passing ``auth=None`` here builds an app with no authentication and logs a warning
+    saying so; that is for tests of unrelated parts of this API, not for serving.
     """
     app = FastAPI(title=title, version=version)
 
     install_error_handlers(app)
+    install_auth(app, auth=auth, api_prefix=API_PREFIX)
 
     @app.get("/healthz", responses=API_ERROR_RESPONSES)
     async def _healthz() -> Response:
