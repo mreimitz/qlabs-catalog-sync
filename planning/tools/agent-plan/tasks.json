@@ -848,7 +848,7 @@
       ],
       "dod": "read() returns a UC schema as a neutral DataProduct with its tables/views as member Datasets, with field envelopes, paging defensively.",
       "verify": "uv run pytest packages/qlabs-connector-databricks/tests/read -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T4.5",
