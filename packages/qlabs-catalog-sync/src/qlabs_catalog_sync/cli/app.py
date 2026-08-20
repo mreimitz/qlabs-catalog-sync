@@ -24,6 +24,7 @@ from qlabs_catalog_sync.observability import configure_logging
 
 from .deps import CliDeps, RuntimeContext
 from .identity_commands import identity_confirm
+from .serve_command import serve
 from .sync_commands import dry_run, run
 
 __all__ = ["cli", "main"]
@@ -74,6 +75,7 @@ def cli(ctx: click.Context, state_db: str, review_file: Path, log_level: str) ->
 cli.add_command(run)
 cli.add_command(dry_run)
 cli.add_command(identity_confirm)
+cli.add_command(serve)
 
 
 def main() -> None:

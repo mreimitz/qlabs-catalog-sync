@@ -29,7 +29,11 @@ target_metadata = Base.metadata
 def _resolve_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
     if not url:
-        url = config.get_x_argument(as_dictionary=True).get("db_url")
+        # alembic ships incomplete stubs: get_x_argument exists at runtime (it is the
+        # documented way to read -x arguments) but is absent from Config's type info.
+        url = config.get_x_argument(as_dictionary=True).get(  # type: ignore[attr-defined]
+            "db_url"
+        )
     if not url:
         raise RuntimeError(
             "no database URL configured: set sqlalchemy.url on the Alembic Config, "

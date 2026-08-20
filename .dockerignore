@@ -1,0 +1,43 @@
+# What the image build must never see. The Dockerfile itself decides *which* packages ship
+# (see its header comment on Collibra/Snowflake); this file's job is the stuff that must never
+# reach any image built from this repo, regardless of which Dockerfile stage COPYs what:
+# version-control metadata, the governed planning/ bundle, dev-only docs/scripts, every
+# package's test suite (including recorded HTTP cassettes), and local tooling/build artifacts.
+
+# Version control and CI.
+.git/
+.github/
+.gitignore
+
+# planning/ is a large, separately-governed OKF bundle (CLAUDE.md: "Never hand-edit its
+# concepts") with its own hooks, generators, and .venv -- none of it is application code and
+# none of it belongs in a runtime image.
+planning/
+
+# Repo documentation, dev-only scripts, and root-level docs -- not imported by the engine or
+# any of the four packages this image installs.
+docs/
+scripts/
+*.md
+.pre-commit-config.yaml
+
+# Claude Code / agent tooling config.
+.claude/
+
+# Every package's tests: unit tests, fixtures, and recorded vcrpy cassettes. The runtime image
+# never imports test code, and cassettes are the single largest dev-only artifact in the repo.
+packages/*/tests/
+
+# Python/uv/editor/OS artifacts that must never be baked into a build context.
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+.venv/
+**/.venv/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pytest_cache/
+**/.coverage
+**/*.db
+**/*.db-journal
+**/.DS_Store
