@@ -4,9 +4,12 @@ Keeps **data-product metadata** consistent across data catalogs — Databricks, 
 Snowflake, Collibra — so the same description, owner list and tags do not have to be
 maintained by hand in each one.
 
-> **Status: pre-implementation.** The research, the contracts and the build plan are
-> settled; the sync itself is not built yet. Nothing described under *What it will do*
-> runs today. See [Current state](#current-state) for exactly what exists.
+> **Status: the engine works; the console does not exist yet.** The Databricks-to-Qlik
+> sync is built, tested and tagged `v0.1.0-engine`, and runs headless from a config file
+> plus environment variables. The browser console described below is under construction —
+> its configuration store and selection rule engine are built, but nothing serves a
+> browser yet. No part of this has run against a live tenant. See
+> [Current state](#current-state) for exactly what exists.
 
 ---
 
@@ -251,7 +254,8 @@ and the behaviours only a real tenant can confirm are listed in
 
 ### Status at a glance
 
-As of 2026-08-20 — RM-01 (the engine) is **complete**: 52 of 52 tasks, 1,600 tests passing.
+As of 2026-08-20 — RM-01 (the engine) is **complete**: 52 of 52 tasks. RM-06 (the console)
+is **in progress**: WP10 is done and WP11 is under way. 1,923 tests passing.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
@@ -265,8 +269,8 @@ As of 2026-08-20 — RM-01 (the engine) is **complete**: 52 of 52 tasks, 1,600 t
 | WP7 | Identity map, field diff, owner correlation | 4 / 4 | **Done** |
 | WP8 | Integration, end-to-end pilot, release readiness | 4 / 4 | **Done** |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 4 / 4 | **Done** |
-| WP10 | Configuration store, secret references, audit log | 0 / 4 | Not started (console, RM-06) |
-| WP11 | Selection rule engine, source tree, run history | 0 / 4 | Not started (console, RM-06) |
+| WP10 | Configuration store, secret references, audit log | 4 / 4 | **Done** (console, RM-06) |
+| WP11 | Selection rule engine, source tree, run history | 2 / 4 | In progress (console, RM-06) |
 | WP12 | REST API, authentication, generated client | 0 / 9 | Not started (console, RM-06) |
 | WP13 | Console SPA | 0 / 8 | Not started (console, RM-06) |
 | WP14 | One image, operator docs, console-driven pilot | 0 / 3 | Not started (console, RM-06) |
@@ -334,8 +338,11 @@ tenant has been involved.
 - **No glossary sync.** Databricks has no glossary to source one from, so the Qlik glossary
   write path is Track B (decision D5).
 - **No two-way sync and no access-control sync.** Both are out of v1 by design.
-- **No console and no HTTP API.** No configuration store, no selection rule engine, no REST
-  API, no SPA — the whole of WP10-WP14 is unbuilt.
+- **No console and no HTTP API.** There is no REST API and no SPA (WP12-WP14 are unbuilt),
+  so nothing serves a browser yet. The configuration store and the selection rule engine
+  underneath them do exist (WP10, and WP11 in part) — but nothing calls them at runtime:
+  the engine still reads its configuration from the environment at startup and still has
+  no HTTP surface beyond `/healthz` and `/metrics`.
 
 ### Known-unverified behavior
 
