@@ -253,7 +253,7 @@
       ],
       "dod": "list_changed returns changed objects using SHOW/INFORMATION_SCHEMA/ACCOUNT_USAGE, accounting for ~2h lag.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T6.4",
@@ -316,7 +316,7 @@
       ],
       "dod": "Snowflake connector passes the SDK conformance kit in read mode.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests -q",
-      "status": "pending"
+      "status": "in_progress"
     }
   ]
 }

@@ -2,8 +2,9 @@
 ``__init__.py``): the real connector, set up with real key-pair JWT auth, reading a real
 neutral entity over ``respx``-mocked HTTP.
 
-Everything else about ``__init__.py`` is left alone -- ``list_changed`` is still T6.3's,
-and the write path still refuses through the inherited defaults.
+``list_changed`` is wired too (T6.3's one authorized change to the same file); its own
+behavior lives in ``tests/read/changes/``. The write path still refuses through the
+inherited defaults.
 """
 
 from __future__ import annotations
@@ -13,8 +14,9 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from qlabs_catalog_sync_sdk.config import ConnectorContext, ManualClock
+from qlabs_catalog_sync_sdk.contract import Watermark
 from qlabs_catalog_sync_sdk.exceptions import CapabilityError, NotFound
-from qlabs_catalog_sync_sdk.models import AssetType, Dataset
+from qlabs_catalog_sync_sdk.models import AssetType, Dataset, EntityType
 from qlabs_connector_snowflake import Connector
 from qlabs_connector_snowflake.auth import SnowflakeConfig
 
@@ -138,9 +140,11 @@ async def test_the_write_path_still_refuses() -> None:
     await connector.close()
 
 
-async def test_list_changed_is_still_the_next_tasks_work() -> None:
-    connector = await _connector()
-
-    with pytest.raises(NotImplementedError, match="T6.3"):
-        await connector.list_changed(dataset_ref().entity_type, None)  # type: ignore[arg-type]
-    await connector.close()
+async def test_list_changed_before_setup_is_a_programming_error_not_a_silent_empty() -> None:
+    """The read path's lifecycle guard, mirrored on the change feed: a connector that was
+    never set up must say so rather than answer "nothing changed"."""
+    with pytest.raises(RuntimeError, match="setup"):
+        await Connector().list_changed(
+            EntityType.DATA_PRODUCT,
+            Watermark.initial(ENDPOINT, EntityType.DATA_PRODUCT),
+        )

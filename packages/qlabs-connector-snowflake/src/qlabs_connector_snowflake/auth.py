@@ -180,6 +180,32 @@ class SnowflakeConfig(ConnectorConfig):
             "(RS-05 section 3.1)."
         ),
     )
+    account_usage_safety_margin_seconds: int = Field(
+        default=10_800,
+        ge=0,
+        description=(
+            "How far behind the account clock a change-detection watermark is allowed to "
+            "advance, in seconds. SNOWFLAKE.ACCOUNT_USAGE lags (RS-05 section 1.4: up to "
+            "roughly two hours for many views, worse for some), and a watermark advanced "
+            "to 'now' against a lagging view silently loses every change that had not yet "
+            "propagated. The 3-hour default is deliberately pessimistic: assuming too "
+            "little loses changes silently, assuming too much only widens a query. Raise "
+            "it if a tenant measures a worse lag. Must match read.py's "
+            "DEFAULT_WATERMARK_SAFETY_MARGIN, which test_lag_settings.py pins."
+        ),
+    )
+    rescan_overlap_seconds: int = Field(
+        default=900,
+        ge=0,
+        description=(
+            "How far below the stored watermark each change-detection poll re-scans, in "
+            "seconds. Re-delivery is harmless -- the poll compares every re-scanned row "
+            "against a per-object checksum carried in the watermark -- so this costs a "
+            "wider query rather than duplicate work, and it absorbs the boundary case "
+            "the safety margin alone does not. Must match read.py's "
+            "DEFAULT_RESCAN_OVERLAP, which test_lag_settings.py pins."
+        ),
+    )
 
     @field_validator("organization", "account", "user")
     @classmethod

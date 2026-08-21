@@ -7,16 +7,17 @@ group.
 
 This module (T6.1) implements the connector's identity, config wiring, ``setup()`` and
 ``healthcheck()`` (key-pair JWT auth per RS-05 section 3.2, via ``auth.py``), plus wires
-in the read-only capability manifest (T6.2, ``manifest.py``). ``list_changed()`` (T6.3)
-and ``read()`` (T6.4) are later tasks; their methods are present (the ABC requires it to
-instantiate) but raise ``NotImplementedError`` rather than any placeholder that could
-pass for real behavior. The write path (``create``/``update``/``delete``) is
-deliberately left untouched: the inherited ``Connector`` defaults already refuse with
+in the read-only capability manifest (T6.2, ``manifest.py``). ``read()`` (T6.4) and
+``list_changed()`` (T6.3) are both live and delegate to ``read.py``, which owns the SQL,
+the HTTP and the identity rules the two must agree on. The write path
+(``create``/``update``/``delete``) is deliberately left untouched: the inherited
+``Connector`` defaults already refuse with
 ``CapabilityError``, which is exactly what a read-only source connector wants.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -42,7 +43,7 @@ from .auth import (
     translate_snowflake_error,
 )
 from .manifest import build_manifest
-from .read import StatementClient, read_entity
+from .read import StatementClient, list_changed_candidates, read_entity
 
 __all__ = ["Connector"]
 
@@ -158,13 +159,40 @@ class Connector(ConnectorABC):
     # -- read path (T6.3 / T6.4) --------------------------------------------------------
 
     async def list_changed(self, entity_type: EntityType, since: Watermark) -> ListChangedResult:
-        """Not implemented yet.
+        """Candidates changed since ``since``, plus the proposed next watermark (T6.3).
 
-        TODO(T6.3): list candidates changed since ``since`` via SHOW /
-        INFORMATION_SCHEMA / ACCOUNT_USAGE (note the ~2h ACCOUNT_USAGE lag, RS-05
-        section 1.4), plus the proposed next watermark.
+        Delegates straight to
+        :func:`~qlabs_connector_snowflake.read.list_changed_candidates`, which scans
+        ``SNOWFLAKE.ACCOUNT_USAGE`` (account-wide, carries dropped objects and object ids)
+        for tables/views and schemas and ``SHOW LISTINGS`` for listings. ``ACCOUNT_USAGE``
+        lags — RS-05 section 1.4 documents up to roughly two hours, and some views worse —
+        so the watermark it proposes is deliberately held back by
+        :data:`~qlabs_connector_snowflake.read.DEFAULT_WATERMARK_SAFETY_MARGIN` and the
+        next poll re-scans an overlap on top of that; see ``read.py``'s "Change detection"
+        section for why that is what stops a change falling between two polls.
+
+        ``tenant_id`` is the account identifier, the same value the refs handed to
+        :meth:`read` carry. The :class:`~qlabs_connector_snowflake.read.StatementClient` is
+        built per call for the same reason it is in :meth:`read`: it is a stateless wrapper
+        around the already-authenticated ``HttpEndpoint``.
         """
-        raise NotImplementedError("Connector.list_changed is implemented in T6.3")
+        if self._ctx is None or self._http is None:
+            raise RuntimeError("setup() must be called before list_changed()")
+        config = self._ctx.config
+        return await list_changed_candidates(
+            StatementClient(
+                self._http,
+                endpoint=self._ctx.endpoint,
+                role=config.role,
+                warehouse=config.warehouse,
+            ),
+            entity_type,
+            since,
+            endpoint=self._ctx.endpoint,
+            tenant_id=config.account_identifier,
+            safety_margin=timedelta(seconds=config.account_usage_safety_margin_seconds),
+            rescan_overlap=timedelta(seconds=config.rescan_overlap_seconds),
+        )
 
     async def read(self, ref: IdentityRef) -> NeutralEntity:
         """Read one object into a neutral entity with its provenance sidecar (T6.4).

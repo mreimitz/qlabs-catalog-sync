@@ -415,3 +415,40 @@ async def test_a_dataset_ref_is_rejected(
 ) -> None:
     with pytest.raises(ValueError, match="DATA_PRODUCT"):
         await read_listing(make_client(http), dataset_ref())
+
+
+async def test_a_reordered_share_composition_reads_identically(
+    respx_mock: object,
+    http: HttpEndpoint,
+    make_client: Callable[..., StatementClient],
+    router: StatementRouter,
+) -> None:
+    """``DESCRIBE SHARE`` takes no ``ORDER BY`` and RS-05 3.5 promises no row order.
+
+    The composition rides in ``custom_attributes``, which the SDK checksums with
+    ``ArrayOrder.PRESERVE`` -- so if the response order leaked through, an unchanged
+    listing would move its checksum on every poll and the engine would rewrite it
+    forever. ``read_share_composition`` sorts on content, so any response order
+    produces the one value.
+    """
+    router.rows("SHOW LISTINGS", LISTING_COLUMNS, [listing_row()])
+    router.rows("DESCRIBE LISTING", DESCRIBE_LISTING_COLUMNS, [describe_listing_row()])
+    router.rows(
+        "DESCRIBE SHARE",
+        SHARE_COLUMNS,
+        [
+            share_row("SALES_DB.PUBLIC.RETURNS", kind="VIEW"),
+            share_row("SALES_DB.PUBLIC.ORDERS"),
+            share_row("SALES_DB.PUBLIC.CUSTOMERS"),
+        ],
+    )
+    respx_mock.post(statements_url()).mock(side_effect=router)  # type: ignore[attr-defined]
+
+    read = await read_listing(make_client(http), listing_ref())
+
+    composition = read.data_product.custom_attributes[SHARE_COMPOSITION_KEY]
+    assert [row["name"] for row in composition] == [
+        "SALES_DB.PUBLIC.CUSTOMERS",
+        "SALES_DB.PUBLIC.ORDERS",
+        "SALES_DB.PUBLIC.RETURNS",
+    ]
