@@ -475,7 +475,7 @@
       ],
       "dod": "The screen makes it obvious what a run would change before it runs; unresolved references are listed with the reason; a no-op plan is presented as such rather than as an empty screen.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T13.7",
