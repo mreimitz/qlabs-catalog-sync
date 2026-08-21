@@ -438,7 +438,7 @@
       ],
       "dod": "A pair can be created, edited and disabled from the browser; activation defaults to off and its consequence is stated in the UI; only enabled, healthy endpoints can be chosen.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T13.5",
