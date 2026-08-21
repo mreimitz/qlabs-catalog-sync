@@ -213,7 +213,7 @@
       ],
       "dod": "Connector authenticates to Snowflake via key-pair JWT with configured client.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/auth -q",
-      "status": "blocked"
+      "status": "done"
     },
     {
       "id": "T6.2",
@@ -233,7 +233,7 @@
       ],
       "dod": "Manifest declares read-only entities, FQN + listing global name identity, and tags/comments support.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/manifest -q",
-      "status": "blocked"
+      "status": "done"
     },
     {
       "id": "T6.3",
@@ -253,7 +253,7 @@
       ],
       "dod": "list_changed returns changed objects using SHOW/INFORMATION_SCHEMA/ACCOUNT_USAGE, accounting for ~2h lag.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
-      "status": "blocked"
+      "status": "pending"
     },
     {
       "id": "T6.4",
@@ -274,7 +274,7 @@
       ],
       "dod": "read() returns objects and listings/shares as neutral entities with envelopes.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
-      "status": "blocked"
+      "status": "pending"
     },
     {
       "id": "T6.5",
@@ -295,7 +295,7 @@
       ],
       "dod": "Comments and tags map correctly into neutral fields.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests/read -q",
-      "status": "blocked"
+      "status": "pending"
     },
     {
       "id": "T6.6",
@@ -316,7 +316,7 @@
       ],
       "dod": "Snowflake connector passes the SDK conformance kit in read mode.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests -q",
-      "status": "blocked"
+      "status": "pending"
     }
   ]
 }
