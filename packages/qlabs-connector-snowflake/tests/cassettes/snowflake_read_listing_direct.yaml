@@ -1,0 +1,70 @@
+# Hand-authored, NOT captured from a live Snowflake account -- see
+# snowflake_connector_setup_and_read_dataset.yaml's header for the convention.
+# Backs read.read_listing() (RS-05 sections 2.2/2.4/3.5/3.6): SHOW LISTINGS LIKE to
+# locate the listing, DESCRIBE LISTING for its manifest fields, DESCRIBE SHARE for
+# the composition of the share beneath it.
+interactions:
+- request:
+    body: '{"statement":"SHOW LISTINGS LIKE ''SALES_DAILY''","timeout":60}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=00a89523-aaae-4001-a23c-6a509a0b527c
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"created_on","type":"text","nullable":true},{"name":"name","type":"text","nullable":true},{"name":"global_name","type":"text","nullable":true},{"name":"title","type":"text","nullable":true},{"name":"subtitle","type":"text","nullable":true},{"name":"share","type":"text","nullable":true},{"name":"owner","type":"text","nullable":true},{"name":"comment","type":"text","nullable":true},{"name":"state","type":"text","nullable":true},{"name":"review_state","type":"text","nullable":true}]},"data":[["1700000000.000000000","SALES_DAILY","GZTSZAS2KH9","Daily
+        sales","Daily sales by region, refreshed nightly","SALES_S","SALES_PROVIDER","Managed
+        by the commercial analytics team.","PUBLISHED","APPROVED"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"DESCRIBE LISTING \"SALES_DAILY\"","timeout":60}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=54b4343e-bf5a-415d-8ba8-725a8e85e901
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"global_name","type":"text","nullable":true},{"name":"name","type":"text","nullable":true},{"name":"owner","type":"text","nullable":true},{"name":"title","type":"text","nullable":true},{"name":"subtitle","type":"text","nullable":true},{"name":"description","type":"text","nullable":true},{"name":"categories","type":"text","nullable":true},{"name":"data_dictionary","type":"text","nullable":true},{"name":"state","type":"text","nullable":true},{"name":"updated_on","type":"text","nullable":true}]},"data":[["GZTSZAS2KH9","SALES_DAILY","SALES_PROVIDER","Daily
+        sales","Daily sales by region, refreshed nightly","# Daily sales\n\nSales
+        fact tables refreshed **daily**.","[\"BUSINESS\"]","{\"featured\": {\"database\":
+        \"SALES_DB\", \"objects\": [{\"name\": \"ORDERS\", \"schema\": \"PUBLIC\",
+        \"domain\": \"TABLE\"}]}}","PUBLISHED","1700003600.000000000"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"DESCRIBE SHARE \"SALES_S\"","timeout":60}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=1998fea1-35cf-49a5-8660-8280518ac0a0
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"created_on","type":"text","nullable":true},{"name":"kind","type":"text","nullable":true},{"name":"name","type":"text","nullable":true},{"name":"shared_on","type":"text","nullable":true}]},"data":[["1700000000.000000000","TABLE","SALES_DB.PUBLIC.ORDERS","1700000000.000000000"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

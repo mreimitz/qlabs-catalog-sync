@@ -316,7 +316,7 @@
       ],
       "dod": "Snowflake connector passes the SDK conformance kit in read mode.",
       "verify": "uv run pytest packages/qlabs-connector-snowflake/tests -q",
-      "status": "in_progress"
+      "status": "done"
     }
   ]
 }

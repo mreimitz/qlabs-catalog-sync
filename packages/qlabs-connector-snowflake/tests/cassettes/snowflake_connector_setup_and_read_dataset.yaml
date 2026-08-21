@@ -1,0 +1,90 @@
+# Hand-authored, NOT captured from a live Snowflake account. RM-01/RS-05 convention:
+# every request/response body below was typed from the field shapes RS-05 documents
+# (snowflake-catalog-api-reference.md sections 1.2, 3.4, 3.7, 3.8), then written out
+# through vcrpy's own serializer so the YAML structure is vcrpy's rather than hand-
+# rolled. Backs the end-to-end test: Connector.setup() (no HTTP -- key-pair JWT is
+# signed locally), healthcheck(), then Connector.read() on a DATASET ref, which is
+# three statements: the TABLES row, its COLUMNS, its TAG_REFERENCES.
+interactions:
+- request:
+    body: null
+    headers:
+      accept:
+      - '*/*'
+    method: GET
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/databases?showLimit=1
+  response:
+    body:
+      string: '[{"name":"SALES_DB","kind":"STANDARD","comment":"Sales domain data."}]'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"SELECT TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_OWNER,
+      TABLE_TYPE, IS_TRANSIENT, COMMENT, CREATED, LAST_ALTERED FROM \"SALES_DB\".INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?","timeout":60,"bindings":{"1":{"type":"TEXT","value":"PUBLIC"},"2":{"type":"TEXT","value":"ORDERS"}}}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=5ee45b9c-0134-40dc-adb6-350c849a851d
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"TABLE_CATALOG","type":"text","nullable":true},{"name":"TABLE_SCHEMA","type":"text","nullable":true},{"name":"TABLE_NAME","type":"text","nullable":true},{"name":"TABLE_OWNER","type":"text","nullable":true},{"name":"TABLE_TYPE","type":"text","nullable":true},{"name":"IS_TRANSIENT","type":"text","nullable":true},{"name":"COMMENT","type":"text","nullable":true},{"name":"CREATED","type":"text","nullable":true},{"name":"LAST_ALTERED","type":"text","nullable":true}]},"data":[["SALES_DB","PUBLIC","ORDERS","SALES_ENGINEER","BASE
+        TABLE","NO","Order header rows, one per checkout.","1700000000.000000000","1700003600.000000000"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"SELECT COLUMN_NAME, ORDINAL_POSITION, DATA_TYPE, IS_NULLABLE,
+      COMMENT FROM \"SALES_DB\".INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ?
+      AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION","timeout":60,"bindings":{"1":{"type":"TEXT","value":"PUBLIC"},"2":{"type":"TEXT","value":"ORDERS"}}}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=1eaf3eab-dfcc-4fa7-af7a-28a6ae2d2d19
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"COLUMN_NAME","type":"text","nullable":true},{"name":"ORDINAL_POSITION","type":"text","nullable":true},{"name":"DATA_TYPE","type":"text","nullable":true},{"name":"IS_NULLABLE","type":"text","nullable":true},{"name":"COMMENT","type":"text","nullable":true}]},"data":[["ORDER_ID",1,"NUMBER","NO","Surrogate
+        key"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"SELECT TAG_DATABASE, TAG_SCHEMA, TAG_NAME, TAG_VALUE, DOMAIN,
+      OBJECT_DATABASE, OBJECT_SCHEMA, OBJECT_NAME, COLUMN_NAME FROM TABLE(\"SALES_DB\".INFORMATION_SCHEMA.TAG_REFERENCES(''SALES_DB.PUBLIC.ORDERS'',
+      ''TABLE''))","timeout":60}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=da4ad082-61e6-46cf-88b5-a4378df155c8
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":2,"format":"jsonv2","partitionInfo":[{"rowCount":2}],"rowType":[{"name":"TAG_DATABASE","type":"text","nullable":true},{"name":"TAG_SCHEMA","type":"text","nullable":true},{"name":"TAG_NAME","type":"text","nullable":true},{"name":"TAG_VALUE","type":"text","nullable":true},{"name":"DOMAIN","type":"text","nullable":true},{"name":"OBJECT_DATABASE","type":"text","nullable":true},{"name":"OBJECT_SCHEMA","type":"text","nullable":true},{"name":"OBJECT_NAME","type":"text","nullable":true},{"name":"COLUMN_NAME","type":"text","nullable":true}]},"data":[["GOVERNANCE","TAGS","COST_CENTER","commerce","TABLE","SALES_DB","PUBLIC","ORDERS",null],["SNOWFLAKE","CORE","PRIVACY_CATEGORY","IDENTIFIER","TABLE","SALES_DB","PUBLIC","ORDERS","ORDER_ID"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

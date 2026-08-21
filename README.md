@@ -108,7 +108,8 @@ flowchart LR
 ```
 
 Solid is what v1 ships: Databricks in, Qlik out. Collibra and Snowflake are written against
-the same contract and start after v0.1 — adding them changes no engine code.
+the same contract — adding them changes no engine code. Snowflake's read side is already
+built (WP6); Collibra starts after v0.1.
 
 Entities: **DataProduct**, **Dataset**, **GlossaryTerm**, **Category** — plus the
 **Party**, **Tag** and **IdentityRef** value types reused across them.
@@ -217,8 +218,9 @@ v1 is deliberately the smallest safe version of the idea:
 The **MVP (Track A)** is one source and one target: Databricks Unity Catalog → Qlik Cloud.
 A UC schema becomes one Qlik data product; its tables and views become that product's
 datasets. **Track B** — Collibra, Snowflake and the Qlik glossary write path — is a separate
-roadmap item (RM-05) on its own board; it starts only after the MVP ships, and its tasks sit as
-`blocked` until then.
+roadmap item (RM-05) on its own board, planned to start only after the MVP ships. The
+Snowflake read connector has since been built ahead of that ordering; the rest of Track B
+still sits as `blocked`.
 
 Two safety properties hold for v1, by design:
 
@@ -258,7 +260,8 @@ and the behaviours only a real tenant can confirm are listed in
 
 As of 2026-08-21 — RM-01 (the engine) is **complete**: 52 of 52 tasks. RM-06 (the console)
 is **nearly complete**: WP10-WP13 are done and only WP14 (packaging, docs, the pilot)
-remains. 2,316 Python tests and 272 console tests passing.
+remains. On Track B (RM-05), the Snowflake read connector (WP6) is complete. 2,795 Python
+tests and 272 console tests passing.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
@@ -268,7 +271,7 @@ remains. 2,316 Python tests and 272 console tests passing.
 | WP3 | Qlik write connector (sole writer) | 8 / 8 | **Done** |
 | WP4 | Databricks read connector | 7 / 7 | **Done** |
 | WP5 | Collibra read connector | 0 / 6 | Blocked (Track B, RM-05) |
-| WP6 | Snowflake read connector | 0 / 6 | Blocked (Track B, RM-05) |
+| WP6 | Snowflake read connector | 6 / 6 | **Done** (Track B, RM-05) |
 | WP7 | Identity map, field diff, owner correlation | 4 / 4 | **Done** |
 | WP8 | Integration, end-to-end pilot, release readiness | 4 / 4 | **Done** |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 4 / 4 | **Done** |
@@ -279,14 +282,17 @@ remains. 2,316 Python tests and 272 console tests passing.
 | WP14 | One image, operator docs, console-driven pilot | 0 / 3 | Not started (console, RM-06) |
 
 **v0.1 ships the engine and the console together.** WP0-WP4 and WP7-WP9 are the engine
-(RM-01); WP10-WP14 are the console (RM-06); WP5 and WP6 are Track B (RM-05) and start only
-after v0.1 is tagged.
+(RM-01); WP10-WP14 are the console (RM-06); WP5 and WP6 are Track B (RM-05), whose plan
+has them starting only after v0.1 is tagged. WP6 (Snowflake) was built ahead of that
+ordering and is done; WP5 (Collibra), the Qlik glossary write path (T3.6) and both Track B
+pilots (T8.2, T8.3) are still where the plan puts them, blocked behind the v0.1 tag.
 
 Regenerate this picture at any time:
 
 ```bash
 python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-01
 python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-06
+python3 planning/tools/agent-plan/ready_queue.py --all --roadmap RM-05
 ```
 
 ### What works today
@@ -315,8 +321,18 @@ tenant has been involved.
 - **Tags come from Unity Catalog** through the Statement Execution API when a SQL warehouse
   is configured; without one the connector reports tags as unavailable rather than empty,
   so the sync leaves the target's tags alone instead of clearing them.
-- **Both connectors are certified** against the SDK's conformance kit, which also fails a
-  connector whose capability manifest lies about what it can do.
+- **Snowflake reads too.** The Snowflake connector authenticates with a key-pair (no
+  password anywhere), reads a schema as a data product and its tables and views as
+  datasets, reads a Marketplace listing — including the composition of the share beneath
+  it — as a data product in its own right, and brings across comments, owning roles, tags
+  and Snowflake's own machine-generated privacy/semantic classifications. It finds what
+  changed since the last run over Snowflake's account-usage views, which report on a delay
+  of up to a few hours; the connector deliberately holds its bookmark back by that much and
+  re-scans an overlap, so a change cannot fall between two runs. It is read-only and
+  refuses every write. Nothing yet syncs Snowflake into Qlik end to end — that pilot is
+  still Track B work.
+- **All three working connectors are certified** against the SDK's conformance kit, which
+  also fails a connector whose capability manifest lies about what it can do.
 - **Operations:** structured JSON logs with sync context and no secrets, Prometheus metrics,
   `/healthz` and `/metrics`, a per-pair scheduler with jitter that never overlaps a cycle
   with itself, and automatic database migration on startup.
@@ -351,11 +367,17 @@ tenant has been involved.
 ### What does not exist yet
 
 - **No live-tenant verification.** The connectors have never talked to a real Databricks
-  workspace or Qlik tenant. See [Known-unverified behavior](#known-unverified-behavior) and
-  the checklist in [`docs/tenant-verification.md`](docs/tenant-verification.md).
-- **No Collibra or Snowflake connector.** Both packages exist as placeholders that declare
-  an entry point, so the engine reports them as unavailable at startup. They are Track B
-  (RM-05) and start after v0.1.
+  workspace, Qlik tenant or Snowflake account. See
+  [Known-unverified behavior](#known-unverified-behavior); the pre-production checklist in
+  [`docs/tenant-verification.md`](docs/tenant-verification.md) covers the Qlik and
+  Databricks assumptions item by item, and does not yet cover Snowflake's.
+- **No Collibra connector.** The package exists as a placeholder that declares an entry
+  point, so the engine reports it as unavailable at startup. It is Track B (RM-05) and
+  starts after v0.1.
+- **No Snowflake-to-Qlik sync yet.** The Snowflake connector reads, but no run has ever
+  taken what it reads and written it into Qlik: that pilot (T8.3) is Track B and still
+  blocked behind the v0.1 tag. Configuring a Snowflake endpoint through the console has
+  likewise never been exercised.
 - **No glossary sync.** Databricks has no glossary to source one from, so the Qlik glossary
   write path is Track B (decision D5).
 - **No two-way sync and no access-control sync.** Both are out of v1 by design.
@@ -372,9 +394,10 @@ tenant has been involved.
 
 ### Known-unverified behavior
 
-The build runs without access to a live Databricks workspace or Qlik tenant, so connectors
-are written against mocked HTTP and hand-authored cassettes derived from the API research.
-These points are documented assumptions until a real tenant confirms them:
+The build runs without access to a live Databricks workspace, Qlik tenant or Snowflake
+account, so connectors are written against mocked HTTP and hand-authored cassettes derived
+from the API research. These points are documented assumptions until a real tenant
+confirms them:
 
 - whether the Qlik data-products `PATCH` endpoint honors `if-match`/ETag (undocumented —
   the writer sends it and tolerates its absence)
@@ -383,8 +406,18 @@ These points are documented assumptions until a real tenant confirms them:
 - whether `qri`/`secureQri` survive a space move and differ across tenants
 - the exact custom-role permissions a Qlik sync service account needs
 - Databricks rate-limit behavior at the chosen poll cadence
+- how far behind Snowflake's account-usage views actually run on a given account — the
+  change detector assumes the worse of the two figures Snowflake documents, because
+  assuming too little loses a change while assuming too much only widens a re-scan
+- whether Snowflake's tag reads really work without a running warehouse, as the capability
+  manifest assumes
+- which account-usage column carries a stable object id for each object kind, and whether
+  a Snowflake key-pair token's issuer uses the bare account name or the hyphenated
+  organization-account form
 
-They are tracked as an explicit pre-production checklist, not left implicit.
+The Qlik and Databricks items are tracked as an explicit pre-production checklist, not
+left implicit. The Snowflake ones are recorded in the connector's own code, marked
+`TENANT-UNVERIFIED` at the point that depends on them, but are not on that checklist yet.
 
 ---
 

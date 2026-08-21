@@ -1,0 +1,94 @@
+# Hand-authored, NOT captured from a live Snowflake account -- see
+# snowflake_connector_setup_and_read_dataset.yaml's header for the convention.
+# Backs read.read_schema() called directly against a bare HttpEndpoint, so the test
+# can assert on the whole DataProductRead (the data product AND its member datasets)
+# that Connector.read() alone returns only half of. Four statements: SCHEMATA, the
+# schema's own TAG_REFERENCES, the member TABLES rows, the ACCOUNT_USAGE tag index.
+interactions:
+- request:
+    body: '{"statement":"SELECT CATALOG_NAME, SCHEMA_NAME, SCHEMA_OWNER, IS_TRANSIENT,
+      IS_MANAGED_ACCESS, COMMENT, CREATED, LAST_ALTERED FROM \"SALES_DB\".INFORMATION_SCHEMA.SCHEMATA
+      WHERE SCHEMA_NAME = ?","timeout":60,"bindings":{"1":{"type":"TEXT","value":"PUBLIC"}}}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=2a2d9cdc-83ac-4f4f-9902-a88751c3453d
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"CATALOG_NAME","type":"text","nullable":true},{"name":"SCHEMA_NAME","type":"text","nullable":true},{"name":"SCHEMA_OWNER","type":"text","nullable":true},{"name":"IS_TRANSIENT","type":"text","nullable":true},{"name":"IS_MANAGED_ACCESS","type":"text","nullable":true},{"name":"COMMENT","type":"text","nullable":true},{"name":"CREATED","type":"text","nullable":true},{"name":"LAST_ALTERED","type":"text","nullable":true}]},"data":[["SALES_DB","PUBLIC","SYSADMIN","NO","NO","Conformed
+        sales dimensions and facts.","1700000000.000000000","1700003600.000000000"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"SELECT TAG_DATABASE, TAG_SCHEMA, TAG_NAME, TAG_VALUE, DOMAIN,
+      OBJECT_DATABASE, OBJECT_SCHEMA, OBJECT_NAME, COLUMN_NAME FROM TABLE(\"SALES_DB\".INFORMATION_SCHEMA.TAG_REFERENCES(''SALES_DB.PUBLIC'',
+      ''SCHEMA''))","timeout":60}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=8f39339b-6a5d-46e2-90bf-2ecb1d757c53
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"TAG_DATABASE","type":"text","nullable":true},{"name":"TAG_SCHEMA","type":"text","nullable":true},{"name":"TAG_NAME","type":"text","nullable":true},{"name":"TAG_VALUE","type":"text","nullable":true},{"name":"DOMAIN","type":"text","nullable":true},{"name":"OBJECT_DATABASE","type":"text","nullable":true},{"name":"OBJECT_SCHEMA","type":"text","nullable":true},{"name":"OBJECT_NAME","type":"text","nullable":true},{"name":"COLUMN_NAME","type":"text","nullable":true}]},"data":[["GOVERNANCE","TAGS","DOMAIN","sales","SCHEMA","SALES_DB","PUBLIC","PUBLIC",null]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"SELECT TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_OWNER,
+      TABLE_TYPE, IS_TRANSIENT, COMMENT, CREATED, LAST_ALTERED FROM \"SALES_DB\".INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME","timeout":60,"bindings":{"1":{"type":"TEXT","value":"PUBLIC"}}}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=fc0c966c-ffe2-4fe6-8b39-5764da9d4566
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"TABLE_CATALOG","type":"text","nullable":true},{"name":"TABLE_SCHEMA","type":"text","nullable":true},{"name":"TABLE_NAME","type":"text","nullable":true},{"name":"TABLE_OWNER","type":"text","nullable":true},{"name":"TABLE_TYPE","type":"text","nullable":true},{"name":"IS_TRANSIENT","type":"text","nullable":true},{"name":"COMMENT","type":"text","nullable":true},{"name":"CREATED","type":"text","nullable":true},{"name":"LAST_ALTERED","type":"text","nullable":true}]},"data":[["SALES_DB","PUBLIC","ORDERS","SALES_ENGINEER","BASE
+        TABLE","NO","Order header rows, one per checkout.","1700000000.000000000","1700003600.000000000"]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"statement":"SELECT TAG_DATABASE, TAG_SCHEMA, TAG_NAME, TAG_VALUE, DOMAIN,
+      OBJECT_DATABASE, OBJECT_SCHEMA, OBJECT_NAME, COLUMN_NAME FROM SNOWFLAKE.ACCOUNT_USAGE.TAG_REFERENCES
+      WHERE OBJECT_DATABASE = ? AND OBJECT_SCHEMA = ?","timeout":60,"bindings":{"1":{"type":"TEXT","value":"SALES_DB"},"2":{"type":"TEXT","value":"PUBLIC"}}}'
+    headers:
+      accept:
+      - '*/*'
+      content-type:
+      - application/json
+    method: POST
+    uri: https://acme-primary.snowflakecomputing.com/api/v2/statements?requestId=f745355c-e2dc-4b6a-bea6-929badc0f6a0
+  response:
+    body:
+      string: '{"code":"090001","statementHandle":"01b2c3d4-0000-0000-0000-0000000006c6","message":"Statement
+        executed successfully.","resultSetMetaData":{"numRows":1,"format":"jsonv2","partitionInfo":[{"rowCount":1}],"rowType":[{"name":"TAG_DATABASE","type":"text","nullable":true},{"name":"TAG_SCHEMA","type":"text","nullable":true},{"name":"TAG_NAME","type":"text","nullable":true},{"name":"TAG_VALUE","type":"text","nullable":true},{"name":"DOMAIN","type":"text","nullable":true},{"name":"OBJECT_DATABASE","type":"text","nullable":true},{"name":"OBJECT_SCHEMA","type":"text","nullable":true},{"name":"OBJECT_NAME","type":"text","nullable":true},{"name":"COLUMN_NAME","type":"text","nullable":true}]},"data":[["GOVERNANCE","TAGS","COST_CENTER","commerce","TABLE","SALES_DB","PUBLIC","ORDERS",null]]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1
