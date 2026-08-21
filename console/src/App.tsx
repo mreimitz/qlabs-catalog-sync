@@ -15,6 +15,7 @@ import { DEFAULT_ROUTE, NAV_ROUTES } from "./app/routes";
 import { Shell } from "./app/Shell";
 import { EndpointsScreen } from "./features/endpoints/EndpointsScreen";
 import { PairsScreen } from "./features/pairs/PairsScreen";
+import { RunsScreen } from "./features/runs/RunsScreen";
 
 function App() {
   return (
@@ -35,6 +36,8 @@ function App() {
                     <EndpointsScreen />
                   ) : route.path === "/pairs" ? (
                     <PairsScreen />
+                  ) : route.path === "/runs" ? (
+                    <RunsScreen />
                   ) : (
                     <PlaceholderScreen title={route.label} builtBy={route.builtBy} />
                   )

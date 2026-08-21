@@ -91,6 +91,18 @@ export function installApiRouter(
   return { fetchMock, calls };
 }
 
+/** The calls the Runs screen makes on mount. Any test that renders the shell at `/runs`
+ * needs these answered, whether or not it cares about runs. `/api/runs` IS keyset-paginated
+ * (unlike `/api/endpoints`, a bare array, and unlike `/api/pairs/{id}/source-tree`, which is
+ * offset-based) -- three different shapes in one API, so each is checked against
+ * `openapi.json` rather than assumed from its neighbours. */
+export function runsScreenRoutes(): Record<string, Response> {
+  return {
+    "GET /api/pairs": jsonResponse(200, []),
+    "GET /api/runs": jsonResponse(200, { items: [], limit: 50, has_more: false, next_cursor: null }),
+  };
+}
+
 /** The two calls the Endpoints screen makes on mount. Any test that renders the shell at the
  * default route needs these answered, whether or not it cares about endpoints. */
 export function endpointsScreenRoutes(): Record<string, Response> {
