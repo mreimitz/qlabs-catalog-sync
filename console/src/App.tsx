@@ -16,6 +16,7 @@ import { Shell } from "./app/Shell";
 import { EndpointsScreen } from "./features/endpoints/EndpointsScreen";
 import { PairsScreen } from "./features/pairs/PairsScreen";
 import { RunsScreen } from "./features/runs/RunsScreen";
+import { DryRunScreen } from "./features/dry-run/DryRunScreen";
 import { SelectionScreen } from "./features/selection/SelectionScreen";
 
 function App() {
@@ -41,6 +42,8 @@ function App() {
                     <RunsScreen />
                   ) : route.path === "/selection" ? (
                     <SelectionScreen />
+                  ) : route.path === "/dry-run" ? (
+                    <DryRunScreen />
                   ) : (
                     <PlaceholderScreen title={route.label} builtBy={route.builtBy} />
                   )
