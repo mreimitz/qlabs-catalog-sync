@@ -622,6 +622,15 @@ export interface components {
             broken_reason?: string | null;
             /** Broken Stage */
             broken_stage?: string | null;
+            /** Config Schema */
+            config_schema?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /**
+             * Config Secret Fields
+             * @default []
+             */
+            config_secret_fields: string[];
             /** Distribution */
             distribution?: string | null;
             manifest?: components["schemas"]["CapabilityManifestOut"] | null;
