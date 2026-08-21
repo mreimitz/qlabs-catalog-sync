@@ -457,7 +457,7 @@
       ],
       "dod": "Reordering rules changes the preview and the tree consistently; every node can be traced to its deciding rule; a draft is previewable before saving and discardable; a catalog with thousands of tables stays responsive.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T13.6",
@@ -493,7 +493,7 @@
       ],
       "dod": "A run's outcome is legible without reading logs; issues link back to the object that caused them; run-now reflects live status; the UI never implies an orphan was deleted.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T13.8",
