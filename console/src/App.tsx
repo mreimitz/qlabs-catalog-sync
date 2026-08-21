@@ -16,6 +16,7 @@ import { Shell } from "./app/Shell";
 import { EndpointsScreen } from "./features/endpoints/EndpointsScreen";
 import { PairsScreen } from "./features/pairs/PairsScreen";
 import { RunsScreen } from "./features/runs/RunsScreen";
+import { SelectionScreen } from "./features/selection/SelectionScreen";
 
 function App() {
   return (
@@ -38,6 +39,8 @@ function App() {
                     <PairsScreen />
                   ) : route.path === "/runs" ? (
                     <RunsScreen />
+                  ) : route.path === "/selection" ? (
+                    <SelectionScreen />
                   ) : (
                     <PlaceholderScreen title={route.label} builtBy={route.builtBy} />
                   )

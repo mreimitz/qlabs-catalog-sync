@@ -41,6 +41,10 @@ export function connectorInfoFixture(overrides: Partial<ConnectorInfo> = {}): Co
     available: true,
     manifest: manifestFixture(),
     manifest_unavailable_reason: null,
+    // The connector's own settings schema, secrets stripped server-side (C2). Always present
+    // on a real response -- config_secret_fields is a non-optional array, never undefined.
+    config_schema: null,
+    config_secret_fields: [],
     distribution: null,
     broken_stage: null,
     broken_reason: null,
