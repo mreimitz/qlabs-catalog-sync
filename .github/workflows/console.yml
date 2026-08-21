@@ -1,0 +1,61 @@
+name: Console CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  console-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the version this repo actually runs (console/CLAUDE.md, pnpm-workspace.yaml):
+      # pnpm 11 refuses postinstall scripts by default, and `console/pnpm-workspace.yaml`'s
+      # `allowBuilds: { esbuild: true }` is what makes `pnpm install` exit 0 rather than
+      # ERR_PNPM_IGNORED_BUILDS. That setting only works from pnpm 11 itself -- the legacy
+      # `pnpm.onlyBuiltDependencies` package.json field and `.npmrc`'s
+      # `only-built-dependencies[]` do not.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm -C console install --frozen-lockfile
+
+      # vitest does not typecheck -- a broken `tsc` can reach main with every test green. This
+      # step is what actually proves the app compiles; `pnpm -C console build` below repeats the
+      # same `tsc --noEmit` for real but this step keeps a type error attributable to its own
+      # named step in the Actions UI rather than buried inside the build log.
+      - name: Type-check (tsc)
+        run: pnpm -C console typecheck
+
+      - name: Lint (eslint)
+        run: pnpm -C console lint
+
+      - name: Test (vitest)
+        run: pnpm -C console test --run
+
+      # axe-core over every *.a11y.test.tsx file (console/CLAUDE.md's load-bearing naming
+      # convention: `vitest run a11y` is a path-substring filter, not a suite name). Coverage of
+      # that convention itself is enforced by src/test/a11y-coverage.a11y.test.ts, which is
+      # collected by this same command.
+      - name: Accessibility (axe-core)
+        run: pnpm -C console a11y
+
+      # A console that type-checks but does not build is not shippable -- WP14 copies
+      # console/dist into the container image.
+      - name: Build
+        run: pnpm -C console build

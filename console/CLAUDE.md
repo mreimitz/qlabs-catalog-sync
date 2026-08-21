@@ -58,8 +58,9 @@ pnpm build      # tsc --noEmit && vite build -> dist/
 `vitest.config.ts` + `src/test/setup.ts` are T13.1's minimum viable harness (jsdom
 environment, jest-dom matchers, a `window.matchMedia` polyfill jsdom doesn't ship —
 see the comment in `setup.ts`). `src/test/app-shell.test.tsx` and
-`src/test/a11y.test.tsx` are smoke tests over the scaffold's own template screen, not
-permanent screen tests — T13.8 owns refining this harness as real screens land.
+`src/test/a11y.test.tsx` cover the composed real `App` (sign-in and the signed-in shell),
+not any one feature screen — each feature owns its own `<Screen>.test.tsx` /
+`<Screen>.a11y.test.tsx` beside it.
 
 **Naming convention, load-bearing:** `pnpm a11y` runs `vitest run a11y`, and vitest
 treats that positional argument as a *path substring filter*. So an accessibility test
@@ -68,6 +69,13 @@ is picked up if — and only if — its path contains `a11y`. Name every one
 accessibility test is named anything else is silently not gated: the command still exits
 0, having run the other files. (It fails closed in the other direction — a filter that
 matches nothing exits 1 rather than passing vacuously.)
+
+**The gate no longer trusts that convention blindly.** `src/test/a11y-coverage.a11y.test.ts`
+(T13.8) enumerates every `*Screen.tsx` under `src/features/*` and `src/auth` via
+`import.meta.glob` and asserts a matching `*.a11y.test.tsx` sits beside each one. It is
+itself named `*.a11y.test.ts`, so it runs under both `pnpm test` (unfiltered) and `pnpm
+a11y` (filtered) — a new feature screen that lands without its accessibility test fails
+the gate immediately, rather than silently shrinking the set of files `pnpm a11y` covers.
 
 ## Install / make it runnable
 

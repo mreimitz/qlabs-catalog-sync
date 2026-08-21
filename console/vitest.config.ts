@@ -5,8 +5,9 @@ import react from "@vitejs/plugin-react";
 // the Tailwind v4 plugin to process src/styles.css for the built bundle, which no test
 // here needs (component tests render markup, not computed styles — visual/contrast
 // verification is the brand-ui-audit skill's job, not this suite's). Keeping `css:
-// false` means no test pays that build cost. T13.8 owns refining this file further;
-// this is the minimum that makes `pnpm test` / `pnpm a11y` real rather than absent.
+// false` means no test pays that build cost. T13.8 (the console gate + its CI job)
+// reviewed this file and found the T13.1 baseline still sufficient — no changes needed
+// beyond the harness additions in `src/test/` (see `a11y-coverage.a11y.test.ts`).
 export default defineConfig({
   plugins: [react()],
   test: {
