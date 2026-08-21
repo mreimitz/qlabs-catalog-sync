@@ -514,7 +514,7 @@
       ],
       "dod": "All four checks run in one CI job and pass on a clean tree; a type error, a lint violation, a failing test or an accessibility regression fails the build.",
       "verify": "pnpm -C console typecheck && pnpm -C console lint && pnpm -C console test --run && pnpm -C console a11y",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "id": "T14.1",
