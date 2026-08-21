@@ -1,5 +1,16 @@
 // A generic, connector-agnostic editor for `EndpointOut.settings` (`Record<string,
-// JsonValue>`). Deliberately NOT built on `KeyValueEditor` (`@elabs-ai/components-ui`), even
+// JsonValue>`). Originally (T13.3) the ONLY settings editor, back when the API exposed no
+// connector config schema at all. `SchemaSettingsForm.tsx` (later) generates a real typed form
+// from a connector's `config_schema` when one is available -- this component now serves two
+// narrower roles instead: the whole editor for a connector with no schema (`config_schema` is
+// `null` -- an unavailable connector, or one whose `ConfigModel` could not produce a schema),
+// and, reused unchanged, the "Additional settings" section of the schema-driven form for
+// stored settings keys the connector's CURRENT schema does not describe (see
+// `configSchemaForm.ts`'s `unknownSettingNames`). Both need exactly the same thing: an ordered,
+// freeform list of key/value pairs with per-key error attachment -- so this file still owns that
+// job rather than it being reinvented in two places.
+//
+// Deliberately NOT built on `KeyValueEditor` (`@elabs-ai/components-ui`), even
 // though that component exists and looks like an obvious fit -- two reasons, both load-bearing:
 //
 //   1. `KeyValueEditor`'s `KeyValueRow` carries an opt-in `secret` flag that renders a row
@@ -17,13 +28,11 @@
 //      primitives `KeyValueEditor` itself is built from, composed instead of reused, precisely
 //      because reuse could not satisfy the DoD.
 //
-// There is no connector config schema exposed anywhere in this API (see the task report's
-// "seams" section) -- this editor cannot know a connector's real field names, types, or which
-// ones are secret-typed ahead of time. It is intentionally dumb: an ordered list of plain-text
-// key/value pairs. On submit (`EndpointFormSheet.tsx`), each value is `JSON.parse`d when that
-// succeeds (so `"8080"`, `"true"`, `"{\"a\":1}"` become a number/boolean/object, matching a
-// connector's typed `ConfigModel` fields without this editor needing to know their types) and
-// kept as a plain string otherwise.
+// Even where a schema now IS available, this component still does not read it -- by the time it
+// is showing (no schema at all, or the "Additional settings" leftovers a schema doesn't
+// describe), a field name/type it could look up would not apply to what it's rendering anyway.
+// It stays intentionally dumb: an ordered list of plain-text key/value pairs, each value
+// `parseSettingValue`/`stringifySettingValue`-converted on the way in and out (below).
 import { Button, FieldRow, IconButton, Input } from "@elabs-ai/components-ui";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -39,14 +48,31 @@ export function newSettingsRow(key = "", value = ""): SettingsRow {
   return { id: `settings-row-${nextRowId}`, key, value };
 }
 
+/** A `JsonValue` -> the string one raw-text row/control shows for it. Not already a string ->
+ * `JSON.stringify`d, so round-tripping through a raw text control without any change reproduces
+ * the same value on submit (see `parseSettingValue`, its inverse). Shared with
+ * `SchemaSettingsForm.tsx`'s fallback control for a schema property this form cannot render as a
+ * typed control -- same convention, one implementation. */
+export function stringifySettingValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/** A raw-text control's string -> the `JsonValue` sent to the server: parsed as JSON when that
+ * succeeds (so `"8080"`, `"true"`, `"{\"a\":1}"` become a number/boolean/object, matching a
+ * connector's typed `ConfigModel` field without the control needing to know its type) and kept
+ * as a plain string otherwise. */
+export function parseSettingValue(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
 /** `Record<string, JsonValue>` -> ordered rows, for seeding the editor from an existing
- * endpoint's `settings` when opening the edit form. Values that are not already strings are
- * `JSON.stringify`d so round-tripping through the editor without any change reproduces the
- * same value on submit (see the module doc's JSON.parse-on-submit note). */
+ * endpoint's `settings` when opening the edit form. */
 export function settingsToRows(settings: Record<string, unknown>): SettingsRow[] {
-  return Object.entries(settings).map(([key, value]) =>
-    newSettingsRow(key, typeof value === "string" ? value : JSON.stringify(value)),
-  );
+  return Object.entries(settings).map(([key, value]) => newSettingsRow(key, stringifySettingValue(value)));
 }
 
 /** Ordered rows -> `Record<string, JsonValue>` for the request body. Blank keys are dropped
@@ -57,11 +83,7 @@ export function rowsToSettings(rows: SettingsRow[]): Record<string, unknown> {
   for (const row of rows) {
     const key = row.key.trim();
     if (!key) continue;
-    try {
-      settings[key] = JSON.parse(row.value);
-    } catch {
-      settings[key] = row.value;
-    }
+    settings[key] = parseSettingValue(row.value);
   }
   return settings;
 }
