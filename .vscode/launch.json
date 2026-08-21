@@ -94,8 +94,14 @@
       "justMyCode": false
     },
     {
-      // The long-running service: REST API, console assets, /healthz and /metrics on one
-      // port (decision C8).
+      // The long-running service against a REAL tenant config: REST API, /healthz and
+      // /metrics on one port (decision C8). It prompts for the config file, and both
+      // connectors will try to reach that tenant at startup.
+      //
+      // NO --console-assets, so `/` says the console is not installed — this profile is for
+      // debugging the API and the scheduler. Use "UI: serve the console" above to see the
+      // browser console; add --console-assets ${workspaceFolder}/console/dist here to get
+      // both against a real tenant.
       //
       // REQUIRES an administrator credential, or it refuses to start — that is deliberate
       // (C7: never serve an unauthenticated console). Set one up first:
@@ -104,8 +110,8 @@
       //
       // and put the line it prints in a `.env` file at the repository root (already
       // gitignored). It also needs a real engine config; copy deploy/config/tenant.example.yaml
-      // and fill it in. Both connectors will try to reach a real tenant at startup.
-      "name": "CLI: serve (API + console)",
+      // and fill it in.
+      "name": "CLI: serve (API only, real tenant config)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/.venv/bin/qlabs-catalog-sync",
@@ -120,7 +126,7 @@
         "--host",
         "127.0.0.1",
         "--port",
-        "8080"
+        "8090"
       ],
       "python": "${workspaceFolder}/.venv/bin/python",
       "cwd": "${workspaceFolder}",
@@ -129,16 +135,27 @@
       "justMyCode": false
     },
     {
-      // THE UI. Serves the built console at http://127.0.0.1:8080 and opens a browser at it.
+      // THE UI. Serves the built console at http://127.0.0.1:8090 and opens a browser at it.
       //
-      // Build the console first -- this points at console/dist, which Vite produces:
+      // Two things must be true or it dies before the browser opens:
       //
-      //   pnpm -C console install --frozen-lockfile
-      //   pnpm -C console build
+      //  1. console/dist exists. Vite produces it:
+      //       pnpm -C console install --frozen-lockfile
+      //       pnpm -C console build
+      //  2. .env at the repository root holds an administrator credential, or the service
+      //     refuses to start (C7 -- never an unauthenticated console):
+      //       uv run python scripts/make_admin_hash.py
+      //     Paste the QLABS_CONSOLE_ADMIN__PASSWORD_HASH line it prints into .env. Sign in
+      //     with the username you hashed (default "admin").
       //
-      // Same prerequisites as "CLI: serve" below it: an administrator credential in .env
-      // (scripts/make_admin_hash.py) or the service refuses to start, and an engine config
-      // file. Sign in with the username you hashed (default "admin").
+      // No prompt for a config file: this one runs deploy/config/local-console.yaml, which
+      // declares no endpoints and no pairs, so nothing contacts a Databricks or Qlik tenant
+      // and the console comes up empty, ready to be configured in the browser (C1). Point
+      // --config at a real tenant file when you want it to come up already configured.
+      //
+      // Port 8090, not 8080: 8080 is a busy port on a dev machine, and a collision here is
+      // a crash with "address already in use" and no browser, which reads like the profile
+      // is broken.
       //
       // One process, one port: the console at /, the REST API under /api, plus /healthz and
       // /metrics -- decision C8. Breakpoints in api/ and configstore/ are hit by what the
@@ -154,11 +171,11 @@
         "sqlite:///debug-state.db",
         "serve",
         "--config",
-        "${input:configFile}",
+        "${workspaceFolder}/deploy/config/local-console.yaml",
         "--host",
         "127.0.0.1",
         "--port",
-        "8080",
+        "8090",
         "--console-assets",
         "${workspaceFolder}/console/dist"
       ],
@@ -169,7 +186,7 @@
       "justMyCode": false,
       "serverReadyAction": {
         "pattern": "serve\\.started",
-        "uriFormat": "http://127.0.0.1:8080/",
+        "uriFormat": "http://127.0.0.1:8090/",
         "action": "openExternally"
       }
     },

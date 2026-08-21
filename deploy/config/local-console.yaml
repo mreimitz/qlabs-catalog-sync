@@ -1,0 +1,8 @@
+# Empty tenant for looking at the console locally.
+#
+# No endpoints and no pairs: `serve` accepts that on purpose (C1 -- the configuration
+# store is authoritative, so a console-first deployment declares everything in the
+# browser). Nothing here contacts a tenant, so the service starts without credentials
+# for Databricks or Qlik. Used by the "UI: serve the console" debug profile.
+endpoints: {}
+pairs: []

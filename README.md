@@ -452,6 +452,14 @@ refuses to start, deliberately — it will not serve an unauthenticated console.
 `--console-assets` the API, `/healthz` and `/metrics` still serve and `/` says the console
 is not installed.
 
+To just look at the console without a tenant, point `--config` at
+[`deploy/config/local-console.yaml`](deploy/config/local-console.yaml) — it declares no
+endpoints and no pairs, so nothing contacts Databricks or Qlik and the console comes up
+empty, ready to be configured in the browser. In VS Code that is the **"UI: serve the
+console and open a browser"** debug profile: it runs exactly that on port 8090 and opens a
+browser when the service is up. It still needs `console/dist` built and the administrator
+credential in `.env`.
+
 `pnpm -C console dev` runs the Vite dev server instead, but the API is same-origin by
 design (no CORS), so the dev server needs the service proxied behind it.
 
