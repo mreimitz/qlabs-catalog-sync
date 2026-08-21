@@ -50,9 +50,7 @@ __all__ = [
 
 
 @contextlib.contextmanager
-def capture_requests(
-    *, response: httpx.Response | None = None
-) -> Iterator[respx.Route]:
+def capture_requests(*, response: httpx.Response | None = None) -> Iterator[respx.Route]:
     """Intercept every outbound httpx request for the duration of the block.
 
     Registers one catch-all route (any method, any host) so nothing escapes to a real

@@ -673,9 +673,7 @@ def build_history_router(recorder: RunRecorder, config_service: ConfigService) -
         ]
         owner_items = [item for item in items if _OWNERS_FIELD in item.unresolved_fields]
         orphan_items = [item for item in items if item.is_orphan]
-        categorized_ids = {
-            item.id for item in (*dataset_member_items, *owner_items, *orphan_items)
-        }
+        categorized_ids = {item.id for item in (*dataset_member_items, *owner_items, *orphan_items)}
         other_items = [item for item in items if item.id not in categorized_ids]
 
         orphan_advisories: list[RunOrphanIssueOut] = []

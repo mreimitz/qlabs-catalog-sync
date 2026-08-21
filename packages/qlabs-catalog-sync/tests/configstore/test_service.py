@@ -289,9 +289,7 @@ async def test_update_endpoint_partial_update_diffs_and_bumps_generation_once(
         actor=ACTOR,
         now=NOW,
     )
-    updated = await svc.update_endpoint(
-        "databricks_prod", enabled=True, actor=ACTOR, now=LATER
-    )
+    updated = await svc.update_endpoint("databricks_prod", enabled=True, actor=ACTOR, now=LATER)
     assert updated.enabled is True
     assert _generation(engine) == 2
     assert _change_summaries(engine) == [
@@ -333,9 +331,7 @@ async def test_update_endpoint_can_explicitly_clear_secret_ref(
         actor=ACTOR,
         now=NOW,
     )
-    updated = await svc.update_endpoint(
-        "qlik_acme", secret_ref=None, actor=ACTOR, now=LATER
-    )
+    updated = await svc.update_endpoint("qlik_acme", secret_ref=None, actor=ACTOR, now=LATER)
     assert updated.secret_ref is None
     assert _change_summaries(engine)[-1] == ("endpoint", "qlik_acme", "update", "secret_ref")
 
@@ -628,9 +624,7 @@ async def test_update_sync_pair_diffs_multiple_fields_in_one_generation_bump(
     assert updated.entity_types == [EntityType.DATA_PRODUCT, EntityType.DATASET]
     assert _generation(engine) == generation_before + 1  # one bump for both fields
 
-    fields_changed = {
-        summary[3] for summary in _change_summaries(engine) if summary[2] == "update"
-    }
+    fields_changed = {summary[3] for summary in _change_summaries(engine) if summary[2] == "update"}
     assert fields_changed == {"cadence_seconds", "entity_types"}
 
 
@@ -716,12 +710,18 @@ async def test_delete_sync_pair_cascades_rules_and_overrides_with_one_audit_row(
 
     assert await svc.get_sync_pair(pair.id) is None
     with Session(engine) as session:
-        assert session.scalars(
-            select(SelectionRuleRow).where(SelectionRuleRow.pair_id == pair.id)
-        ).all() == []
-        assert session.scalars(
-            select(SelectionOverrideRow).where(SelectionOverrideRow.pair_id == pair.id)
-        ).all() == []
+        assert (
+            session.scalars(
+                select(SelectionRuleRow).where(SelectionRuleRow.pair_id == pair.id)
+            ).all()
+            == []
+        )
+        assert (
+            session.scalars(
+                select(SelectionOverrideRow).where(SelectionOverrideRow.pair_id == pair.id)
+            ).all()
+            == []
+        )
 
     assert _generation(engine) == generation_before + 1  # exactly one bump
     assert _change_summaries(engine)[-1] == ("sync_pair", str(pair.id), "delete", None)
@@ -849,9 +849,7 @@ async def test_update_selection_rule_not_found_raises(svc: ConfigService) -> Non
         )
 
 
-async def test_delete_selection_rule_removes_and_audits(
-    svc: ConfigService, engine: Engine
-) -> None:
+async def test_delete_selection_rule_removes_and_audits(svc: ConfigService, engine: Engine) -> None:
     pair = await _make_pair(svc)
     rule = await svc.create_selection_rule(
         pair_id=pair.id,

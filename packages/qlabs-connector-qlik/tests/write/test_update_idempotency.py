@@ -108,9 +108,7 @@ async def test_only_the_operations_that_are_not_current_are_sent(
     )
 
     assert result.outcome is WriteOutcome.UPDATED
-    assert patch_bodies(respx_mock) == [
-        [{"op": "replace", "path": "/tags", "value": ["sales"]}]
-    ]
+    assert patch_bodies(respx_mock) == [[{"op": "replace", "path": "/tags", "value": ["sales"]}]]
     # `written_fields` means "fields this call wrote" — the name was already there.
     assert result.written_fields == ["tags"]
     assert result.detail is not None and "/name" in result.detail
@@ -152,9 +150,7 @@ async def test_a_pre_read_returning_an_unreadable_body_also_just_proceeds(
     respx_mock: object, make_writer: Callable[..., QlikWriter]
 ) -> None:
     """A 200 whose body is not a JSON object is no usable answer either — same rule."""
-    respx_mock.get(PRODUCT_URL).mock(
-        return_value=httpx.Response(200, content=b"not json at all")
-    )
+    respx_mock.get(PRODUCT_URL).mock(return_value=httpx.Response(200, content=b"not json at all"))
     mock_patch(respx_mock)
     writer = make_writer()
 
@@ -188,13 +184,9 @@ async def test_an_absent_key_in_the_pre_read_counts_as_not_applied(
     mock_patch(respx_mock)
     writer = make_writer()
 
-    await writer.update(
-        product_ref(), diff(change("documentation", TextField.markdown("# Sales")))
-    )
+    await writer.update(product_ref(), diff(change("documentation", TextField.markdown("# Sales"))))
 
-    assert patch_bodies(respx_mock) == [
-        [{"op": "replace", "path": "/readMe", "value": "# Sales"}]
-    ]
+    assert patch_bodies(respx_mock) == [[{"op": "replace", "path": "/readMe", "value": "# Sales"}]]
 
 
 async def test_a_reordered_array_at_the_target_is_still_sent(
@@ -206,9 +198,7 @@ async def test_a_reordered_array_at_the_target_is_still_sent(
     mock_patch(respx_mock)
     writer = make_writer()
 
-    await writer.update(
-        product_ref(), diff(change("tags", [Tag(key="sales"), Tag(key="revenue")]))
-    )
+    await writer.update(product_ref(), diff(change("tags", [Tag(key="sales"), Tag(key="revenue")])))
 
     assert patch_bodies(respx_mock) == [
         [{"op": "replace", "path": "/tags", "value": ["sales", "revenue"]}]
@@ -233,7 +223,7 @@ async def test_the_patch_still_guards_with_the_diffs_revision_not_the_pre_reads(
 async def test_an_empty_diff_still_short_circuits_before_the_pre_read(
     respx_mock: object, make_writer: Callable[..., QlikWriter]
 ) -> None:
-    """"No diff, no request" is unchanged and still means *zero* requests — the pre-read
+    """ "No diff, no request" is unchanged and still means *zero* requests — the pre-read
     is only worth making when there is something it could save."""
     mock_patch(respx_mock)
     writer = make_writer()

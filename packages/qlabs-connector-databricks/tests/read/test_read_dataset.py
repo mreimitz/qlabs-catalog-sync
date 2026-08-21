@@ -34,9 +34,7 @@ async def test_reads_one_table_by_full_name(
 async def test_reads_one_view_by_full_name(
     respx_mock: object, make_http: Callable[..., HttpEndpoint]
 ) -> None:
-    raw = make_raw_table(
-        name="orders_view", full_name="prod.sales.orders_view", table_type="VIEW"
-    )
+    raw = make_raw_table(name="orders_view", full_name="prod.sales.orders_view", table_type="VIEW")
     respx_mock.get(f"{BASE_URL}{TABLES_PATH}/prod.sales.orders_view").mock(
         return_value=httpx.Response(200, json=raw)
     )

@@ -125,9 +125,7 @@ async def test_read_dataset_direct_delivers_one_item(qlik_vcr: vcr.VCR) -> None:
     assert dataset.name == "orders"
     identity = dataset.identity_for(ENDPOINT)
     assert identity is not None
-    expected_secure_qri = (
-        "qdf-secure:acme-conformance-tenant:610a2f3b4c5d6e7f8a9b0c1d:ds-orders-1"
-    )
+    expected_secure_qri = "qdf-secure:acme-conformance-tenant:610a2f3b4c5d6e7f8a9b0c1d:ds-orders-1"
     assert identity.native_key == expected_secure_qri
     assert identity.secondary_keys["id"] == DATASET_ITEM_ID
     assert identity.secondary_keys["resourceId"] == "ds-orders-1"

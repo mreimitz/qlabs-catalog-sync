@@ -105,9 +105,11 @@ def test_same_object_id_is_allowed_in_a_different_scope(
     session.add(_override(pair.id, "analytics.sales", scope=RuleScope.DATASET))
     session.commit()  # must not raise
 
-    rows = session.execute(
-        select(SelectionOverrideRow).where(SelectionOverrideRow.pair_id == pair.id)
-    ).scalars().all()
+    rows = (
+        session.execute(select(SelectionOverrideRow).where(SelectionOverrideRow.pair_id == pair.id))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 2
 
 
@@ -125,7 +127,9 @@ def test_deleting_a_pair_cascades_to_its_overrides(session: Session, pair: SyncP
     session.delete(pair)
     session.commit()
 
-    remaining = session.execute(
-        select(SelectionOverrideRow).where(SelectionOverrideRow.pair_id == pair_id)
-    ).scalars().all()
+    remaining = (
+        session.execute(select(SelectionOverrideRow).where(SelectionOverrideRow.pair_id == pair_id))
+        .scalars()
+        .all()
+    )
     assert remaining == []

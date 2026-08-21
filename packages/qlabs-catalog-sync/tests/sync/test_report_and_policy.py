@@ -241,9 +241,7 @@ async def test_a_create_carries_the_status_once_the_pair_opts_in(
     seed_product(source, "sales.orders", status=DataProductStatus.ACTIVE)
     opted_in = pair.model_copy(update={"activation_opt_in": True})
 
-    report = await make_loop(pair=opted_in, create_missing=True).run_cycle(
-        EntityType.DATA_PRODUCT
-    )
+    report = await make_loop(pair=opted_in, create_missing=True).run_cycle(EntityType.DATA_PRODUCT)
 
     assert target.calls("create")[0].args["entity"].status is DataProductStatus.ACTIVE
     assert report.records[0].withheld == ()

@@ -7,6 +7,4 @@ for a real broken connector package, letting the collision/load-failure tests in
 ``ep.load()`` raising without needing a genuinely broken package installed.
 """
 
-raise ModuleNotFoundError(
-    "simulated broken connector: no module named 'not_a_real_vendor_sdk'"
-)
+raise ModuleNotFoundError("simulated broken connector: no module named 'not_a_real_vendor_sdk'")

@@ -67,9 +67,7 @@ async def test_a_member_list_that_resolves_to_nothing_leaves_dataset_ids_untouch
     members = refs(2)
     writer = make_writer(dataset_names={members[0]: "orders", members[1]: "returns"})
 
-    result = await writer.update(
-        product_ref(), diff(change("dataset_refs", members))
-    )
+    result = await writer.update(product_ref(), diff(change("dataset_refs", members)))
 
     # No PATCH at all: the only operation the diff asked for could not be built safely.
     assert not any(call.request.method == "PATCH" for call in respx_mock.calls)
@@ -91,9 +89,7 @@ async def test_a_genuinely_empty_desired_member_list_is_sent_as_an_empty_array(
 
     result = await writer.update(product_ref(), diff(change("dataset_refs", [])))
 
-    assert patch_body(respx_mock) == [
-        {"op": "replace", "path": "/datasetIds", "value": []}
-    ]
+    assert patch_body(respx_mock) == [{"op": "replace", "path": "/datasetIds", "value": []}]
     assert result.outcome is WriteOutcome.UPDATED
     assert result.skipped_fields == []
 
@@ -128,9 +124,7 @@ async def test_a_genuinely_empty_desired_owner_list_is_sent_as_an_empty_array(
 
     result = await writer.update(product_ref(), diff(change("owners", [])))
 
-    assert patch_body(respx_mock) == [
-        {"op": "replace", "path": "/keyContacts", "value": []}
-    ]
+    assert patch_body(respx_mock) == [{"op": "replace", "path": "/keyContacts", "value": []}]
     assert result.outcome is WriteOutcome.UPDATED
 
 

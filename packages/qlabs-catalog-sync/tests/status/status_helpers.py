@@ -72,9 +72,7 @@ class ActivatingFakeConnector(FakeConnector):
 
     name: ClassVar[str] = TARGET
 
-    async def activate(
-        self, ref: IdentityRef, *, name: str, managed_space_id: str
-    ) -> WriteResult:
+    async def activate(self, ref: IdentityRef, *, name: str, managed_space_id: str) -> WriteResult:
         diff = FieldDiff(
             entity_type=EntityType.DATA_PRODUCT,
             changes=[FieldChange(field="status", value=DataProductStatus.ACTIVE.value)],

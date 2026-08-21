@@ -114,9 +114,7 @@ def test_the_pair_selector_excludes_a_schema_outside_its_catalog_schema_patterns
         )
     ]
     assert created_names == ["retail"]
-    assert sorted(
-        stored.body["name"] for stored in tenants.qlik.products.values()
-    ) == ["retail"]
+    assert sorted(stored.body["name"] for stored in tenants.qlik.products.values()) == ["retail"]
     # ...and the out-of-scope schema is reported as what it is.
     assert "filtered=1" in result.stdout
 
@@ -190,8 +188,15 @@ def test_the_dry_run_plan_does_not_promise_a_create_the_apply_will_refuse(
 
     planned = runner.invoke(
         cli,
-        [*root, "dry-run", "--config", str(config_path), "--create-missing", "--plan-file",
-         str(plan_path)],
+        [
+            *root,
+            "dry-run",
+            "--config",
+            str(config_path),
+            "--create-missing",
+            "--plan-file",
+            str(plan_path),
+        ],
         obj=cli_deps,
     )
     assert planned.exit_code in (0, 1), planned.output

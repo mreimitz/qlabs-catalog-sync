@@ -480,9 +480,7 @@ class AdminCredential:
         """
         derived = _derive(password, self.params, self.salt)
         password_ok = hmac.compare_digest(derived, self.digest)
-        username_ok = hmac.compare_digest(
-            username.encode("utf-8"), self.username.encode("utf-8")
-        )
+        username_ok = hmac.compare_digest(username.encode("utf-8"), self.username.encode("utf-8"))
         return password_ok and username_ok
 
 
@@ -727,9 +725,7 @@ class ConsoleAuth:
         """Constant-time comparison of ``presented`` against *this session's* token."""
         if not presented:
             return False
-        return hmac.compare_digest(
-            presented.encode("utf-8"), session.csrf_token.encode("utf-8")
-        )
+        return hmac.compare_digest(presented.encode("utf-8"), session.csrf_token.encode("utf-8"))
 
     @property
     def live_session_count(self) -> int:
@@ -974,9 +970,7 @@ def _build_auth_router(auth: ConsoleAuth) -> APIRouter:
         responses=API_ERROR_RESPONSES,
         summary="Sign in as the administrator",
     )
-    async def sign_in(
-        payload: SignInRequest, request: Request, response: Response
-    ) -> SessionInfo:
+    async def sign_in(payload: SignInRequest, request: Request, response: Response) -> SessionInfo:
         """Exchange the administrator credential for a session cookie and a CSRF token.
 
         The refusal is one shape for every failure — wrong username, wrong password,

@@ -28,9 +28,7 @@ def _mock_two_statements(
 ) -> None:
     respx_mock.post(statements_url()).mock(  # type: ignore[attr-defined]
         side_effect=[
-            httpx.Response(
-                200, json=succeeded_response(SCHEMA_STMT_ID, rows=schema_rows)
-            ),
+            httpx.Response(200, json=succeeded_response(SCHEMA_STMT_ID, rows=schema_rows)),
             httpx.Response(200, json=succeeded_response(TABLE_STMT_ID, rows=table_rows)),
         ]
     )

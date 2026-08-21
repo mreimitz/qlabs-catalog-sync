@@ -82,9 +82,7 @@ def test_the_parity_checker_actually_catches_a_drifted_column() -> None:
     finally:
         engine.dispose()
 
-    assert problems == [
-        "fake_pairs.notes: declared in the ORM model, missing from the migration"
-    ]
+    assert problems == ["fake_pairs.notes: declared in the ORM model, missing from the migration"]
 
 
 def test_the_parity_checker_catches_a_nullability_mismatch_too() -> None:

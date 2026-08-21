@@ -75,8 +75,7 @@ def mount_static(app: FastAPI, *, static_dir: Path | None, api_prefix: str) -> N
                 status_code=404,
                 code="console_not_installed",
                 message=(
-                    "the console has not been built into this image yet (see RM-06 "
-                    "WP13/T14.1)"
+                    "the console has not been built into this image yet (see RM-06 WP13/T14.1)"
                 ),
             )
 

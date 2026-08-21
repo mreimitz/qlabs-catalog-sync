@@ -35,9 +35,7 @@ from .conftest import (
 )
 
 
-async def test_multi_page_catalog_listing_is_fully_drained(
-    respx_mock, http: HttpEndpoint
-) -> None:
+async def test_multi_page_catalog_listing_is_fully_drained(respx_mock, http: HttpEndpoint) -> None:
     route = mock_list(
         respx_mock,
         CATALOGS_PATH,
@@ -79,9 +77,7 @@ async def test_multi_page_catalog_listing_is_fully_drained(
     assert result.has_more is False
 
 
-async def test_runaway_pagination_raises_instead_of_hanging(
-    respx_mock, http: HttpEndpoint
-) -> None:
+async def test_runaway_pagination_raises_instead_of_hanging(respx_mock, http: HttpEndpoint) -> None:
     mock_single_page(
         respx_mock, CATALOGS_PATH, params={}, items_key="catalogs", items=[catalog("main")]
     )

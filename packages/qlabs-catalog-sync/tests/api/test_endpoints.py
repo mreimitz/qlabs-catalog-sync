@@ -575,9 +575,7 @@ def test_endpoint_can_be_registered_healthchecked_and_enabled_end_to_end(
     )
     assert created.status_code == 201, created.text
 
-    health = client.post(
-        f"{API_PREFIX}/endpoints/fake_ep/healthcheck", headers={CSRF_HEADER: csrf}
-    )
+    health = client.post(f"{API_PREFIX}/endpoints/fake_ep/healthcheck", headers={CSRF_HEADER: csrf})
     assert health.status_code == 200, health.text
     body = health.json()
     assert body["endpoint"] == "fake_ep"
@@ -607,9 +605,7 @@ def test_an_auth_error_healthcheck_is_a_200_response_describing_an_unhealthy_end
     )
     fake_connector.fail_next("healthcheck", AuthError("bad credentials", endpoint="fake"))
 
-    response = client.post(
-        f"{API_PREFIX}/endpoints/flaky/healthcheck", headers={CSRF_HEADER: csrf}
-    )
+    response = client.post(f"{API_PREFIX}/endpoints/flaky/healthcheck", headers={CSRF_HEADER: csrf})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["state"] == "unhealthy"
@@ -627,9 +623,7 @@ def test_a_healthcheck_timeout_is_a_200_response_describing_an_unhealthy_endpoin
     )
     fake_connector.fail_next("healthcheck", TimeoutError("simulated timeout"))
 
-    response = client.post(
-        f"{API_PREFIX}/endpoints/slow/healthcheck", headers={CSRF_HEADER: csrf}
-    )
+    response = client.post(f"{API_PREFIX}/endpoints/slow/healthcheck", headers={CSRF_HEADER: csrf})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["state"] == "unhealthy"
@@ -650,9 +644,7 @@ def test_an_unexpected_healthcheck_exception_is_unhealthy_and_never_leaks_its_me
     sentinel = "sk-t12-3-unexpected-exception-must-not-leak-4b1c"
     fake_connector.fail_next("healthcheck", RuntimeError(f"boom {sentinel}"))
 
-    response = client.post(
-        f"{API_PREFIX}/endpoints/buggy/healthcheck", headers={CSRF_HEADER: csrf}
-    )
+    response = client.post(f"{API_PREFIX}/endpoints/buggy/healthcheck", headers={CSRF_HEADER: csrf})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["state"] == "unhealthy"

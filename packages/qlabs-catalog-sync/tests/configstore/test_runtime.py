@@ -491,9 +491,7 @@ async def test_changing_a_semantic_field_rebuilds_and_closes_the_replaced_connec
     await _create_source_endpoint(config_service)
 
     first = await pool.get(SOURCE_ENDPOINT)
-    await config_service.update_endpoint(
-        SOURCE_ENDPOINT, actor=ACTOR, now=LATER, **{field: value}
-    )
+    await config_service.update_endpoint(SOURCE_ENDPOINT, actor=ACTOR, now=LATER, **{field: value})
     second = await pool.get(SOURCE_ENDPOINT)
 
     assert second is not first

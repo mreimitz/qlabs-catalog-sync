@@ -348,7 +348,5 @@ class CapabilityManifest(CapabilityManifestBase):
     def supported_entity_types(self) -> frozenset[EntityType]:
         """Every entity type this manifest declares ``supported``."""
         return frozenset(
-            entity_type
-            for entity_type, capability in self.entities.items()
-            if capability.supported
+            entity_type for entity_type, capability in self.entities.items() if capability.supported
         )

@@ -557,9 +557,7 @@ def _map_data_product(
     if "readMe" in raw:
         values["documentation"] = _text_field(raw["readMe"], markdown=True)
     if isinstance(raw.get("activated"), bool):
-        values["status"] = (
-            DataProductStatus.ACTIVE if raw["activated"] else DataProductStatus.DRAFT
-        )
+        values["status"] = DataProductStatus.ACTIVE if raw["activated"] else DataProductStatus.DRAFT
     owners = _data_product_owners(raw)
     if owners is not None:
         values["owners"] = owners

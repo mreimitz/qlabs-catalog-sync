@@ -190,9 +190,7 @@ class TestDefinitionOfDone:
         pairs = await svc.list_sync_pairs()
         pair_id = pairs[0].id
 
-        edited = await svc.update_sync_pair(
-            pair_id, cadence_seconds=1234, actor=ACTOR, now=LATER
-        )
+        edited = await svc.update_sync_pair(pair_id, cadence_seconds=1234, actor=ACTOR, now=LATER)
         assert edited.cadence_seconds == 1234
 
         # "Restart": re-run the importer with the same environment config.
@@ -312,9 +310,7 @@ class TestDatabaseWins:
         await svc.delete_endpoint("databricks_unused", actor=ACTOR, now=LATER)
         assert await svc.get_endpoint("databricks_unused") is None
 
-        report = await bootstrap_from_environment(
-            svc, config, now=RESTART
-        )
+        report = await bootstrap_from_environment(svc, config, now=RESTART)
 
         assert report.seeded is False
         assert await svc.get_endpoint("databricks_unused") is None
@@ -345,9 +341,7 @@ class TestSecretsBridge:
         assert databricks is not None and databricks.secret_ref == "env:databricks_prod"
         assert qlik is not None and qlik.secret_ref == "env:qlik_acme"
 
-    async def test_non_convention_secrets_are_refused_not_guessed(
-        self, svc: ConfigService
-    ) -> None:
+    async def test_non_convention_secrets_are_refused_not_guessed(self, svc: ConfigService) -> None:
         # A per-field key naming an unrelated environment variable -- structurally
         # legal on EndpointConfig.secrets (T2.3 places no constraint on the value),
         # but not representable as one secret_ref (configstore.secrets always derives

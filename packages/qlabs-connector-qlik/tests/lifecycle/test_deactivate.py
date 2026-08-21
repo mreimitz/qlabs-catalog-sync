@@ -29,9 +29,7 @@ async def test_deactivate_issues_the_documented_request(
 
     request = respx_mock.calls.last.request
     assert request.method == "POST"
-    assert (
-        request.url.path == f"/api/data-governance/data-products/{PRODUCT_ID}/actions/deactivate"
-    )
+    assert request.url.path == f"/api/data-governance/data-products/{PRODUCT_ID}/actions/deactivate"
     # No body fields are documented for this endpoint; a well-formed empty object is sent.
     assert sent_body(respx_mock) == {}
     assert result.outcome is WriteOutcome.UPDATED

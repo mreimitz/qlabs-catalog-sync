@@ -153,9 +153,9 @@ def test_qlik_is_never_sent_a_delete_or_a_lifecycle_action(
 
     # D7 is not only "no activate call": the create body must not carry activation
     # intent either, and the product must still be inactive afterwards.
-    created = request_bodies(
-        qlik_requests(router, method="POST", path_prefix=_DATA_PRODUCTS_PATH)
-    )[0]
+    created = request_bodies(qlik_requests(router, method="POST", path_prefix=_DATA_PRODUCTS_PATH))[
+        0
+    ]
     assert "activated" not in created
     assert "status" not in created
     patched_paths = {
@@ -206,9 +206,7 @@ def test_no_qlik_dataset_is_ever_created(
     )
     assert result.exit_code == EXIT_INCOMPLETE, result.output
 
-    creates = qlik_requests(
-        router, method="POST", path_prefix=_DATA_PRODUCTS_PATH, since=before
-    )
+    creates = qlik_requests(router, method="POST", path_prefix=_DATA_PRODUCTS_PATH, since=before)
     assert len(creates) == 1
     assert json.loads(creates[0].content)["name"] == "retail"
     assert len(tenants.qlik.products) == 1

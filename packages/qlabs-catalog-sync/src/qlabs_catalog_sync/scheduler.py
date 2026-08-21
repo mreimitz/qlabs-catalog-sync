@@ -298,6 +298,7 @@ def _utc_now() -> datetime:
     """The wall clock, injectable so tests can pin run-history timestamps."""
     return datetime.now(UTC)
 
+
 #: Jitter as a fraction of a pair's cadence — see the module docstring for the magnitude's
 #: justification against Qlik's 100 req/min write tier (RS-02 section 3.4).
 DEFAULT_JITTER_FRACTION: float = 0.10
@@ -617,9 +618,7 @@ class ConfigStorePairSource:
             try:
                 plans.append(await self._plan_for(pair_row, endpoints))
             except Exception as exc:  # noqa: BLE001 - one bad pair must not lose the rest
-                failures.append(
-                    PairLoadFailure(pair=label, reason=f"{type(exc).__name__}: {exc}")
-                )
+                failures.append(PairLoadFailure(pair=label, reason=f"{type(exc).__name__}: {exc}"))
         return ConfigSnapshot(plans=tuple(plans), failures=tuple(failures))
 
     def _schedulable(self, pair_row: SyncPairRow, endpoints: dict[str, EndpointRow]) -> bool:
@@ -631,16 +630,12 @@ class ConfigStorePairSource:
         target = endpoints.get(pair_row.target)
         return source is not None and source.enabled and target is not None and target.enabled
 
-    async def _plan_for(
-        self, pair_row: SyncPairRow, endpoints: dict[str, EndpointRow]
-    ) -> PairPlan:
+    async def _plan_for(self, pair_row: SyncPairRow, endpoints: dict[str, EndpointRow]) -> PairPlan:
         rule_rows: list[SelectionRuleRow] = []
         override_rows: list[SelectionOverrideRow] = []
         for scope in RuleScope:
             rule_rows.extend(await self._service.list_selection_rules(pair_row.id, scope))
-            override_rows.extend(
-                await self._service.list_selection_overrides(pair_row.id, scope)
-            )
+            override_rows.extend(await self._service.list_selection_overrides(pair_row.id, scope))
         # Compile first: SelectionRuleSet.build is what validates every pattern, so a
         # malformed rule fails here rather than surviving into a SyncPairConfig whose
         # projected patterns would then fail a second, less informative validator.

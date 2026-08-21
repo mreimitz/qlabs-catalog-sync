@@ -747,9 +747,7 @@ class QlikWriter:
                 return WriteResult.no_op(
                     ref,
                     source_revision=(
-                        current_revision
-                        if current_revision is not None
-                        else diff.expected_revision
+                        current_revision if current_revision is not None else diff.expected_revision
                     ),
                     skipped_fields=request.skipped_fields,
                     detail=request.detail,
@@ -847,9 +845,7 @@ class QlikWriter:
         api_consumable_refs: Sequence[uuid.UUID] | None,
     ) -> None:
         """``datasetIds`` (D2) plus the ``apiConsumableDatasetIds`` subset rule."""
-        resolution = await self._resolve_datasets(
-            product.dataset_refs, dataset_names=dataset_names
-        )
+        resolution = await self._resolve_datasets(product.dataset_refs, dataset_names=dataset_names)
 
         # Two neutral members can legitimately resolve to the same Qlik dataset (two
         # source tables matched to one dataset by name); RS-02 documents datasetIds as a
@@ -929,9 +925,7 @@ class QlikWriter:
             return
         resolution: OwnerResolution = await self._resolver.resolve_owners(product.owners)
         if resolution.key_contacts:
-            request.body["keyContacts"] = [
-                contact.as_json() for contact in resolution.key_contacts
-            ]
+            request.body["keyContacts"] = [contact.as_json() for contact in resolution.key_contacts]
             request.wrote("owners")
         if resolution.unmatched:
             request.skip("owners", _unmatched_owners_note(resolution, total=len(product.owners)))
@@ -1378,8 +1372,9 @@ class QlikWriter:
             else QLIK_DATA_PRODUCT_PATCH_PATHS
         )
 
-        operations = [self._patch_path_for(change.field, capability, allowed) for change in
-                      diff.changes]
+        operations = [
+            self._patch_path_for(change.field, capability, allowed) for change in diff.changes
+        ]
         if api_consumable_refs is not None:
             if "dataset_refs" not in diff.field_names:
                 raise CapabilityError(
@@ -1519,9 +1514,7 @@ def _text_value(text: TextField | None) -> str | None:
 
 def _tag_values(tags: Sequence[Tag]) -> list[str]:
     """Neutral key/value tags flattened to Qlik's ``string[]`` (module docstring, point 4)."""
-    return _dedupe(
-        tag.key if tag.value is None else f"{tag.key}={tag.value}" for tag in tags
-    )
+    return _dedupe(tag.key if tag.value is None else f"{tag.key}={tag.value}" for tag in tags)
 
 
 # --------------------------------------------------------------------------------------
@@ -1579,9 +1572,7 @@ def _patch_tags(change: FieldChange, *, endpoint: str) -> list[str]:
         return []
     if not isinstance(value, list):
         raise _unreadable_change(change, "a list of tags", endpoint=endpoint)
-    return _tag_values(
-        [_neutral(Tag, item, change=change, endpoint=endpoint) for item in value]
-    )
+    return _tag_values([_neutral(Tag, item, change=change, endpoint=endpoint) for item in value])
 
 
 def _patch_parties(change: FieldChange, *, endpoint: str) -> list[Party]:
@@ -1696,9 +1687,7 @@ def _apply_status(product: DataProduct, request: _CreateRequest) -> None:
 
 
 def _unresolved_datasets_note(resolution: DatasetResolution, *, total: int) -> str:
-    examples = [
-        f"{item.name!r} ({item.reason.value})" for item in resolution.unresolved
-    ]
+    examples = [f"{item.name!r} ({item.reason.value})" for item in resolution.unresolved]
     return (
         f"{len(resolution.unresolved)} of {total} dataset member(s) did not resolve to an "
         f"existing Qlik dataset in the target space and were omitted (decision D2): "

@@ -82,9 +82,7 @@ async def test_unmatched_email_is_reported_and_dropped(
     http: HttpEndpoint,
     make_lookup: Callable[[dict[uuid.UUID, str] | None], DatasetIdentityLookup],
 ) -> None:
-    respx_mock.get(USERS_URL).mock(
-        return_value=httpx.Response(200, json={"data": [], "links": {}})
-    )
+    respx_mock.get(USERS_URL).mock(return_value=httpx.Response(200, json={"data": [], "links": {}}))
     owner = Party(email="nobody@acme.example", role=PartyRole.OWNER)
     resolver = _resolver(http, make_lookup(None))
 

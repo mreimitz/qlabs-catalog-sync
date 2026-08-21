@@ -41,9 +41,7 @@ async def test_a_paged_listing_processes_every_page_and_commits_the_last(
     for key in ("sales.orders", "sales.returns", "sales.refunds"):
         seed_product(paged, key)
 
-    report = await make_loop(source=paged, create_missing=True).run_cycle(
-        EntityType.DATA_PRODUCT
-    )
+    report = await make_loop(source=paged, create_missing=True).run_cycle(EntityType.DATA_PRODUCT)
 
     assert report.pages == 3
     assert report.has_more is False
@@ -181,9 +179,7 @@ async def test_an_entity_type_the_target_does_not_support_runs_no_cycle_at_all(
     make_loop: Callable[..., SyncLoop], source: FakeConnector, pair: SyncPairConfig
 ) -> None:
     """The Qlik-shaped manifest declares glossary unsupported (D5); it is never scheduled."""
-    glossary_pair = pair.model_copy(
-        update={"entity_types": [EntityType.GLOSSARY_TERM]}
-    )
+    glossary_pair = pair.model_copy(update={"entity_types": [EntityType.GLOSSARY_TERM]})
 
     report = await make_loop(pair=glossary_pair).run_cycle(EntityType.GLOSSARY_TERM)
 

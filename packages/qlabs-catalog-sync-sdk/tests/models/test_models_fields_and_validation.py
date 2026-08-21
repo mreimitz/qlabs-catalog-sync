@@ -130,9 +130,7 @@ def test_text_field_distinguishes_plain_from_markdown() -> None:
 
 def test_identity_ref_requires_a_tenant() -> None:
     with pytest.raises(ValidationError):
-        IdentityRef.model_validate(
-            {"endpoint": "qlik", "entityType": "dataset", "nativeKey": "k"}
-        )
+        IdentityRef.model_validate({"endpoint": "qlik", "entityType": "dataset", "nativeKey": "k"})
     with pytest.raises(ValidationError):
         IdentityRef.model_validate(
             {"endpoint": "qlik", "entityType": "dataset", "nativeKey": "k", "tenantId": ""}

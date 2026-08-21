@@ -161,9 +161,7 @@ async def test_a_rate_limit_hint_is_counted_and_honored(
         slept.append(seconds)
 
     seed_product(source, "sales.orders")
-    source.fail_next(
-        "read", TransientError("429", endpoint=source.name, retry_after_seconds=12.5)
-    )
+    source.fail_next("read", TransientError("429", endpoint=source.name, retry_after_seconds=12.5))
 
     report = await make_loop(create_missing=True, sleep=record_sleep).run_cycle(
         EntityType.DATA_PRODUCT
@@ -186,9 +184,7 @@ async def test_an_auth_error_quarantines_the_endpoint_and_commits_nothing(
     health = HealthRegistry()
     source.fail_next("list_changed", AuthError("token rejected", endpoint=source.name))
 
-    report = await make_loop(create_missing=True, health=health).run_cycle(
-        EntityType.DATA_PRODUCT
-    )
+    report = await make_loop(create_missing=True, health=health).run_cycle(EntityType.DATA_PRODUCT)
 
     assert report.status is RunStatus.FAILED
     assert report.quarantined_endpoints == (source.name,)
@@ -274,7 +270,9 @@ async def test_a_stale_target_binding_is_reported_not_repaired(
     assert record.holds_watermark is True
     assert target.call_count("create") == 0  # no silent re-creation
     binding = await store.get_binding(
-        record.neutral_id, target.name, EntityType.DATA_PRODUCT  # type: ignore[arg-type]
+        record.neutral_id,
+        target.name,
+        EntityType.DATA_PRODUCT,  # type: ignore[arg-type]
     )
     assert binding is not None  # the stale binding is left for a human to resolve
 

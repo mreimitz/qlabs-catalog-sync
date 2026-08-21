@@ -64,7 +64,7 @@ def test_an_empty_rule_set_includes_nothing_and_says_so() -> None:
 
 
 def test_a_candidate_no_rule_matches_is_excluded_by_the_default_not_by_a_rule() -> None:
-    """"No rule matched" is a first-class answer, distinguishable from "a rule excluded it"."""
+    """ "No rule matched" is a first-class answer, distinguishable from "a rule excluded it"."""
     rule_set = SelectionRuleSet.build([include(0, "analytics.*")])
     matched = evaluate(rule_set, schema_candidate("analytics.sales"))
     unmatched = evaluate(rule_set, schema_candidate("finance.sales"))

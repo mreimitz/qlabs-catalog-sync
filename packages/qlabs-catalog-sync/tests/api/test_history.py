@@ -320,9 +320,7 @@ async def test_run_list_pages_newest_first_with_an_explicit_contract(
     assert [item["id"] for item in second_body["items"]] == [str(ids[2]), str(ids[1])]
     assert second_body["has_more"] is True
 
-    third_page = client.get(
-        RUNS_PATH, params={"limit": 2, "cursor": second_body["next_cursor"]}
-    )
+    third_page = client.get(RUNS_PATH, params={"limit": 2, "cursor": second_body["next_cursor"]})
     third_body = third_page.json()
     assert [item["id"] for item in third_body["items"]] == [str(ids[0])]
     assert third_body["has_more"] is False
@@ -497,8 +495,12 @@ async def test_no_issues_is_distinguishable_from_issues_not_yet_recorded(
     client, _csrf = signed_in_client
 
     still_running = await recorder.start(
-        pair="p", source_endpoint="dbx", target_endpoint="qlik_tenant",
-        entity_type=EntityType.DATA_PRODUCT, dry_run=False, started_at=STARTED_AT,
+        pair="p",
+        source_endpoint="dbx",
+        target_endpoint="qlik_tenant",
+        entity_type=EntityType.DATA_PRODUCT,
+        dry_run=False,
+        started_at=STARTED_AT,
     )
     clean_finish = await _finished_run(
         recorder, pair="p", started_at=STARTED_AT + timedelta(seconds=5)
@@ -528,8 +530,12 @@ async def test_swept_stale_run_is_distinguishable_from_a_genuine_failure(
     client, _csrf = signed_in_client
 
     genuinely_failed = await recorder.start(
-        pair="p", source_endpoint="dbx", target_endpoint="qlik_tenant",
-        entity_type=EntityType.DATA_PRODUCT, dry_run=False, started_at=STARTED_AT,
+        pair="p",
+        source_endpoint="dbx",
+        target_endpoint="qlik_tenant",
+        entity_type=EntityType.DATA_PRODUCT,
+        dry_run=False,
+        started_at=STARTED_AT,
     )
     await recorder.fail(
         genuinely_failed,
@@ -539,8 +545,12 @@ async def test_swept_stale_run_is_distinguishable_from_a_genuine_failure(
     )
 
     reaped = await recorder.start(
-        pair="p", source_endpoint="dbx", target_endpoint="qlik_tenant",
-        entity_type=EntityType.DATA_PRODUCT, dry_run=False, started_at=STARTED_AT,
+        pair="p",
+        source_endpoint="dbx",
+        target_endpoint="qlik_tenant",
+        entity_type=EntityType.DATA_PRODUCT,
+        dry_run=False,
+        started_at=STARTED_AT,
     )
     reaped_ids = await recorder.reap_stale(now=STARTED_AT + timedelta(minutes=10))
     assert reaped in reaped_ids
@@ -623,9 +633,7 @@ async def test_run_issues_surfaces_dataset_members_owners_and_orphans_as_one_ans
     assert body["issues_recorded"] is True
     assert body["has_issues"] is True
 
-    assert [item["native_key"] for item in body["unresolved_dataset_members"]] == [
-        "sales.orders"
-    ]
+    assert [item["native_key"] for item in body["unresolved_dataset_members"]] == ["sales.orders"]
     assert [item["native_key"] for item in body["unresolvable_owners"]] == ["sales.customers"]
     assert [item["native_key"] for item in body["other_outstanding"]] == ["sales.broken"]
 

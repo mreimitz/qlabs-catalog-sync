@@ -33,9 +33,7 @@ ACTIVATE_URL = f"{DATA_PRODUCTS_URL}/{PRODUCT_ID}/actions/activate"
 async def test_activate_issues_the_documented_request(
     respx_mock: object, make_lifecycle: Callable[..., LifecycleActions]
 ) -> None:
-    respx_mock.post(ACTIVATE_URL).mock(
-        return_value=httpx.Response(200, json=activate_response())
-    )
+    respx_mock.post(ACTIVATE_URL).mock(return_value=httpx.Response(200, json=activate_response()))
     lifecycle = make_lifecycle(enabled_actions=frozenset({DestructiveAction.ACTIVATE}))
     ref = product_ref()
 

@@ -270,10 +270,7 @@ class ConnectorRegistry:
         return dict(self._broken)
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}(connectors={self.names()!r}, "
-            f"broken={tuple(self._broken)!r})"
-        )
+        return f"{type(self).__name__}(connectors={self.names()!r}, broken={tuple(self._broken)!r})"
 
 
 # --------------------------------------------------------------------------------------

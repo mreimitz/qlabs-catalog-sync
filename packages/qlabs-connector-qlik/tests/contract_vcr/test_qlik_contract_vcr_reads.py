@@ -51,9 +51,7 @@ async def test_read_dataset_item_pins_items_api_and_secure_qri(
     """``read.read_dataset()`` called directly against a plain ``HttpEndpoint`` (no
     OAuth) -- pins the Items API single-item GET and the ``secureQri``-first identity
     rule (``read.py`` module docstring, point 1)."""
-    async with HttpEndpoint(
-        TENANT_BASE_URL, auth=("Bearer", "contract-vcr-static-token")
-    ) as http:
+    async with HttpEndpoint(TENANT_BASE_URL, auth=("Bearer", "contract-vcr-static-token")) as http:
         with qlik_contract_vcr.use_cassette("qlik_read_dataset_item.yaml"):
             dataset = await read.read_dataset(
                 http, dataset_ref("item-contract-vcr-orders-1"), endpoint=ENDPOINT

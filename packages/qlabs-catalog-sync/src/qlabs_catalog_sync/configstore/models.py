@@ -214,9 +214,7 @@ class SelectionRuleRow(Base):
     decision: Mapped[SelectionDecision] = mapped_column(
         StrEnumType(SelectionDecision, 16), nullable=False
     )
-    matcher_kind: Mapped[MatcherKind] = mapped_column(
-        StrEnumType(MatcherKind, 16), nullable=False
-    )
+    matcher_kind: Mapped[MatcherKind] = mapped_column(StrEnumType(MatcherKind, 16), nullable=False)
     # The glob, tag key[=value], or owner-email pattern `matcher_kind` interprets it as.
     pattern: Mapped[str] = mapped_column(Text, nullable=False)
 

@@ -149,9 +149,7 @@ def config_service(tmp_path: Path, registry: ConnectorRegistry) -> Iterator[Conf
 
 @pytest.fixture
 def app(config_service: ConfigService, registry: ConnectorRegistry) -> FastAPI:
-    credential = AdminCredential.from_password_hash(
-        hash_password(_PASSWORD), username=_USERNAME
-    )
+    credential = AdminCredential.from_password_hash(hash_password(_PASSWORD), username=_USERNAME)
     return create_app(
         health=HealthRegistry(),
         metrics_registry=CollectorRegistry(),
@@ -258,7 +256,7 @@ def test_an_unexpected_failure_reason_never_echoes_credential_material(
 def test_an_unknown_endpoint_is_an_error_not_an_empty_manifest(
     signed_in: tuple[TestClient, str],
 ) -> None:
-    """"This endpoint does not exist" and "this endpoint reports nothing" are opposite
+    """ "This endpoint does not exist" and "this endpoint reports nothing" are opposite
     facts. Asking about a name that was never registered is a request error, not a 200
     with an empty body the console would render as a real, empty manifest."""
     client, _ = signed_in

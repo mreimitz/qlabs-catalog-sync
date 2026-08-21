@@ -85,9 +85,9 @@ async def test_resolve_orphan_clears_it_from_the_unresolved_report(store: StateS
         await uow.resolve_orphan(neutral_id, "databricks", EntityType.DATASET, now=resolved_at)
 
     assert await store.list_orphans("databricks") == []
-    assert (
-        await store.list_orphans("databricks", unresolved_only=False)
-    )[0].resolved_at == resolved_at
+    assert (await store.list_orphans("databricks", unresolved_only=False))[
+        0
+    ].resolved_at == resolved_at
 
 
 async def test_orphan_that_reappears_and_vanishes_again_reopens(store: StateStore) -> None:

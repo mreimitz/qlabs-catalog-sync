@@ -243,9 +243,7 @@ async def test_an_operator_can_configure_a_running_engine_from_the_api(
         assert rule.status_code in (200, 201), rule.text
 
         # 5. Run it now, through the console, against the running engine.
-        ran = await client.post(
-            svc.url(f"/api/pairs/{pair_id}/run-now"), headers=headers, json={}
-        )
+        ran = await client.post(svc.url(f"/api/pairs/{pair_id}/run-now"), headers=headers, json={})
 
     assert ran.status_code == 200, (
         "run-now against a console-registered endpoint failed. This is the gap T12.9 "

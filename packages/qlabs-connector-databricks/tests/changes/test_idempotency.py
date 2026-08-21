@@ -106,9 +106,7 @@ async def test_rerun_on_unchanged_tables_yields_nothing(respx_mock, http: HttpEn
     assert second.has_more is False
 
 
-async def test_third_run_after_a_real_change_is_quiet_again(
-    respx_mock, http: HttpEndpoint
-) -> None:
+async def test_third_run_after_a_real_change_is_quiet_again(respx_mock, http: HttpEndpoint) -> None:
     """Three polls: quiet, changed, quiet again — the snapshot tracks forward, it does
     not just remember the very first observation forever."""
     mock_single_page(

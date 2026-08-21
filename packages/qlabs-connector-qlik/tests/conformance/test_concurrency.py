@@ -83,9 +83,7 @@ def _created_body(**overrides: object) -> dict[str, object]:
 def _name_diff(value: str, *, expected_revision: str | None) -> FieldDiff:
     return FieldDiff(
         entity_type=EntityType.DATA_PRODUCT,
-        changes=[
-            FieldChange(field="name", mode=FieldUpdateMode.PATCH, value=to_json_value(value))
-        ],
+        changes=[FieldChange(field="name", mode=FieldUpdateMode.PATCH, value=to_json_value(value))],
         expected_revision=expected_revision,
     )
 

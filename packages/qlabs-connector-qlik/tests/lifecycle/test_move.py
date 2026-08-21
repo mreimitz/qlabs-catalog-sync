@@ -106,9 +106,7 @@ async def test_a_response_body_that_disagrees_on_identity_is_honored_not_trusted
     stale."""
     new_id = "9999d8b7a182224cbb3f9999"
     respx_mock.post(MOVE_URL).mock(
-        return_value=httpx.Response(
-            200, json={"id": new_id, "qri": f"qri:data-product://{new_id}"}
-        )
+        return_value=httpx.Response(200, json={"id": new_id, "qri": f"qri:data-product://{new_id}"})
     )
     lifecycle = make_lifecycle(enabled_actions=frozenset({DestructiveAction.MOVE}))
 

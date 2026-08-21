@@ -372,9 +372,7 @@ class StoreConnectorPool:
             row = await self._config_service.get_endpoint(endpoint_name)
             if row is None:
                 await self._discard(endpoint_name)
-                raise EndpointSetupError(
-                    endpoint_name, "no endpoint is configured under that name"
-                )
+                raise EndpointSetupError(endpoint_name, "no endpoint is configured under that name")
             if not row.enabled:
                 await self._discard(endpoint_name)
                 raise EndpointSetupError(

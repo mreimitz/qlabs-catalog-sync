@@ -143,6 +143,6 @@ def test_two_reads_of_identical_dataset_data_produce_identical_checksums() -> No
     second = build_dataset(dict(raw), endpoint=ENDPOINT)
 
     for field in ("name", "asset_type", "custom_attributes"):
-        assert (
-            first.field_envelopes[field].checksum == second.field_envelopes[field].checksum
-        ), field
+        assert first.field_envelopes[field].checksum == second.field_envelopes[field].checksum, (
+            field
+        )

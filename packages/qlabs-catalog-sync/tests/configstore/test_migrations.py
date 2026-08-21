@@ -69,9 +69,7 @@ def test_migration_sets_expected_foreign_keys(db_url: str) -> None:
     finally:
         engine.dispose()
 
-    referred_columns = {
-        (fk["constrained_columns"][0], fk["referred_table"]) for fk in pair_fks
-    }
+    referred_columns = {(fk["constrained_columns"][0], fk["referred_table"]) for fk in pair_fks}
     assert referred_columns == {("source", "endpoints"), ("target", "endpoints")}
     assert all(fk["options"].get("ondelete") == "RESTRICT" for fk in pair_fks)
 

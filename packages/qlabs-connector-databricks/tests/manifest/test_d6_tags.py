@@ -19,9 +19,7 @@ def test_data_product_tags_are_ro_with_a_warehouse_and_na_without_one(
     manifest_without_warehouse: CapabilityManifest,
 ) -> None:
     with_warehouse = manifest_with_warehouse.field_capability(EntityType.DATA_PRODUCT, "tags")
-    without_warehouse = manifest_without_warehouse.field_capability(
-        EntityType.DATA_PRODUCT, "tags"
-    )
+    without_warehouse = manifest_without_warehouse.field_capability(EntityType.DATA_PRODUCT, "tags")
 
     assert with_warehouse is not None
     assert without_warehouse is not None

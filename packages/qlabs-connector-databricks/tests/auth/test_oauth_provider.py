@@ -27,9 +27,7 @@ async def test_token_request_matches_the_databricks_oauth_m2m_shape(respx_mock, 
 
     assert token == "tok-1"
     request = route.calls.last.request
-    assert request.headers.get("content-type", "").startswith(
-        "application/x-www-form-urlencoded"
-    )
+    assert request.headers.get("content-type", "").startswith("application/x-www-form-urlencoded")
     auth_header = request.headers.get("authorization", "")
     assert auth_header.startswith("Basic ")
     form = parse_qs(request.content.decode())

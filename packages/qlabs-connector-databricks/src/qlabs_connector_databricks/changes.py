@@ -515,9 +515,7 @@ async def _scan_schemas(
                     if isinstance(table_id, str) and table_id:
                         table_ids.append(table_id)
 
-            checksum = compute_checksum(
-                {"schema": schema, "dataset_membership": sorted(table_ids)}
-            )
+            checksum = compute_checksum({"schema": schema, "dataset_membership": sorted(table_ids)})
             fresh[ref.native_key] = _Observed(
                 ref=ref,
                 checksum=checksum,

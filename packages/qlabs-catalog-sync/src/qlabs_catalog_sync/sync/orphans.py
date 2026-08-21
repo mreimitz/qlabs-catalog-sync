@@ -400,9 +400,7 @@ async def _last_synced_at(
     is gone now.
     """
     envelopes = await store.fetch_envelopes(neutral_id, endpoint)
-    synced = [
-        envelope.last_synced_at for envelope in envelopes.values() if envelope.last_synced_at
-    ]
+    synced = [envelope.last_synced_at for envelope in envelopes.values() if envelope.last_synced_at]
     return max(synced) if synced else None
 
 

@@ -188,8 +188,7 @@ async def test_compatibility_equivalent_names_are_not_folded_together(
     compatibility pass -- full-width forms, roman numerals, superscripts -- is not.
     """
     report = await run_bootstrap(
-        resolver, [dbx("sch-0001", "ｆｉｎａｎｃｅ")],
-        [qlik("dp-1", "finance")]
+        resolver, [dbx("sch-0001", "ｆｉｎａｎｃｅ")], [qlik("dp-1", "finance")]
     )
 
     assert report.proposed == ()

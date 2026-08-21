@@ -73,9 +73,7 @@ async def test_update_pins_preread_and_replace_only_patch_with_if_match(
 ) -> None:
     """``write.QlikWriter.update()`` called directly against a plain ``HttpEndpoint``
     (no OAuth) -- the same ``update()`` the connector calls at runtime."""
-    async with HttpEndpoint(
-        TENANT_BASE_URL, auth=("Bearer", "contract-vcr-static-token")
-    ) as http:
+    async with HttpEndpoint(TENANT_BASE_URL, auth=("Bearer", "contract-vcr-static-token")) as http:
         writer = write.build_writer(
             http,
             endpoint=ENDPOINT,

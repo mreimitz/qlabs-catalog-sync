@@ -568,9 +568,7 @@ class RecordReport:
                     "field": dropped.field,
                     "reason": dropped.reason.value,
                     "capability_mode": (
-                        None
-                        if dropped.capability_mode is None
-                        else dropped.capability_mode.value
+                        None if dropped.capability_mode is None else dropped.capability_mode.value
                     ),
                     "native_path": dropped.native_path,
                 }
@@ -1599,9 +1597,7 @@ class SyncLoop:
         await self._anchor_created_object(neutral_id, change.ref, result.ref)
         held = {item.field for item in withheld}
         persisted = tuple(
-            name
-            for name in result.written_fields
-            if name in source_envelopes and name not in held
+            name for name in result.written_fields if name in source_envelopes and name not in held
         )
         self._queue_envelopes(
             mutations, neutral_id, entity_type, persisted, source_envelopes, result
@@ -1907,9 +1903,7 @@ class SyncLoop:
     async def _read(self, ref: IdentityRef) -> NeutralEntity:
         return await self._call("read", self._source.name, lambda: self._source.read(ref))
 
-    async def _call(
-        self, operation: str, endpoint: str, func: Callable[[], Awaitable[_T]]
-    ) -> _T:
+    async def _call(self, operation: str, endpoint: str, func: Callable[[], Awaitable[_T]]) -> _T:
         """Invoke one connector call, applying the SDK's documented error reactions.
 
         ``TransientError`` is retried with backoff (honoring ``retry_after_seconds``, which
@@ -2124,9 +2118,7 @@ class SyncLoop:
         return self._refusal(result.included, candidate, result)
 
     @staticmethod
-    def _refusal(
-        included: bool, candidate: SelectionCandidate, explained: _Explains
-    ) -> str | None:
+    def _refusal(included: bool, candidate: SelectionCandidate, explained: _Explains) -> str | None:
         """``None`` when included; otherwise the operator-facing reason it was not.
 
         The explanation always comes from the evaluator's own

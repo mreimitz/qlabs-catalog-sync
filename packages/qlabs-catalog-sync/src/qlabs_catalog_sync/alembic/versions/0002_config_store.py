@@ -97,9 +97,7 @@ def upgrade() -> None:
             "ordinal",
             name="uq_selection_rules_pair_id_scope_ordinal",
         ),
-        sa.CheckConstraint(
-            "ordinal >= 0", name=op.f("ck_selection_rules_ordinal_non_negative")
-        ),
+        sa.CheckConstraint("ordinal >= 0", name=op.f("ck_selection_rules_ordinal_non_negative")),
     )
     op.create_table(
         "selection_overrides",

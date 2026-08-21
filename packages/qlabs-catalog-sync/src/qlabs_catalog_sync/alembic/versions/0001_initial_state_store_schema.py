@@ -89,9 +89,7 @@ def upgrade() -> None:
         sa.Column("last_run_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_status", sa.String(length=32), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint(
-            "sync_pair", "endpoint", "entity_type", name=op.f("pk_watermarks")
-        ),
+        sa.PrimaryKeyConstraint("sync_pair", "endpoint", "entity_type", name=op.f("pk_watermarks")),
     )
 
 

@@ -148,9 +148,7 @@ def target(
     values: dict[str, Any], *, revision: str | None = TARGET_REVISION
 ) -> dict[str, FieldEnvelope[JsonValue]]:
     """Last-known target envelopes, all read at one revision."""
-    return build_field_envelopes(
-        values, source_endpoint=TARGET_ENDPOINT, source_revision=revision
-    )
+    return build_field_envelopes(values, source_endpoint=TARGET_ENDPOINT, source_revision=revision)
 
 
 def target_field(

@@ -353,9 +353,7 @@ async def _read_connector_manifest(
             await connector.setup(ctx)
             return capability_manifest_out(connector.capabilities()), None
     except TimeoutError:
-        return None, (
-            f"connector did not respond within {HEALTHCHECK_TIMEOUT_SECONDS:.0f}s"
-        )
+        return None, (f"connector did not respond within {HEALTHCHECK_TIMEOUT_SECONDS:.0f}s")
     except ConnectorError as exc:
         return None, exc.message
     except (SecretNotFoundError, SecretRefFormatError) as exc:
@@ -377,7 +375,6 @@ async def _read_connector_manifest(
         if connector is not None:
             with contextlib.suppress(Exception):
                 await connector.close()
-
 
 
 # --------------------------------------------------------------------------------------

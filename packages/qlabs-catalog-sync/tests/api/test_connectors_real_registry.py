@@ -150,9 +150,7 @@ def test_a_connector_that_can_describe_itself_still_reports_a_manifest(
     response = client.get(f"{API_PREFIX}/connectors")
     assert response.status_code == 200, response.text
     described = [
-        item
-        for item in response.json()
-        if item["available"] and item["manifest"] is not None
+        item for item in response.json() if item["available"] and item["manifest"] is not None
     ]
 
     assert described, (
@@ -267,9 +265,7 @@ def test_the_schema_actually_describes_the_settings_the_server_demands(
         health=HealthRegistry(),
         metrics_registry=CollectorRegistry(),
         auth=ConsoleAuth(
-            credential=AdminCredential.from_password_hash(
-                hash_password(password), username="admin"
-            )
+            credential=AdminCredential.from_password_hash(hash_password(password), username="admin")
         ),
         config_service=ConfigService(store.engine, real_registry),
         registry=real_registry,

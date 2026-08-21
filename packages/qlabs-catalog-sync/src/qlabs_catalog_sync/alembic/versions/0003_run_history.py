@@ -88,9 +88,7 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_run_items_run_id", "run_items", ["run_id"])
-    op.create_index(
-        "ix_run_items_neutral_id_endpoint", "run_items", ["neutral_id", "endpoint"]
-    )
+    op.create_index("ix_run_items_neutral_id_endpoint", "run_items", ["neutral_id", "endpoint"])
 
     op.create_table(
         "run_item_unresolved_fields",

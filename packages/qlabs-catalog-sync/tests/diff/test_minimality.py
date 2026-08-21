@@ -17,9 +17,7 @@ PRODUCT = {
 }
 
 
-def plan_for(
-    source_values: dict[str, object], target_values: dict[str, object]
-) -> DiffPlan:
+def plan_for(source_values: dict[str, object], target_values: dict[str, object]) -> DiffPlan:
     return compute_field_diff(
         entity_type=EntityType.DATA_PRODUCT,
         source_envelopes=source(source_values),

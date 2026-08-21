@@ -97,6 +97,4 @@ class FakeQlikConnector(_StubConnector):
 def make_registry() -> ConnectorRegistry:
     """A registry with exactly the two v1 endpoint roles: ``"databricks"`` (read-only
     source) and ``"qlik"`` (the sole write target, per ``WRITE_CONNECTOR_NAME``)."""
-    return ConnectorRegistry(
-        {"databricks": FakeDatabricksConnector, "qlik": FakeQlikConnector}, {}
-    )
+    return ConnectorRegistry({"databricks": FakeDatabricksConnector, "qlik": FakeQlikConnector}, {})

@@ -211,8 +211,12 @@ def test_resolution_depends_only_on_the_locator_not_any_endpoint_name(
     monkeypatch.setenv("SHARED_TENANT__CLIENT_SECRET", _SENTINEL)
     ref = SecretRef.parse("env:SHARED_TENANT")
 
-    kwargs_for_acme = resolve_connector_kwargs(ref, _ExampleConnectorConfig, settings={"base_url": "https://a"})
-    kwargs_for_other = resolve_connector_kwargs(ref, _ExampleConnectorConfig, settings={"base_url": "https://b"})
+    kwargs_for_acme = resolve_connector_kwargs(
+        ref, _ExampleConnectorConfig, settings={"base_url": "https://a"}
+    )
+    kwargs_for_other = resolve_connector_kwargs(
+        ref, _ExampleConnectorConfig, settings={"base_url": "https://b"}
+    )
 
     assert kwargs_for_acme["client_secret"].get_secret_value() == _SENTINEL
     assert kwargs_for_other["client_secret"].get_secret_value() == _SENTINEL

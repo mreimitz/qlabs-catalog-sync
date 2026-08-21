@@ -190,9 +190,7 @@ async def test_the_hundred_item_dataset_cap_is_enforced_client_side(
     identity_map = {member: f"ds-{index:03d}" for index, member in enumerate(members)}
     writer = make_writer(identity_map=identity_map)
 
-    result = await writer.create(
-        sales_product(dataset_refs=members), api_consumable_refs=members
-    )
+    result = await writer.create(sales_product(dataset_refs=members), api_consumable_refs=members)
 
     body = sent_body(respx_mock)
     assert len(body["datasetIds"]) == MAX_DATASET_IDS

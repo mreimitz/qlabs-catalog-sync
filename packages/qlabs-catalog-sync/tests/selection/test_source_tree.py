@@ -372,12 +372,10 @@ async def test_walking_the_tree_twice_yields_the_same_nodes_both_times() -> None
         return {node.candidate.object_id for node in nodes}
 
     first_pass = [
-        node
-        async for node in walk_source_tree(source, rule_set, entity_types=_SCHEMA_ONLY)
+        node async for node in walk_source_tree(source, rule_set, entity_types=_SCHEMA_ONLY)
     ]
     second_pass = [
-        node
-        async for node in walk_source_tree(source, rule_set, entity_types=_SCHEMA_ONLY)
+        node async for node in walk_source_tree(source, rule_set, entity_types=_SCHEMA_ONLY)
     ]
 
     assert _ids(first_pass) == _ids(second_pass) == {"analytics.sales", "analytics.finance"}
@@ -467,10 +465,7 @@ async def test_walking_the_tree_agrees_with_calling_evaluate_directly() -> None:
             exclude(1, "analytics.staging*", rule_id="no-staging"),
         ]
     )
-    nodes = [
-        node
-        async for node in walk_source_tree(source, rule_set, entity_types=_SCHEMA_ONLY)
-    ]
+    nodes = [node async for node in walk_source_tree(source, rule_set, entity_types=_SCHEMA_ONLY)]
     assert len(nodes) == 3
 
     for node in nodes:
@@ -594,8 +589,7 @@ async def test_resolve_tags_is_opt_in_default_walk_leaves_the_rule_undetermined(
     source.seed(DataProduct(name="Sales", tags=[Tag(key="pii")]), native_key="analytics.sales")
 
     nodes = [
-        node
-        async for node in walk_source_tree(source, _tag_rule_set(), entity_types=_SCHEMA_ONLY)
+        node async for node in walk_source_tree(source, _tag_rule_set(), entity_types=_SCHEMA_ONLY)
     ]
     node = _only_schema_node(nodes)
 

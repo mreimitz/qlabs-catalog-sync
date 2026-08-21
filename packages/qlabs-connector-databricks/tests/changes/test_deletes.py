@@ -75,9 +75,7 @@ async def test_vanished_table_is_reported_as_deleted(respx_mock, http: HttpEndpo
         items=[table("main", "sales", "orders")],
     )
 
-    second = await list_changed(
-        http, EntityType.DATASET, first.next_watermark, endpoint=ENDPOINT
-    )
+    second = await list_changed(http, EntityType.DATASET, first.next_watermark, endpoint=ENDPOINT)
 
     assert len(second.changes) == 1
     deleted = second.changes[0]

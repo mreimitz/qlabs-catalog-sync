@@ -179,9 +179,7 @@ async def test_confirming_a_source_bound_since_the_file_was_written_raises_confl
     with pytest.raises(ConflictError, match="Rebinding is never automatic"):
         await resolver.confirm(report.proposed[0].proposal_id)
 
-    counterpart = await resolver.counterpart(
-        neutral_id, TARGET_ENDPOINT, EntityType.DATA_PRODUCT
-    )
+    counterpart = await resolver.counterpart(neutral_id, TARGET_ENDPOINT, EntityType.DATA_PRODUCT)
     assert counterpart is not None
     assert counterpart.identity.native_key == "dp-elsewhere"
 

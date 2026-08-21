@@ -185,9 +185,7 @@ async def _serve(
     # operator registered in the console (C6). The startup pool above can only build what
     # the YAML config named, so without this a console-registered endpoint could never
     # sync. Built lazily and rebuilt when an endpoint's settings or secret_ref change.
-    store_pool = StoreConnectorPool(
-        config_service, runtime.connector_registry(), metrics=metrics
-    )
+    store_pool = StoreConnectorPool(config_service, runtime.connector_registry(), metrics=metrics)
 
     async def _build_runner(plan: PairPlan) -> PairRunner:
         """Build one pair's runner from its stored configuration (C1).
@@ -290,10 +288,19 @@ async def _serve(
         "cannot bind. Bootstrap identity with `identity-confirm` instead."
     ),
 )
-@click.option("--host", default="0.0.0.0", show_default=True,
-              help="Interface for the API, the console, /healthz and /metrics.")
-@click.option("--port", default=8080, show_default=True, type=int,
-              help="Port for the API, the console, /healthz and /metrics -- one origin (C8).")
+@click.option(
+    "--host",
+    default="0.0.0.0",
+    show_default=True,
+    help="Interface for the API, the console, /healthz and /metrics.",
+)
+@click.option(
+    "--port",
+    default=8080,
+    show_default=True,
+    type=int,
+    help="Port for the API, the console, /healthz and /metrics -- one origin (C8).",
+)
 @click.option(
     "--console-assets",
     "console_assets",

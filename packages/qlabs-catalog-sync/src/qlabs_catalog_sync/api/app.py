@@ -152,13 +152,9 @@ def create_app(
         app.include_router(build_endpoints_router(config_service, registry), prefix=API_PREFIX)
         app.include_router(build_pairs_router(config_service), prefix=API_PREFIX)
         app.include_router(build_selection_router(config_service), prefix=API_PREFIX)
-        app.include_router(
-            build_preview_router(config_service, registry), prefix=API_PREFIX
-        )
+        app.include_router(build_preview_router(config_service, registry), prefix=API_PREFIX)
         if recorder is not None:
-            app.include_router(
-                build_history_router(recorder, config_service), prefix=API_PREFIX
-            )
+            app.include_router(build_history_router(recorder, config_service), prefix=API_PREFIX)
         if store is not None and resolver is not None:
             app.include_router(
                 build_run_control_router(

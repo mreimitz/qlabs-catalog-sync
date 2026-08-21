@@ -216,9 +216,7 @@ class LifecycleActions:
         self._ensure_enabled(DestructiveAction.ACTIVATE)
         self._ensure_data_product(ref)
         native_id = _native_id(ref)
-        response = await self._send_activate(
-            native_id, {"name": name, "spaceId": managed_space_id}
-        )
+        response = await self._send_activate(native_id, {"name": name, "spaceId": managed_space_id})
         raw = _json_object(
             response,
             url=_action_url(native_id, DestructiveAction.ACTIVATE),

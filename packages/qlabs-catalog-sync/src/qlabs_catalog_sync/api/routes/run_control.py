@@ -616,8 +616,7 @@ def build_run_control_router(
             raise APIError(
                 status.HTTP_504_GATEWAY_TIMEOUT,
                 timeout_code,
-                f"sync pair {pair_row.name!r}: cycle did not finish within "
-                f"{timeout_seconds:.0f}s",
+                f"sync pair {pair_row.name!r}: cycle did not finish within {timeout_seconds:.0f}s",
                 entity=pair_row.name,
             ) from None
         finally:

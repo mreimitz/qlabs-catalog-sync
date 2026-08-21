@@ -100,9 +100,7 @@ def test_a_plan_over_the_cap_is_flagged_and_never_truncated() -> None:
 
     plan = compute_field_diff(
         entity_type=EntityType.DATA_PRODUCT,
-        source_envelopes=source(
-            {"name": "Sales v2", "description": "new", "tags": ["a", "b"]}
-        ),
+        source_envelopes=source({"name": "Sales v2", "description": "new", "tags": ["a", "b"]}),
         target_envelopes=target({"name": "Sales", "description": "old", "tags": ["a"]}),
         manifest=capped,
     )

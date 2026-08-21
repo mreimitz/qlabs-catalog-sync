@@ -69,16 +69,10 @@ async def test_content_change_with_unmoved_updated_at_is_still_caught(
         TABLES_PATH,
         params={"catalog_name": "main", "schema_name": "sales"},
         items_key="tables",
-        items=[
-            table(
-                "main", "sales", "orders", comment="curated orders", updated_at=DEFAULT_TS
-            )
-        ],
+        items=[table("main", "sales", "orders", comment="curated orders", updated_at=DEFAULT_TS)],
     )
 
-    second = await list_changed(
-        http, EntityType.DATASET, first.next_watermark, endpoint=ENDPOINT
-    )
+    second = await list_changed(http, EntityType.DATASET, first.next_watermark, endpoint=ENDPOINT)
 
     assert {c.ref.native_key for c in second.changes} == expected
     assert second.changes[0].kind is ChangeKind.UPSERT

@@ -101,9 +101,7 @@ async def test_a_null_text_value_clears_the_field_rather_than_sending_an_empty_s
 
     await writer.update(product_ref(), diff(change("description", None)))
 
-    assert patch_body(respx_mock) == [
-        {"op": "replace", "path": "/description", "value": None}
-    ]
+    assert patch_body(respx_mock) == [{"op": "replace", "path": "/description", "value": None}]
 
 
 async def test_one_changed_tag_sends_the_whole_tags_array(
@@ -141,9 +139,7 @@ async def test_dataset_refs_send_the_whole_resolved_array(
     first, second = refs(2)
     writer = make_writer(identity_map={first: "ds-customers", second: "ds-orders"})
 
-    result = await writer.update(
-        product_ref(), diff(change("dataset_refs", [first, second]))
-    )
+    result = await writer.update(product_ref(), diff(change("dataset_refs", [first, second])))
 
     assert patch_body(respx_mock) == [
         {"op": "replace", "path": "/datasetIds", "value": ["ds-customers", "ds-orders"]}
@@ -366,9 +362,7 @@ async def test_no_code_path_creates_a_dataset_or_a_user_on_the_update_path(
         for call in respx_mock.calls
         if call.request.method != "GET"
     ]
-    assert mutating == [
-        ("PATCH", "/api/data-governance/data-products/6672d8b7a182224cbb3f1c26")
-    ]
+    assert mutating == [("PATCH", "/api/data-governance/data-products/6672d8b7a182224cbb3f1c26")]
 
 
 async def test_space_id_is_never_touched_by_an_update(

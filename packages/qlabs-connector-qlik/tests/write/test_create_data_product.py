@@ -236,9 +236,7 @@ async def test_glossary_ids_are_never_sent_and_neutral_refs_are_reported(
     mock_create(respx_mock)
     writer = make_writer()
 
-    result = await writer.create(
-        sales_product(glossary_term_refs=[uuid.uuid4(), uuid.uuid4()])
-    )
+    result = await writer.create(sales_product(glossary_term_refs=[uuid.uuid4(), uuid.uuid4()]))
 
     assert "glossaryIds" not in sent_body(respx_mock)
     assert "glossary_term_refs" in result.skipped_fields
@@ -272,9 +270,7 @@ async def test_a_present_but_empty_description_is_sent_as_an_empty_string(
     mock_create(respx_mock)
     writer = make_writer()
 
-    result = await writer.create(
-        DataProduct(name="Bare Product", description=TextField.plain(""))
-    )
+    result = await writer.create(DataProduct(name="Bare Product", description=TextField.plain("")))
 
     body = sent_body(respx_mock)
     assert body["description"] == ""

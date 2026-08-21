@@ -180,9 +180,7 @@ def client_for(app: FastAPI, *, base_url: str = "http://testserver") -> TestClie
 def sign_in(
     client: TestClient, *, username: str = USERNAME, password: str = PASSWORD, **kwargs: Any
 ) -> Any:
-    return client.post(
-        SESSION_PATH, json={"username": username, "password": password}, **kwargs
-    )
+    return client.post(SESSION_PATH, json={"username": username, "password": password}, **kwargs)
 
 
 def sign_in_ok(client: TestClient) -> str:
@@ -277,7 +275,7 @@ def test_the_refusal_is_logged_once_at_start(captured_logs: list[Any]) -> None:
 
 
 def test_the_refusal_is_not_logged_per_request(captured_logs: list[Any]) -> None:
-    """"Logged once at start" has to mean *not on every request*. A configured app under
+    """ "Logged once at start" has to mean *not on every request*. A configured app under
     load must never emit the startup refusal, and an unauthenticated caller must never be
     able to make it emit one."""
     app, _ = build_app()
@@ -362,8 +360,7 @@ def test_a_hash_below_the_cost_floor_is_refused_even_though_it_parses() -> None:
     """A weak hash smuggled into the deployment's configuration must not be usable, and
     the parameters come *from the hash*, so this is the only place to catch it."""
     weak = (
-        "$scrypt$ln=10,r=8,p=1$AAAAAAAAAAAAAAAAAAAAAA$"
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "$scrypt$ln=10,r=8,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     )
 
     with pytest.raises(AuthConfigurationError):
@@ -915,7 +912,7 @@ def test_sign_in_itself_needs_no_csrf_token() -> None:
 
 
 def test_csrf_applies_outside_the_api_prefix_too(tmp_path: Path) -> None:
-    """"Every mutating request" means every one, not every one under the prefix."""
+    """ "Every mutating request" means every one, not every one under the prefix."""
     app, _ = build_app(static_dir=write_console_dist(tmp_path, index_html=SPA_SENTINEL))
     client = client_for(app)
     csrf = sign_in_ok(client)

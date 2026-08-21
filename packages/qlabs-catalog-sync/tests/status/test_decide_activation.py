@@ -73,7 +73,7 @@ def test_a_non_active_status_is_never_requested_regardless_of_the_other_two_gate
 
 
 def test_opt_in_reason_matches_loop_pys_field_level_withholding_reason() -> None:
-    """"Consistent rather than duplicated" (T7.4's own instruction): this module's
+    """ "Consistent rather than duplicated" (T7.4's own instruction): this module's
     lifecycle-action gate reports the *same* reason code ``loop.py`` already uses for its
     field-level D7 withholding, so a report combining both never has to explain two
     spellings of the same decision. Asserted against the real, exported constant --

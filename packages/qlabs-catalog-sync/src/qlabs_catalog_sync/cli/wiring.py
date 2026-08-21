@@ -95,9 +95,7 @@ def select_pairs(config: EngineConfig, names: Sequence[str]) -> list[SyncPairCon
     return [by_name[name] for name in names]
 
 
-def select_entity_types(
-    pair: SyncPairConfig, requested: Sequence[EntityType]
-) -> list[EntityType]:
+def select_entity_types(pair: SyncPairConfig, requested: Sequence[EntityType]) -> list[EntityType]:
     """The entity types to sync for ``pair``: every type it configures, or the overlap
     with ``requested`` when the caller narrowed it via ``--entity-type``."""
     if not requested:

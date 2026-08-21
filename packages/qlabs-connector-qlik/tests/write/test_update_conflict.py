@@ -268,9 +268,7 @@ async def test_an_absent_key_in_the_reread_counts_as_not_applied(
     )
     writer = make_writer()
 
-    await writer.update(
-        product_ref(), diff(change("documentation", TextField.markdown("# Sales")))
-    )
+    await writer.update(product_ref(), diff(change("documentation", TextField.markdown("# Sales"))))
 
     _, retry = patch_bodies(respx_mock)
     assert retry == [{"op": "replace", "path": "/readMe", "value": "# Sales"}]
@@ -306,9 +304,7 @@ async def test_the_reread_uses_the_same_product_url_and_is_a_plain_get(
     methods = [call.request.method for call in respx_mock.calls]
     # GET (idempotency pre-read), PATCH (412), GET (recovery re-read), PATCH (retry).
     assert methods == ["GET", "PATCH", "GET", "PATCH"]
-    get_request = next(
-        call.request for call in respx_mock.calls if call.request.method == "GET"
-    )
+    get_request = next(call.request for call in respx_mock.calls if call.request.method == "GET")
     assert get_request.url.path == "/api/data-governance/data-products/6672d8b7a182224cbb3f1c26"
 
 
@@ -335,13 +331,9 @@ async def test_a_conflict_still_reports_the_references_that_were_dropped(
     mock_read_product(respx_mock, datasetIds=["ds-stale"])
     mock_datasets_by_name(respx_mock, {})
     kept, missing = refs(2)
-    writer = make_writer(
-        identity_map={kept: "ds-kept"}, dataset_names={missing: "gone"}
-    )
+    writer = make_writer(identity_map={kept: "ds-kept"}, dataset_names={missing: "gone"})
 
-    result = await writer.update(
-        product_ref(), diff(change("dataset_refs", [kept, missing]))
-    )
+    result = await writer.update(product_ref(), diff(change("dataset_refs", [kept, missing])))
 
     assert result.outcome is WriteOutcome.UPDATED
     assert result.detail is not None

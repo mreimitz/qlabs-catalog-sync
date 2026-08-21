@@ -105,9 +105,7 @@ async def _preview(source: FakeConnector, rule_set: SelectionRuleSet) -> dict[st
     }
 
 
-async def _sync(
-    source: FakeConnector, rule_set: SelectionRuleSet
-) -> dict[str, DatasetSelection]:
+async def _sync(source: FakeConnector, rule_set: SelectionRuleSet) -> dict[str, DatasetSelection]:
     """The sync loop's path: one dataset change at a time, no tree."""
     decisions: dict[str, DatasetSelection] = {}
     async for change in iter_object_changes(source, EntityType.DATASET):

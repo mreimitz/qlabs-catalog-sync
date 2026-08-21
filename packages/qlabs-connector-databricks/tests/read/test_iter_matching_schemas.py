@@ -33,9 +33,7 @@ async def test_includes_matches_and_excludes_near_misses_across_catalogs(
             # catalog "staging": would match the schema-glob but wrong catalog.
             httpx.Response(
                 200,
-                json={
-                    "schemas": [make_raw_schema(name="sales_x", full_name="staging.sales_x")]
-                },
+                json={"schemas": [make_raw_schema(name="sales_x", full_name="staging.sales_x")]},
             ),
         ]
     )

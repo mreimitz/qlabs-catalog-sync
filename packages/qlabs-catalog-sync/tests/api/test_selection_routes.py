@@ -268,9 +268,7 @@ def test_listing_rules_for_an_unknown_pair_is_a_404_not_an_empty_list(
     """A silent empty list for a pair that does not exist would be indistinguishable
     from "this pair genuinely has no rules yet"."""
     client, _csrf = signed_in_client
-    response = client.get(
-        f"{API_PREFIX}/pairs/{uuid.uuid4()}/rules", params={"scope": "object"}
-    )
+    response = client.get(f"{API_PREFIX}/pairs/{uuid.uuid4()}/rules", params={"scope": "object"})
     assert response.status_code == 404
     assert response.json()["code"] == "sync_pair_not_found"
 
@@ -631,8 +629,7 @@ async def test_rule_and_override_mutations_are_recorded_in_the_change_log(
 
     generation = await config_service.current_generation()
     rules = [
-        _create_rule(client, csrf, pair_id, decision="include", pattern=p)
-        for p in ("a.*", "b.*")
+        _create_rule(client, csrf, pair_id, decision="include", pattern=p) for p in ("a.*", "b.*")
     ]
     assert await config_service.current_generation() > generation
 

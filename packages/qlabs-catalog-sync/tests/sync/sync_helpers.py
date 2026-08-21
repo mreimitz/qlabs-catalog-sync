@@ -29,6 +29,7 @@ from qlabs_catalog_sync_sdk.testing import (
 
 WRITE_METHODS = ("create", "update", "delete")
 
+
 class FailingTarget(FakeConnector):
     """A Qlik-shaped write target whose write path starts failing from the Nth call.
 
@@ -98,9 +99,7 @@ def write_calls(connector: FakeConnector) -> list[str]:
     The direction guard and decision D4 are both assertions about this list: it must stay
     empty for a source connector, and must never contain ``delete`` for any connector.
     """
-    return [
-        entry.method for entry in connector.call_log if entry.method in WRITE_METHODS
-    ]
+    return [entry.method for entry in connector.call_log if entry.method in WRITE_METHODS]
 
 
 async def bind(

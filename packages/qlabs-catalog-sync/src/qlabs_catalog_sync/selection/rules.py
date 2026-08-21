@@ -364,9 +364,7 @@ class SelectionCandidate:
         owners = self.owners
         if owners is UNKNOWN:
             return None
-        emails = (
-            normalize_email(party.email) for party in owners if party.role is PartyRole.OWNER
-        )
+        emails = (normalize_email(party.email) for party in owners if party.role is PartyRole.OWNER)
         return frozenset(email for email in emails if email is not None)
 
     @property
@@ -467,8 +465,7 @@ class SelectionRule:
     def describe(self) -> str:
         """A short human label, e.g. ``"rule #2 include glob 'analytics.*'"``."""
         return (
-            f"rule #{self.ordinal} {self.decision.value} "
-            f"{self.matcher_kind.value} {self.pattern!r}"
+            f"rule #{self.ordinal} {self.decision.value} {self.matcher_kind.value} {self.pattern!r}"
         )
 
     @classmethod

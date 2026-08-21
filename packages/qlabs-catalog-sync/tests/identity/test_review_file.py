@@ -172,9 +172,7 @@ async def test_a_changed_candidate_set_supersedes_a_stale_decision(
     await run_bootstrap(resolver, [source], [qlik("dp-a", "sales")])
     edit_review_json(resolver.review_path, source.key, decision="confirm")
 
-    report = await run_bootstrap(
-        resolver, [source], [qlik("dp-a", "sales"), qlik("dp-b", "sales")]
-    )
+    report = await run_bootstrap(resolver, [source], [qlik("dp-a", "sales"), qlik("dp-b", "sales")])
 
     assert report.superseded == (source.key,)
     entry = find_entry(read_review_json(resolver.review_path), source.key)

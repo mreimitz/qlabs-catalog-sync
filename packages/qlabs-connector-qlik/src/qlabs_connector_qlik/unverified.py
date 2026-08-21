@@ -334,8 +334,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
             "worked example — the equivalence is inferred, not witnessed."
         ),
         relied_on=(
-            "resolve.py:_dataset_id_of (prefers resourceId, falls back to the Items-API "
-            "item id)",
+            "resolve.py:_dataset_id_of (prefers resourceId, falls back to the Items-API item id)",
             "write.py:QlikWriter._apply_datasets / _apply_dataset_update (send whatever "
             "_dataset_id_of returned as datasetIds)",
         ),
@@ -476,8 +475,10 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
             "assumes standard REST convention gives one, paginated the same way as "
             "everything else (a data array plus a links object)."
         ),
-        relied_on=("read.py:_iter_data_product_changes (http.paginate_cursor('GET', "
-                    "DATA_PRODUCTS_PATH, ...))",),
+        relied_on=(
+            "read.py:_iter_data_product_changes (http.paginate_cursor('GET', "
+            "DATA_PRODUCTS_PATH, ...))",
+        ),
         current_behavior=(
             "list_changed(DATA_PRODUCT) calls the bare collection GET; nothing else in this "
             "module depends on it — read_data_product (a single documented GET .../{id}) "
@@ -510,8 +511,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
             "the item id."
         ),
         relied_on=(
-            "read.py:_map_dataset (identity fallback chain: secure_qri -> legacy_qri -> "
-            "item_id)",
+            "read.py:_map_dataset (identity fallback chain: secure_qri -> legacy_qri -> item_id)",
         ),
         current_behavior=(
             "A missing resourceAttributes never raises; the dataset's native identity "
@@ -545,8 +545,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
             "same neutral status."
         ),
         relied_on=(
-            "read.py:_map_data_product (values['status'] = ACTIVE if raw['activated'] else "
-            "DRAFT)",
+            "read.py:_map_data_product (values['status'] = ACTIVE if raw['activated'] else DRAFT)",
         ),
         current_behavior=(
             "A previously-active, now-deactivated product reads back as DRAFT, identical to "
@@ -579,9 +578,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
             "RS-02 documents sort on Items updatedAt but not a confirmed changed-since "
             "filter for either the Items API or the data-products list endpoint."
         ),
-        relied_on=(
-            "read.py:list_changed / _iter_data_product_changes / _iter_dataset_changes",
-        ),
+        relied_on=("read.py:list_changed / _iter_data_product_changes / _iter_dataset_changes",),
         current_behavior=(
             "Every list_changed call performs a full scan of the relevant listing endpoint "
             "and reports every object as UPSERT, regardless of since; next_watermark is the "
@@ -744,7 +741,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
         ),
         verification="Manual, paired with the activate check above. Not automated by the probe.",
         probe_check=None,
-        source="lifecycle.py module docstring, \"Deactivate's request body\"",
+        source='lifecycle.py module docstring, "Deactivate\'s request body"',
         must_verify_before_production=False,
     ),
     # -- Qlik: operational precondition, not a code path ---------------------------------
@@ -821,8 +818,8 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
         status=AssumptionStatus.UNUSED,
         summary="The request body key for the glossary term change-status action.",
         assumption=(
-            "RS-02 could not confirm whether the body is {\"status\": \"verified\"} or "
-            "{\"type\": \"verified\"}."
+            'RS-02 could not confirm whether the body is {"status": "verified"} or '
+            '{"type": "verified"}.'
         ),
         relied_on=("none — same TODO(T3.6) stub as above; decision D5.",),
         current_behavior="No code in this build calls this action.",
@@ -885,9 +882,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
             "Same caveat as SCHEMA_TAGS, for table_name plus catalog_name/schema_name/"
             "tag_name/tag_value."
         ),
-        relied_on=(
-            "qlabs_connector_databricks.sql_tags:_TABLE_TAGS_COLUMNS / read_catalog_tags",
-        ),
+        relied_on=("qlabs_connector_databricks.sql_tags:_TABLE_TAGS_COLUMNS / read_catalog_tags",),
         current_behavior="Same as DBX-SCHEMA-TAGS-COLUMNS, for the table-level query.",
         consequence="Same failure mode as DBX-SCHEMA-TAGS-COLUMNS, scoped to table tags.",
         verification="Same probe run as DBX-SCHEMA-TAGS-COLUMNS (one call reads both tables).",
@@ -969,8 +964,7 @@ REGISTRY: Final[tuple[UnverifiedAssumption, ...]] = (
         status=AssumptionStatus.LIVE,
         summary="The real UC identifier charset vs. this module's conservative validator.",
         assumption=(
-            "RS-01 pins the tag-key charset but not the catalog/schema/table identifier "
-            "charset."
+            "RS-01 pins the tag-key charset but not the catalog/schema/table identifier charset."
         ),
         relied_on=("qlabs_connector_databricks.sql_tags:_IDENTIFIER_RE / IdentifierError",),
         current_behavior=(

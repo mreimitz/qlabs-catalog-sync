@@ -71,9 +71,7 @@ async def test_a_second_independent_check_confirms_a_still_missing_object(
     assert stored.last_missing_at == LATER  # advanced
 
 
-async def test_an_object_that_returns_is_resolved(
-    store: StateStore, source: FakeConnector
-) -> None:
+async def test_an_object_that_returns_is_resolved(store: StateStore, source: FakeConnector) -> None:
     ref = seed_product(source, "sales.orders", description="Order facts")
     neutral_id = await bind(store, ref)
     binding = await store.get_binding(neutral_id, source.name, EntityType.DATA_PRODUCT)

@@ -99,11 +99,7 @@ def test_record_update_writes_one_row_per_changed_field_sharing_one_generation(
     assert generation == 1
     assert audit.current_generation(session) == 1  # one bump, not two
 
-    rows = (
-        session.execute(select(ConfigChangeRow).order_by(ConfigChangeRow.field))
-        .scalars()
-        .all()
-    )
+    rows = session.execute(select(ConfigChangeRow).order_by(ConfigChangeRow.field)).scalars().all()
     assert len(rows) == 2  # two rows: one per changed field
     by_field = {row.field: row for row in rows}
     assert set(by_field) == {"cadence_seconds", "target_space"}

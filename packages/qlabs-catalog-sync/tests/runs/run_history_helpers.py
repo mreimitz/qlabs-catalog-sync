@@ -163,8 +163,7 @@ def schema_parity_report(
             )
         for extra in sorted(reflected_check_names - model_check_names):
             problems.append(
-                f"{table_name}: check constraint {extra!r} in the migration, "
-                "missing from the model"
+                f"{table_name}: check constraint {extra!r} in the migration, missing from the model"
             )
 
     return problems

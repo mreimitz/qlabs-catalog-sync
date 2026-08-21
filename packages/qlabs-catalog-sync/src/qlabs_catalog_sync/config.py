@@ -377,9 +377,7 @@ class SyncPairConfig(BaseModel):
             try:
                 _validate_catalog_schema_pattern(pattern)
             except ValueError as exc:
-                raise ValueError(
-                    f"sync pair {name!r}: catalog_schema_patterns: {exc}"
-                ) from exc
+                raise ValueError(f"sync pair {name!r}: catalog_schema_patterns: {exc}") from exc
         return patterns
 
     @field_validator("target_space")

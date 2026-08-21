@@ -171,9 +171,7 @@ def test_dry_run_applies_nothing_and_plans_the_create_in_full(
     assert run["errors"] == []
     assert run["orphans"] == []
 
-    created = next(
-        record for record in run["records"] if record["native_key"] == RETAIL_SCHEMA_ID
-    )
+    created = next(record for record in run["records"] if record["native_key"] == RETAIL_SCHEMA_ID)
     assert created["outcome"] == "created"
     assert created["entity_type"] == "data_product"
     # D1: identity is the stable `schema_id`; the dotted `catalog.schema` is the label.
@@ -402,9 +400,9 @@ def test_an_owner_with_no_qlik_user_is_dropped_and_reported_never_invented(
 
     assert "target could not resolve: ['owners']" in result.stdout
     # No user was created to make the reference resolve: the users API was read only.
-    assert [
-        request.method for request in qlik_requests(router, path_prefix="/api/v1/users")
-    ] == ["GET"]
+    assert [request.method for request in qlik_requests(router, path_prefix="/api/v1/users")] == [
+        "GET"
+    ]
 
 
 @pytest.mark.parametrize("cycles", [3])

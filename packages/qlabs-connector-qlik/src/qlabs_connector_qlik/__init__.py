@@ -194,13 +194,9 @@ class Connector(ConnectorABC):
         configuration is fixed.
         """
         assert self.ctx is not None  # narrowed by the caller before `_unhealthy` runs
-        state = (
-            HealthState.DEGRADED if isinstance(error, TransientError) else HealthState.UNHEALTHY
-        )
+        state = HealthState.DEGRADED if isinstance(error, TransientError) else HealthState.UNHEALTHY
         reason = str(error)
-        await self.ctx.logger.awarning(
-            "qlik.healthcheck.failed", state=state.value, reason=reason
-        )
+        await self.ctx.logger.awarning("qlik.healthcheck.failed", state=state.value, reason=reason)
         if state is HealthState.DEGRADED:
             return HealthStatus.degraded(self.name, reason, checked_at=checked_at)
         return HealthStatus.unhealthy(self.name, reason, checked_at=checked_at)

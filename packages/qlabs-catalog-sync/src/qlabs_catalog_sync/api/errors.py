@@ -382,9 +382,7 @@ def install_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def _handle_http_exception(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def _handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         # Covers an explicit ``raise HTTPException(...)`` from route code and
         # Starlette's own "no route matched" 404 for any path this app's routing did not
         # claim outright.

@@ -63,9 +63,7 @@ async def test_renaming_secure_qri_silently_degrades_the_dataset_identity(
         mutate=_rename_secure_qri,
     )
 
-    async with HttpEndpoint(
-        TENANT_BASE_URL, auth=("Bearer", "contract-vcr-static-token")
-    ) as http:
+    async with HttpEndpoint(TENANT_BASE_URL, auth=("Bearer", "contract-vcr-static-token")) as http:
         with vcr_for(mutated_dir).use_cassette("qlik_read_dataset_item.yaml"):
             dataset = await read.read_dataset(
                 http, dataset_ref("item-contract-vcr-orders-1"), endpoint=ENDPOINT

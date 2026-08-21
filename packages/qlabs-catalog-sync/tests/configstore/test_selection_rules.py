@@ -89,11 +89,15 @@ def test_rule_set_evaluates_in_ordinal_order(session: Session, pair: SyncPairRow
     session.add(_rule(pair.id, 1, pattern="second"))
     session.commit()
 
-    patterns = session.execute(
-        select(SelectionRuleRow.pattern)
-        .where(SelectionRuleRow.pair_id == pair.id)
-        .order_by(SelectionRuleRow.ordinal)
-    ).scalars().all()
+    patterns = (
+        session.execute(
+            select(SelectionRuleRow.pattern)
+            .where(SelectionRuleRow.pair_id == pair.id)
+            .order_by(SelectionRuleRow.ordinal)
+        )
+        .scalars()
+        .all()
+    )
     assert list(patterns) == ["first", "second", "third"]
 
 
@@ -114,9 +118,11 @@ def test_same_ordinal_is_allowed_in_a_different_scope(session: Session, pair: Sy
     session.add(_rule(pair.id, 0, scope=RuleScope.DATASET))
     session.commit()  # must not raise
 
-    count = session.execute(
-        select(SelectionRuleRow).where(SelectionRuleRow.pair_id == pair.id)
-    ).scalars().all()
+    count = (
+        session.execute(select(SelectionRuleRow).where(SelectionRuleRow.pair_id == pair.id))
+        .scalars()
+        .all()
+    )
     assert len(count) == 2
 
 
@@ -141,7 +147,9 @@ def test_deleting_a_pair_cascades_to_its_rules(session: Session, pair: SyncPairR
     session.delete(pair)
     session.commit()
 
-    remaining = session.execute(
-        select(SelectionRuleRow).where(SelectionRuleRow.pair_id == pair_id)
-    ).scalars().all()
+    remaining = (
+        session.execute(select(SelectionRuleRow).where(SelectionRuleRow.pair_id == pair_id))
+        .scalars()
+        .all()
+    )
     assert remaining == []

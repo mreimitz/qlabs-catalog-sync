@@ -133,9 +133,7 @@ def test_collision_aborts_discovery_entirely_even_for_unrelated_names() -> None:
     unrelated connector must not be quietly registered alongside the failure."""
     eps = [
         entry_point("good", "fixtures:GoodConnector"),
-        entry_point(
-            "disputed", "fixtures:GoodConnector", distribution_name="qlabs-connector-qlik"
-        ),
+        entry_point("disputed", "fixtures:GoodConnector", distribution_name="qlabs-connector-qlik"),
         entry_point(
             "disputed",
             "fixtures:AnotherGoodConnector",

@@ -82,9 +82,7 @@ async def test_concurrent_headers_calls_trigger_exactly_one_token_request(
     )
     provider = _provider(transport=transport, clock=clock)
 
-    results = await asyncio.gather(
-        provider.headers(), provider.headers(), provider.headers()
-    )
+    results = await asyncio.gather(provider.headers(), provider.headers(), provider.headers())
 
     assert all(r == {"Authorization": "Bearer tok-1"} for r in results)
     assert route.call_count == 1
@@ -151,9 +149,7 @@ async def test_form_encoding_uses_http_basic_auth(respx_mock, transport, clock):
     await provider.headers()
 
     request = route.calls.last.request
-    assert request.headers.get("content-type", "").startswith(
-        "application/x-www-form-urlencoded"
-    )
+    assert request.headers.get("content-type", "").startswith("application/x-www-form-urlencoded")
     auth_header = request.headers.get("authorization", "")
     assert auth_header.startswith("Basic ")
     # Credentials travel as Basic auth, never as body fields, for the Databricks-

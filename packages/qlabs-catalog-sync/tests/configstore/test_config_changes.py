@@ -100,11 +100,15 @@ def test_two_changes_to_the_same_entity_produce_two_distinct_rows(session: Sessi
     session.commit()
 
     assert first.id != second.id
-    rows = session.execute(
-        select(ConfigChangeRow)
-        .where(ConfigChangeRow.entity_id == "databricks-to-qlik")
-        .order_by(ConfigChangeRow.changed_at)
-    ).scalars().all()
+    rows = (
+        session.execute(
+            select(ConfigChangeRow)
+            .where(ConfigChangeRow.entity_id == "databricks-to-qlik")
+            .order_by(ConfigChangeRow.changed_at)
+        )
+        .scalars()
+        .all()
+    )
     assert len(rows) == 2
     assert [row.generation for row in rows] == [1, 2]
     assert [row.new_value for row in rows] == [1800, 3600]

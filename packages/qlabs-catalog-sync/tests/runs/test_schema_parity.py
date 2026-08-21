@@ -91,6 +91,4 @@ def test_the_parity_checker_catches_a_nullability_mismatch_too() -> None:
     finally:
         engine.dispose()
 
-    assert problems == [
-        "fake_runs.pages: nullable mismatch (model=True, migration=False)"
-    ]
+    assert problems == ["fake_runs.pages: nullable mismatch (model=True, migration=False)"]

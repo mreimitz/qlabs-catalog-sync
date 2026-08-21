@@ -518,8 +518,7 @@ async def _collect_rows(
         chunk_count += 1
         if chunk_count > max_chunks:
             raise TransientError(
-                f"statement {statement_id} result did not terminate within "
-                f"{max_chunks} chunks",
+                f"statement {statement_id} result did not terminate within {max_chunks} chunks",
                 endpoint=endpoint,
             )
         chunk_payload = await _get(http, next_link, endpoint=endpoint)

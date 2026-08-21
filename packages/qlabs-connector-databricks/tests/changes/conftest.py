@@ -272,7 +272,5 @@ def mock_infinite_list(
     ``next_page_token``, proving the connector's own page cap — not the mock — is what
     stops the loop."""
     return respx_mock.get(f"{BASE_URL}{path}", params=params).mock(
-        return_value=httpx.Response(
-            200, json={items_key: [item], "next_page_token": "always-more"}
-        )
+        return_value=httpx.Response(200, json={items_key: [item], "next_page_token": "always-more"})
     )

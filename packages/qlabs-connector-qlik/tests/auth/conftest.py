@@ -44,9 +44,7 @@ def qlik_config() -> QlikConfig:
 
 @pytest.fixture
 def context(qlik_config: QlikConfig, clock: ManualClock) -> ConnectorContext[QlikConfig]:
-    return ConnectorContext.build(
-        config=qlik_config, endpoint=ENDPOINT, tenant="acme", clock=clock
-    )
+    return ConnectorContext.build(config=qlik_config, endpoint=ENDPOINT, tenant="acme", clock=clock)
 
 
 @pytest.fixture

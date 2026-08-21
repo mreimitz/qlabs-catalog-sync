@@ -220,14 +220,17 @@ async def test_every_destructive_action_enabled_is_still_just_a_named_opt_in(
     """Sanity check on :data:`ALL_DESTRUCTIVE_ACTIONS` itself — not a refusal test, but
     pins down that the convenience constant really does name all four and nothing more,
     so a future fifth action does not silently slip through unnamed."""
-    assert frozenset(
-        {
-            DestructiveAction.ACTIVATE,
-            DestructiveAction.DEACTIVATE,
-            DestructiveAction.MOVE,
-            DestructiveAction.DELETE,
-        }
-    ) == ALL_DESTRUCTIVE_ACTIONS
+    assert (
+        frozenset(
+            {
+                DestructiveAction.ACTIVATE,
+                DestructiveAction.DEACTIVATE,
+                DestructiveAction.MOVE,
+                DestructiveAction.DELETE,
+            }
+        )
+        == ALL_DESTRUCTIVE_ACTIONS
+    )
     connector: Connector = await build_connector(
         enabled_destructive_actions=ALL_DESTRUCTIVE_ACTIONS
     )

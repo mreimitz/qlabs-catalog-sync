@@ -109,9 +109,7 @@ async def test_a_field_declared_na_is_refused_with_no_request_issued(
     writer = make_writer()
 
     with pytest.raises(CapabilityError) as excinfo:
-        await writer.update(
-            product_ref(), diff(change("glossary_term_refs", refs(2)))
-        )
+        await writer.update(product_ref(), diff(change("glossary_term_refs", refs(2))))
 
     assert excinfo.value.field == "glossary_term_refs"
     assert excinfo.value.capability_mode == "na"
@@ -147,9 +145,7 @@ async def test_status_is_refused_because_activation_is_an_action_not_a_patch_pat
     writer = make_writer(manifest=PERMISSIVE_MANIFEST)
 
     with pytest.raises(CapabilityError) as excinfo:
-        await writer.update(
-            product_ref(), diff(change("status", DataProductStatus.ACTIVE))
-        )
+        await writer.update(product_ref(), diff(change("status", DataProductStatus.ACTIVE)))
 
     assert excinfo.value.field == "status"
     assert excinfo.value.operation == "update"
@@ -190,9 +186,7 @@ async def test_a_path_inside_the_enum_with_no_value_builder_is_refused_not_inven
     writer = make_writer(manifest=PERMISSIVE_MANIFEST)
 
     with pytest.raises(CapabilityError) as excinfo:
-        await writer.update(
-            product_ref(), diff(change("glossary_term_refs", refs(1)))
-        )
+        await writer.update(product_ref(), diff(change("glossary_term_refs", refs(1))))
 
     assert excinfo.value.field == "glossary_term_refs"
     assert "decision D5" in str(excinfo.value)

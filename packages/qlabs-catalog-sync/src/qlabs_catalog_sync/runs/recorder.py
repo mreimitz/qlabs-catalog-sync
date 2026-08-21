@@ -518,9 +518,7 @@ class RunRecorder:
                     )
                 )
                 for field_name in record.target_skipped_fields:
-                    session.add(
-                        RunItemUnresolvedFieldRow(run_item_id=item_id, field=field_name)
-                    )
+                    session.add(RunItemUnresolvedFieldRow(run_item_id=item_id, field=field_name))
 
             for error in report.errors:
                 session.add(
@@ -683,9 +681,7 @@ class RunRecorder:
         """
 
         def _read(session: Session) -> list[RunItemRecord]:
-            item_rows = session.scalars(
-                select(RunItemRow).where(RunItemRow.run_id == run_id)
-            ).all()
+            item_rows = session.scalars(select(RunItemRow).where(RunItemRow.run_id == run_id)).all()
             item_ids = [row.id for row in item_rows]
             fields_by_item: dict[uuid.UUID, list[str]] = {item_id: [] for item_id in item_ids}
             if item_ids:
@@ -696,9 +692,7 @@ class RunRecorder:
                 ).all()
                 for field_row in field_rows:
                     fields_by_item[field_row.run_item_id].append(field_row.field)
-            return [
-                _item_from_row(row, tuple(fields_by_item[row.id])) for row in item_rows
-            ]
+            return [_item_from_row(row, tuple(fields_by_item[row.id])) for row in item_rows]
 
         return await self._read(_read)
 
@@ -706,9 +700,7 @@ class RunRecorder:
         """Every error one run hit, in the order they were recorded."""
 
         def _read(session: Session) -> list[RunErrorRecord]:
-            rows = session.scalars(
-                select(RunErrorRow).where(RunErrorRow.run_id == run_id)
-            ).all()
+            rows = session.scalars(select(RunErrorRow).where(RunErrorRow.run_id == run_id)).all()
             return [_error_from_row(row) for row in rows]
 
         return await self._read(_read)

@@ -85,9 +85,7 @@ async def test_confirm_identity_sets_confirmed_and_timestamp(store: StateStore) 
     async with store.unit_of_work() as uow:
         await uow.bind_identity(neutral_id, identity, now=NOW)
     async with store.unit_of_work() as uow:
-        await uow.confirm_identity(
-            neutral_id, "databricks", EntityType.DATASET, now=confirmed_at
-        )
+        await uow.confirm_identity(neutral_id, "databricks", EntityType.DATASET, now=confirmed_at)
 
     found = await store.get_binding(neutral_id, "databricks", EntityType.DATASET)
     assert found is not None

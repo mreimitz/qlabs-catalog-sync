@@ -40,9 +40,7 @@ async def test_advance_watermark_round_trips_an_opaque_page_cursor(store: StateS
             run_at=RUN_AT,
         )
 
-    watermark = await store.get_watermark(
-        "collibra-to-qlik", "collibra", EntityType.GLOSSARY_TERM
-    )
+    watermark = await store.get_watermark("collibra-to-qlik", "collibra", EntityType.GLOSSARY_TERM)
     assert watermark is not None
     assert watermark.watermark_token == "page-cursor:eyJvZmZzZXQiOiA0MjB9"
     assert watermark.last_status == "partial"

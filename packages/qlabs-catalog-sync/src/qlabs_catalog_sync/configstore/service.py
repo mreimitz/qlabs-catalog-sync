@@ -613,9 +613,7 @@ class ConfigService:
                 row.settings = next_settings
             if not isinstance(secret_ref, _UnsetType) and secret_ref != row.secret_ref:
                 changes.append(
-                    FieldChange(
-                        field="secret_ref", old_value=row.secret_ref, new_value=secret_ref
-                    )
+                    FieldChange(field="secret_ref", old_value=row.secret_ref, new_value=secret_ref)
                 )
                 row.secret_ref = secret_ref
             if not isinstance(enabled, _UnsetType) and enabled != row.enabled:

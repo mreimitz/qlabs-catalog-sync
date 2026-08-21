@@ -189,6 +189,4 @@ async def test_the_writer_exposes_the_collaborators_t3_5_will_reuse(
     assert writer.manifest.supports(EntityType.DATA_PRODUCT)
     assert writer.manifest.is_writable(EntityType.DATA_PRODUCT, "dataset_refs")
     assert not writer.manifest.is_writable(EntityType.DATASET, "name")
-    assert writer.manifest.entity_capability(
-        EntityType.DATA_PRODUCT
-    ).max_update_operations == 8
+    assert writer.manifest.entity_capability(EntityType.DATA_PRODUCT).max_update_operations == 8

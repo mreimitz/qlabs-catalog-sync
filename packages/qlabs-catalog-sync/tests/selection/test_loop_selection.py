@@ -310,9 +310,9 @@ async def test_the_c3_worked_example_decides_a_real_cycle(
     for name in _C3_SCHEMAS:
         seed_schema(source, name)
 
-    report = await make_loop(
-        selection_rules=c3_worked_example(), create_missing=True
-    ).run_cycle(EntityType.DATA_PRODUCT)
+    report = await make_loop(selection_rules=c3_worked_example(), create_missing=True).run_cycle(
+        EntityType.DATA_PRODUCT
+    )
 
     assert outcomes(report) == {
         "analytics.sales": RecordOutcome.CREATED,
@@ -342,9 +342,9 @@ async def test_every_filtered_record_names_what_decided_it(
     for name in _C3_SCHEMAS:
         seed_schema(source, name)
 
-    report = await make_loop(
-        selection_rules=c3_worked_example(), create_missing=True
-    ).run_cycle(EntityType.DATA_PRODUCT)
+    report = await make_loop(selection_rules=c3_worked_example(), create_missing=True).run_cycle(
+        EntityType.DATA_PRODUCT
+    )
     detail = details(report)
 
     staging = detail["analytics.staging"]
@@ -417,10 +417,7 @@ async def test_the_derived_rule_set_is_exactly_one_include_rule_per_pattern(
 
     rules = loop.selection_rules.rules_for(RuleScope.OBJECT)
     assert [compiled.rule.pattern for compiled in rules] == ["sales.*", "finance.reporting"]
-    assert all(
-        compiled.rule.decision is SelectionDecision.INCLUDE
-        for compiled in rules
-    )
+    assert all(compiled.rule.decision is SelectionDecision.INCLUDE for compiled in rules)
     assert loop.selection_rules.rules_for(RuleScope.DATASET) == ()
     # And the standalone translation the API and the bootstrap import share agrees.
     assert rule_set_for_pair(pair).rules_for(RuleScope.OBJECT) == rules
@@ -527,9 +524,9 @@ async def test_an_object_with_no_readable_name_is_filtered_instead_of_synced(
     seed_schema(source, "analytics.sales")
     source.seed(DataProduct(name="mystery"), native_key="opaque-handle-with-no-name")
 
-    report = await make_loop(
-        selection_rules=c3_worked_example(), create_missing=True
-    ).run_cycle(EntityType.DATA_PRODUCT)
+    report = await make_loop(selection_rules=c3_worked_example(), create_missing=True).run_cycle(
+        EntityType.DATA_PRODUCT
+    )
 
     assert outcomes(report) == {
         "analytics.sales": RecordOutcome.CREATED,
@@ -552,9 +549,9 @@ async def test_the_record_says_the_name_was_unreadable_not_that_a_rule_excluded_
     """
     source.seed(DataProduct(name="mystery"), native_key="opaque-handle-with-no-name")
 
-    report = await make_loop(
-        selection_rules=c3_worked_example(), create_missing=True
-    ).run_cycle(EntityType.DATA_PRODUCT)
+    report = await make_loop(selection_rules=c3_worked_example(), create_missing=True).run_cycle(
+        EntityType.DATA_PRODUCT
+    )
     record = report.records[0]
 
     assert record.outcome is RecordOutcome.FILTERED
@@ -851,10 +848,9 @@ def test_the_default_rule_set_is_derived_from_the_pair_and_nothing_else() -> Non
 
     assert not derived.is_empty(RuleScope.OBJECT)
     assert derived.is_empty(RuleScope.DATASET)
-    assert [
-        compiled.rule.pattern
-        for compiled in derived.rules_for(RuleScope.OBJECT)
-    ] == list(pair.catalog_schema_patterns)
+    assert [compiled.rule.pattern for compiled in derived.rules_for(RuleScope.OBJECT)] == list(
+        pair.catalog_schema_patterns
+    )
 
 
 async def test_a_filtered_delete_stays_filtered_and_is_never_orphaned(
@@ -869,9 +865,9 @@ async def test_a_filtered_delete_stays_filtered_and_is_never_orphaned(
     ref = source.seed(DataProduct(name="reporting"), native_key="finance.reporting")
     source.vanish(ref)
 
-    report = await make_loop(
-        selection_rules=c3_worked_example(), create_missing=True
-    ).run_cycle(EntityType.DATA_PRODUCT)
+    report = await make_loop(selection_rules=c3_worked_example(), create_missing=True).run_cycle(
+        EntityType.DATA_PRODUCT
+    )
 
     assert {record.outcome for record in report.records} == {RecordOutcome.FILTERED}
     assert report.orphans == ()
@@ -913,7 +909,7 @@ async def test_selection_never_reads_the_source_to_answer_a_tag_rule(
 async def test_an_undetermined_rule_is_reported_on_a_filtered_record(
     make_loop: Callable[..., SyncLoop], source: FakeConnector
 ) -> None:
-    """"This source cannot tell me" must never be silently read as "no"."""
+    """ "This source cannot tell me" must never be silently read as "no"."""
     seed_schema(source, "finance.reporting")
     rule_set = SelectionRuleSet.build(
         [

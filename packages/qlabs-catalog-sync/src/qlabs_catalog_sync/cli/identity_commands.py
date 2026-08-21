@@ -83,9 +83,7 @@ async def _run_bootstrap(
 ) -> BootstrapReport:
     engine_config = load_engine_config(config_path)
     pair = select_pairs(engine_config, [pair_name])[0]
-    entity_types = (
-        [EntityType(value) for value in entity_type_values] or list(pair.entity_types)
-    )
+    entity_types = [EntityType(value) for value in entity_type_values] or list(pair.entity_types)
     allowed = set(pair.entity_types)
     entity_types = [entity_type for entity_type in entity_types if entity_type in allowed]
     if not entity_types:
@@ -200,8 +198,7 @@ def bootstrap(
     click.echo(render_bootstrap_text(report))
     if report.needs_human:
         click.echo(
-            f"\n{len(report.needs_human)} proposal(s) need review: "
-            "identity-confirm list --pending"
+            f"\n{len(report.needs_human)} proposal(s) need review: identity-confirm list --pending"
         )
 
 

@@ -134,9 +134,7 @@ async def test_read_dataset_without_a_warehouse_correctly_makes_no_statement_cal
 
         with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
             mock_get_table(router, full_name=full_name, table=table)
-            statement_route = router.post(STATEMENTS_URL).mock(
-                side_effect=_tag_statement_responder
-            )
+            statement_route = router.post(STATEMENTS_URL).mock(side_effect=_tag_statement_responder)
             dataset = await connector.read(ref)
 
         assert statement_route.call_count == 0
@@ -160,9 +158,7 @@ async def test_read_dataset_delivers_the_tags_its_ro_manifest_promises(
         mock_get_table(router, full_name=full_name, table=table)
         # This route WOULD hand back a real "pii" tag if the connector ever asked --
         # proving the gap is "never called", not "called and got nothing back".
-        statement_route = router.post(STATEMENTS_URL).mock(
-            side_effect=_tag_statement_responder
-        )
+        statement_route = router.post(STATEMENTS_URL).mock(side_effect=_tag_statement_responder)
         dataset = await connector_with_warehouse.read(ref)
 
     assert statement_route.call_count > 0, (
@@ -190,9 +186,7 @@ async def test_read_schema_delivers_the_tags_its_ro_manifest_promises(
     with respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
         mock_schema_list(router, catalog_name="prod", schemas=[schema])
         mock_table_list(router, catalog_name="prod", schema_name="sales", tables=[])
-        statement_route = router.post(STATEMENTS_URL).mock(
-            side_effect=_tag_statement_responder
-        )
+        statement_route = router.post(STATEMENTS_URL).mock(side_effect=_tag_statement_responder)
         data_product = await connector_with_warehouse.read(ref)
 
     assert statement_route.call_count > 0, (

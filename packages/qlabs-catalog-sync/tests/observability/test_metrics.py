@@ -120,6 +120,7 @@ def test_two_instances_do_not_share_state(metrics: PrometheusMetrics) -> None:
     other = PrometheusMetrics(registry=CollectorRegistry())
     metrics.increment(METRIC_SKIPS_TOTAL, pair="p", entity_type="dataset")
 
-    assert other.registry.get_sample_value(
-        METRIC_SKIPS_TOTAL, {"pair": "p", "entity_type": "dataset"}
-    ) is None
+    assert (
+        other.registry.get_sample_value(METRIC_SKIPS_TOTAL, {"pair": "p", "entity_type": "dataset"})
+        is None
+    )

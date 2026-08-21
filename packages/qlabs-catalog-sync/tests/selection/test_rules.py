@@ -181,9 +181,7 @@ def test_scopes_declare_their_segment_counts() -> None:
 
 
 def test_dataset_scope_requires_three_segments() -> None:
-    validate_pattern(
-        "analytics.sales.*", matcher_kind=MatcherKind.GLOB, scope=RuleScope.DATASET
-    )
+    validate_pattern("analytics.sales.*", matcher_kind=MatcherKind.GLOB, scope=RuleScope.DATASET)
     with pytest.raises(ValueError, match="exactly 2 '\\.'"):
         validate_pattern("analytics.*", matcher_kind=MatcherKind.GLOB, scope=RuleScope.DATASET)
 
@@ -205,9 +203,7 @@ def test_a_two_segment_pattern_is_not_quietly_read_as_all_tables_in_a_schema() -
         rule(0, SelectionDecision.INCLUDE, "analytics.sales", scope=RuleScope.DATASET)
 
     ok = rule(0, SelectionDecision.INCLUDE, "analytics.sales.*", scope=RuleScope.DATASET)
-    matcher = compile_matcher(
-        matcher_kind=ok.matcher_kind, pattern=ok.pattern, scope=ok.scope
-    )
+    matcher = compile_matcher(matcher_kind=ok.matcher_kind, pattern=ok.pattern, scope=ok.scope)
     assert matcher.evaluate(dataset_candidate("analytics.sales.orders")) is MatchOutcome.MATCH
 
 
@@ -237,9 +233,7 @@ def test_invalid_tag_patterns(pattern: str, reason: str) -> None:
 
 
 def test_key_only_tag_pattern_matches_any_value_but_key_value_needs_the_value() -> None:
-    key_only = compile_matcher(
-        matcher_kind=MatcherKind.TAG, pattern="pii", scope=RuleScope.OBJECT
-    )
+    key_only = compile_matcher(matcher_kind=MatcherKind.TAG, pattern="pii", scope=RuleScope.OBJECT)
     key_value = compile_matcher(
         matcher_kind=MatcherKind.TAG, pattern="pii=high", scope=RuleScope.OBJECT
     )
@@ -280,9 +274,7 @@ def test_only_owner_parties_with_an_email_are_matchable() -> None:
     e-mail or an application id, and guessing that an application id is a person is exactly
     what that module refuses to do.
     """
-    matcher = compile_matcher(
-        matcher_kind=MatcherKind.OWNER, pattern="*", scope=RuleScope.OBJECT
-    )
+    matcher = compile_matcher(matcher_kind=MatcherKind.OWNER, pattern="*", scope=RuleScope.OBJECT)
     steward = schema_candidate("a.b", owners=owners("alice@acme.com", role=PartyRole.STEWARD))
     app_id = schema_candidate(
         "a.b",
@@ -374,9 +366,7 @@ def test_key_only_tags_are_indexed_by_key_only() -> None:
 
 def test_a_blank_stable_id_is_refused() -> None:
     with pytest.raises(ValueError, match="non-empty stable identifier"):
-        SelectionCandidate(
-            scope=RuleScope.OBJECT, object_id="  ", qualified_name="analytics.sales"
-        )
+        SelectionCandidate(scope=RuleScope.OBJECT, object_id="  ", qualified_name="analytics.sales")
 
 
 def test_override_keys_try_the_stable_id_before_the_name() -> None:
@@ -415,8 +405,7 @@ def test_a_rule_reports_the_fact_its_matcher_needs() -> None:
     assert include(0, "a.b").required_fact is CandidateFact.QUALIFIED_NAME
     assert include(0, "pii", matcher_kind=MatcherKind.TAG).required_fact is CandidateFact.TAGS
     assert (
-        include(0, "a@b.com", matcher_kind=MatcherKind.OWNER).required_fact
-        is CandidateFact.OWNERS
+        include(0, "a@b.com", matcher_kind=MatcherKind.OWNER).required_fact is CandidateFact.OWNERS
     )
 
 
@@ -580,9 +569,7 @@ def test_a_persisted_rule_row_converts_to_the_in_memory_rule() -> None:
 
 
 def test_a_persisted_override_row_converts_to_the_in_memory_override() -> None:
-    row = override_row(
-        "analytics.prod_staging", SelectionDecision.INCLUDE, reason="pilot schema"
-    )
+    row = override_row("analytics.prod_staging", SelectionDecision.INCLUDE, reason="pilot schema")
     assert SelectionOverride.from_row(row) == SelectionOverride(
         scope=RuleScope.OBJECT,
         object_id="analytics.prod_staging",
@@ -598,9 +585,7 @@ def test_a_rule_set_builds_straight_from_rows() -> None:
             rule_row(1, SelectionDecision.EXCLUDE, "analytics.tmp*", pair_id=pair),
             rule_row(0, SelectionDecision.INCLUDE, "analytics.*", pair_id=pair),
         ],
-        override_rows=[
-            override_row("analytics.tmp_keep", SelectionDecision.INCLUDE, pair_id=pair)
-        ],
+        override_rows=[override_row("analytics.tmp_keep", SelectionDecision.INCLUDE, pair_id=pair)],
     )
     ordered = rule_set.rules_for(RuleScope.OBJECT)
     assert [compiled.rule.pattern for compiled in ordered] == ["analytics.*", "analytics.tmp*"]

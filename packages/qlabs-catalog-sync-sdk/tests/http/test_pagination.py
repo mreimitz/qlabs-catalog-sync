@@ -144,8 +144,7 @@ async def test_offset_pagination_empty_first_page_yields_nothing(
     endpoint = make_endpoint()
 
     items = [
-        item
-        async for item in endpoint.paginate_offset("GET", "/schemas", items_key="schemas")
+        item async for item in endpoint.paginate_offset("GET", "/schemas", items_key="schemas")
     ]
 
     assert items == []

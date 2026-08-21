@@ -17,9 +17,7 @@ from qlabs_connector_databricks.sql_tags import read_catalog_tags
 from .conftest import ENDPOINT, SCHEMA_STMT_ID, TABLE_STMT_ID, statements_url, succeeded_response
 
 
-async def test_401_raises_auth_error(
-    respx_mock: object, http: HttpEndpoint
-) -> None:
+async def test_401_raises_auth_error(respx_mock: object, http: HttpEndpoint) -> None:
     respx_mock.post(statements_url()).mock(  # type: ignore[attr-defined]
         return_value=httpx.Response(401, json={"message": "invalid token"})
     )
@@ -30,9 +28,7 @@ async def test_401_raises_auth_error(
         )
 
 
-async def test_403_also_raises_auth_error(
-    respx_mock: object, http: HttpEndpoint
-) -> None:
+async def test_403_also_raises_auth_error(respx_mock: object, http: HttpEndpoint) -> None:
     respx_mock.post(statements_url()).mock(  # type: ignore[attr-defined]
         return_value=httpx.Response(403, json={"message": "forbidden"})
     )

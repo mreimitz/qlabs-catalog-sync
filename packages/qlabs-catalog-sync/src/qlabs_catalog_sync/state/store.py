@@ -300,9 +300,7 @@ class UnitOfWork:
         """Persist the next opaque resume token for (sync_pair, endpoint, entity_type)."""
 
         def _write() -> None:
-            existing = self._session.get(
-                WatermarkRow, (sync_pair, endpoint, entity_type.value)
-            )
+            existing = self._session.get(WatermarkRow, (sync_pair, endpoint, entity_type.value))
             if existing is None:
                 self._session.add(
                     WatermarkRow(

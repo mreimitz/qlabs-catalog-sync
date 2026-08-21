@@ -514,9 +514,7 @@ class FakeQlikCloud:
         params = request.url.params
         name = params.get("name")
         if params.get("resourceType") == "dataset" and name in self.datasets_by_name:
-            return httpx.Response(
-                200, json={"data": [self.datasets_by_name[name]], "links": {}}
-            )
+            return httpx.Response(200, json={"data": [self.datasets_by_name[name]], "links": {}})
         return httpx.Response(200, json={"data": [], "links": {}})
 
     def handle_data_product_list(self, request: httpx.Request) -> httpx.Response:

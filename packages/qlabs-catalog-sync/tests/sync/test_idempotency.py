@@ -129,9 +129,7 @@ async def test_a_reordered_order_insensitive_array_is_not_a_change(
     make_loop: Callable[..., SyncLoop], source: FakeConnector, target: FakeConnector
 ) -> None:
     """The phantom diff that would rewrite every product every cycle stays killed."""
-    ref = seed_product(
-        source, "sales.orders", tags=[("tier", "gold"), ("owner", "sales")]
-    )
+    ref = seed_product(source, "sales.orders", tags=[("tier", "gold"), ("owner", "sales")])
     loop = make_loop(create_missing=True)
     await loop.run_cycle(EntityType.DATA_PRODUCT)
 

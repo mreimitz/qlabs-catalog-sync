@@ -71,9 +71,7 @@ async def test_resolves_an_orphan_that_has_come_back(
 
 
 async def test_no_open_orphans_is_a_no_op(store: StateStore, source: FakeConnector) -> None:
-    report = await recheck_open_orphans(
-        store, source, entity_type=EntityType.DATA_PRODUCT, now=NOW
-    )
+    report = await recheck_open_orphans(store, source, entity_type=EntityType.DATA_PRODUCT, now=NOW)
     assert report.checked == 0
 
 

@@ -175,7 +175,11 @@ def _harness(
 
 def _setup_pair(h: Harness, *, source_enabled: bool = True) -> str:
     create_endpoint(
-        h.client, h.csrf, name=ENDPOINT_SOURCE, connector=SOURCE_CONNECTOR, role="source",
+        h.client,
+        h.csrf,
+        name=ENDPOINT_SOURCE,
+        connector=SOURCE_CONNECTOR,
+        role="source",
         enabled=source_enabled,
     )
     create_endpoint(
@@ -196,7 +200,10 @@ def _create_rule(
     ordinal: int | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
-        "scope": scope, "decision": decision, "matcher_kind": matcher_kind, "pattern": pattern,
+        "scope": scope,
+        "decision": decision,
+        "matcher_kind": matcher_kind,
+        "pattern": pattern,
     }
     if ordinal is not None:
         payload["ordinal"] = ordinal
@@ -285,10 +292,16 @@ def test_c3_worked_example_previewed_through_the_api(tmp_path: Path) -> None:
     assert body["rule_set_source"] == "stored"
     assert body["truncated"] is False
     assert body["counts"]["object"] == {
-        "total": 4, "included": 2, "excluded": 2, "undetermined": 0,
+        "total": 4,
+        "included": 2,
+        "excluded": 2,
+        "undetermined": 0,
     }
     assert body["counts"]["dataset"] == {
-        "total": 5, "included": 3, "excluded": 2, "undetermined": 0,
+        "total": 5,
+        "included": 3,
+        "excluded": 2,
+        "undetermined": 0,
     }
 
     by_name = {item["qualified_name"]: item for item in body["sample"]}
@@ -375,8 +388,7 @@ async def test_preview_agrees_with_the_evaluator_directly_c4_at_the_api_layer(
     ]
     rule_set = SelectionRuleSet.build(rules)
     direct = {
-        node.candidate.qualified_name: node
-        async for node in walk_source_tree(source, rule_set)
+        node.candidate.qualified_name: node async for node in walk_source_tree(source, rule_set)
     }
 
     assert set(api_sample) == set(direct)
@@ -410,9 +422,7 @@ def test_a_draft_preview_leaves_the_stored_configuration_untouched(tmp_path: Pat
     pair_id = _setup_pair(h)
     _create_rule(h, pair_id, scope="object", decision="exclude", pattern="analytics.*")
 
-    before = h.client.get(
-        f"{API_PREFIX}/pairs/{pair_id}/rules", params={"scope": "object"}
-    ).json()
+    before = h.client.get(f"{API_PREFIX}/pairs/{pair_id}/rules", params={"scope": "object"}).json()
 
     draft = h.client.post(
         f"{API_PREFIX}/pairs/{pair_id}/preview",
@@ -433,9 +443,7 @@ def test_a_draft_preview_leaves_the_stored_configuration_untouched(tmp_path: Pat
     assert draft_body["rule_set_source"] == "draft"
     assert draft_body["counts"]["object"]["included"] == 1
 
-    after = h.client.get(
-        f"{API_PREFIX}/pairs/{pair_id}/rules", params={"scope": "object"}
-    ).json()
+    after = h.client.get(f"{API_PREFIX}/pairs/{pair_id}/rules", params={"scope": "object"}).json()
     assert after == before, "the draft preview must not have written the stored rule list"
 
     stored = h.client.post(

@@ -111,9 +111,7 @@ def test_pair_referencing_nonexistent_source_endpoint_is_rejected(session: Sessi
 
 
 def test_pair_referencing_nonexistent_target_endpoint_is_rejected(session: Session) -> None:
-    session.add(
-        make_endpoint("databricks_prod", connector="databricks", role=EndpointRole.SOURCE)
-    )
+    session.add(make_endpoint("databricks_prod", connector="databricks", role=EndpointRole.SOURCE))
     session.commit()
 
     session.add(make_sync_pair(target="does_not_exist"))

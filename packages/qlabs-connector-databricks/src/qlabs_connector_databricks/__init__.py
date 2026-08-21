@@ -113,9 +113,7 @@ class Connector(ConnectorABC):
         (discover, configure, ``setup``, then ``capabilities``).
         """
         if self._ctx is None:
-            raise RuntimeError(
-                "capabilities() needs the resolved config: call setup(ctx) first"
-            )
+            raise RuntimeError("capabilities() needs the resolved config: call setup(ctx) first")
         return manifest_for_config(self._ctx.config)
 
     # -- lifecycle ---------------------------------------------------------------------

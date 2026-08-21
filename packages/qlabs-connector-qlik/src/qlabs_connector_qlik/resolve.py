@@ -521,9 +521,7 @@ class QlikReferenceResolver:
                 if isinstance(item, dict)
             ]
         except httpx.HTTPStatusError as exc:
-            raise classify_response_error(
-                exc, endpoint=self._endpoint, entity_type="user"
-            ) from exc
+            raise classify_response_error(exc, endpoint=self._endpoint, entity_type="user") from exc
         except httpx.TransportError as exc:
             raise classify_transport_error(
                 exc, endpoint=self._endpoint, entity_type="user"

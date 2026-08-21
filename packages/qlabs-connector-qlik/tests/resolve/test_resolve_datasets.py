@@ -90,9 +90,7 @@ async def test_unresolved_member_is_reported_and_absent_from_output(
     http: HttpEndpoint,
     make_lookup: Callable[[dict[uuid.UUID, str] | None], DatasetIdentityLookup],
 ) -> None:
-    respx_mock.get(ITEMS_URL).mock(
-        return_value=httpx.Response(200, json={"data": [], "links": {}})
-    )
+    respx_mock.get(ITEMS_URL).mock(return_value=httpx.Response(200, json={"data": [], "links": {}}))
     member = DatasetMember(neutral_id=uuid.uuid4(), name="ghost")
     resolver = _resolver(http, make_lookup(None))
 
@@ -183,9 +181,7 @@ async def test_subset_for_stays_a_true_subset_after_a_drop(
     http: HttpEndpoint,
     make_lookup: Callable[[dict[uuid.UUID, str] | None], DatasetIdentityLookup],
 ) -> None:
-    respx_mock.get(ITEMS_URL).mock(
-        return_value=httpx.Response(200, json={"data": [], "links": {}})
-    )
+    respx_mock.get(ITEMS_URL).mock(return_value=httpx.Response(200, json={"data": [], "links": {}}))
     resolved_member = DatasetMember(neutral_id=uuid.uuid4(), name="orders")
     dropped_member = DatasetMember(neutral_id=uuid.uuid4(), name="ghost")
     lookup = make_lookup({resolved_member.neutral_id: "ds-a"})
