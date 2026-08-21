@@ -1,8 +1,8 @@
 """What T6.1 owns of the contract's shape: the connector instantiates, its manifest is
 callable without setup() (unlike Databricks — see manifest.py's docstring on
-config-independence), list_changed()/read() are honest NotImplementedError placeholders
-for T6.3/T6.4, and the write path refuses with CapabilityError without this connector
-writing any write code at all.
+config-independence), list_changed() is an honest NotImplementedError placeholder for
+T6.3, and the write path refuses with CapabilityError without this connector writing any
+write code at all.
 """
 
 from __future__ import annotations
@@ -42,12 +42,6 @@ async def test_list_changed_raises_not_implemented_with_a_t6_3_pointer() -> None
             Watermark.initial("snowflake", EntityType.DATA_PRODUCT),
         )
 
-
-async def test_read_raises_not_implemented_with_a_t6_4_pointer() -> None:
-    connector = Connector()
-
-    with pytest.raises(NotImplementedError, match="T6.4"):
-        await connector.read(_ref(EntityType.DATA_PRODUCT))
 
 
 async def test_create_refuses_with_capability_error() -> None:

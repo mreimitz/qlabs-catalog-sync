@@ -42,6 +42,7 @@ from .auth import (
     translate_snowflake_error,
 )
 from .manifest import build_manifest
+from .read import StatementClient, read_entity
 
 __all__ = ["Connector"]
 
@@ -166,12 +167,31 @@ class Connector(ConnectorABC):
         raise NotImplementedError("Connector.list_changed is implemented in T6.3")
 
     async def read(self, ref: IdentityRef) -> NeutralEntity:
-        """Not implemented yet.
+        """Read one object into a neutral entity with its provenance sidecar (T6.4).
 
-        TODO(T6.4): read one object (schema/table/view) or one listing/share into a
-        neutral entity with field envelopes.
+        Delegates straight to :func:`~qlabs_connector_snowflake.read.read_entity`, which
+        dispatches on ``ref.entity_type`` (and, for a ``DATA_PRODUCT``, on whether the ref
+        names a schema or a listing) and raises the SDK's typed exceptions —
+        ``NotFound`` for a missing object, ``AuthError``/``TransientError`` for HTTP
+        failures, ``CapabilityError`` for an entity type this connector does not support.
+
+        The :class:`~qlabs_connector_snowflake.read.StatementClient` is built per call
+        rather than in :meth:`setup`: it is a stateless wrapper around the already-built,
+        already-authenticated ``HttpEndpoint`` (it owns no connection and no cache), so
+        constructing one costs nothing and keeps ``setup()`` unchanged.
         """
-        raise NotImplementedError("Connector.read is implemented in T6.4")
+        if self._ctx is None or self._http is None:
+            raise RuntimeError("setup() must be called before read()")
+        config = self._ctx.config
+        return await read_entity(
+            StatementClient(
+                self._http,
+                endpoint=self._ctx.endpoint,
+                role=config.role,
+                warehouse=config.warehouse,
+            ),
+            ref,
+        )
 
     # -- write path: intentionally NOT overridden ---------------------------------------
     # create()/update()/delete() inherit the ConnectorABC defaults, which refuse with
