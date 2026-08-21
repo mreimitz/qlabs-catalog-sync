@@ -14,6 +14,7 @@ import { PlaceholderScreen } from "./app/screens/PlaceholderScreen";
 import { DEFAULT_ROUTE, NAV_ROUTES } from "./app/routes";
 import { Shell } from "./app/Shell";
 import { EndpointsScreen } from "./features/endpoints/EndpointsScreen";
+import { PairsScreen } from "./features/pairs/PairsScreen";
 
 function App() {
   return (
@@ -32,6 +33,8 @@ function App() {
                 element={
                   route.path === "/endpoints" ? (
                     <EndpointsScreen />
+                  ) : route.path === "/pairs" ? (
+                    <PairsScreen />
                   ) : (
                     <PlaceholderScreen title={route.label} builtBy={route.builtBy} />
                   )
