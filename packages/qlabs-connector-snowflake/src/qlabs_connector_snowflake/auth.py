@@ -51,7 +51,8 @@ Design decisions:
   :func:`translate_snowflake_error` is this connector's layer on top, switching on
   ``exc.response.status_code`` exactly the way ``http.py``'s docstring anticipates:
   401/403 -> :class:`AuthError` (not retryable; the engine quarantines the endpoint),
-  404 -> :class:`NotFound`, 409 -> :class:`ConflictError`, 429/5xx/transport failures ->
+  404 -> :class:`NotFound`, 409 -> :class:`ConflictError`, 5xx/transport failures and
+  the passing 4xx conditions in :data:`_TRANSIENT_4XX` (408/423/425/429) ->
   :class:`TransientError` (retryable, honoring a ``Retry-After`` delta-seconds hint when
   Snowflake sends one), and any other 4xx -> :class:`CapabilityError` as the honest
   fallback for "the request itself was rejected as invalid" (Snowflake's SQL REST API
@@ -397,6 +398,15 @@ def _parse_retry_after_seconds(response: httpx.Response) -> float | None:
         return None
 
 
+#: 4xx statuses that describe a passing condition rather than a rejected request, so
+#: they must not be folded into the generic "the plan was wrong" bucket below. The SDK's
+#: ``HttpEndpoint`` only auto-retries 429 and 5xx, so anything listed here arrives
+#: un-retried and would otherwise be written off permanently: 408 Request Timeout and
+#: 425 Too Early are the client-side analogues of a 503, and 423 Locked reports an object
+#: another session is holding, which clears on its own.
+_TRANSIENT_4XX = frozenset({408, 423, 425, 429})
+
+
 def translate_snowflake_error(
     exc: httpx.HTTPStatusError | httpx.TransportError,
     *,
@@ -420,7 +430,7 @@ def translate_snowflake_error(
             return NotFound(message, endpoint=endpoint, entity_type=entity_type, cause=exc)
         if status == 409:
             return ConflictError(message, endpoint=endpoint, entity_type=entity_type, cause=exc)
-        if status == 429:
+        if status in _TRANSIENT_4XX:
             return TransientError(
                 message,
                 endpoint=endpoint,

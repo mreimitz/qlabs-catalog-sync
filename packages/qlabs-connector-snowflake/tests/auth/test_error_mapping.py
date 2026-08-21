@@ -90,6 +90,22 @@ def test_5xx_maps_to_transient_error(status: int) -> None:
     assert mapped.retryable is True
 
 
+@pytest.mark.parametrize("status", [408, 423, 425])
+def test_passing_4xx_conditions_map_to_transient_error(status: int) -> None:
+    """408/423/425 describe a condition that clears, not a rejected request.
+
+    ``HttpEndpoint`` only auto-retries 429 and 5xx, so these arrive here un-retried.
+    Folding them into the generic capability-mismatch bucket would have the engine
+    permanently abandon a request a retry would have satisfied.
+    """
+    exc = _status_error(status, json={"message": "try again"})
+
+    err = translate_snowflake_error(exc, endpoint="snowflake")
+
+    assert isinstance(err, TransientError)
+    assert err.retryable is True
+
+
 def test_other_4xx_maps_to_capability_error() -> None:
     exc = _status_error(400, json={"message": "SQL compilation error: invalid statement"})
 
