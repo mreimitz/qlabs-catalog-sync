@@ -18,7 +18,7 @@ qlabs-connector-snowflake    # read-only source connector                       
 ```
 
 `console/` — the operator console SPA (WP13) — is a top-level sibling of `packages/`, outside the
-uv workspace, with its own Node toolchain. It does not exist yet.
+uv workspace, with its own Node toolchain.
 
 ## Hard dependency rule (do not violate)
 

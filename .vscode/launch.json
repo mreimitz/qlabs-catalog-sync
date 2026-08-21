@@ -129,6 +129,51 @@
       "justMyCode": false
     },
     {
+      // THE UI. Serves the built console at http://127.0.0.1:8080 and opens a browser at it.
+      //
+      // Build the console first -- this points at console/dist, which Vite produces:
+      //
+      //   pnpm -C console install --frozen-lockfile
+      //   pnpm -C console build
+      //
+      // Same prerequisites as "CLI: serve" below it: an administrator credential in .env
+      // (scripts/make_admin_hash.py) or the service refuses to start, and an engine config
+      // file. Sign in with the username you hashed (default "admin").
+      //
+      // One process, one port: the console at /, the REST API under /api, plus /healthz and
+      // /metrics -- decision C8. Breakpoints in api/ and configstore/ are hit by what the
+      // browser does.
+      "name": "UI: serve the console and open a browser",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/qlabs-catalog-sync",
+      "args": [
+        "--log-level",
+        "DEBUG",
+        "--state-db",
+        "sqlite:///debug-state.db",
+        "serve",
+        "--config",
+        "${input:configFile}",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8080",
+        "--console-assets",
+        "${workspaceFolder}/console/dist"
+      ],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "serverReadyAction": {
+        "pattern": "serve\\.started",
+        "uriFormat": "http://127.0.0.1:8080/",
+        "action": "openExternally"
+      }
+    },
+    {
       // Plan a cycle and apply nothing. The safest thing to point at a real tenant.
       "name": "CLI: dry-run",
       "type": "debugpy",

@@ -4,11 +4,13 @@ Keeps **data-product metadata** consistent across data catalogs — Databricks, 
 Snowflake, Collibra — so the same description, owner list and tags do not have to be
 maintained by hand in each one.
 
-> **Status: the engine works; the console does not exist yet.** The Databricks-to-Qlik
-> sync is built, tested and tagged `v0.1.0-engine`, and runs headless from a config file
-> plus environment variables. The browser console described below is under construction —
-> its configuration store and selection rule engine are built, but nothing serves a
-> browser yet. No part of this has run against a live tenant. See
+> **Status: the engine works, and the console now runs in a browser.** The Databricks-to-Qlik
+> sync is built, tested and tagged `v0.1.0-engine`. An operator can now sign in to the
+> console and do the whole loop — register endpoints, define a sync pair, narrow its scope
+> with rules and see the effect before applying it, review the planned writes, and read the
+> run history — served by the same process on the same port as the API, `/healthz` and
+> `/metrics`. What remains is packaging it into one container image and the operator
+> documentation (WP14). No part of this has run against a live tenant. See
 > [Current state](#current-state) for exactly what exists.
 
 ---
@@ -254,8 +256,9 @@ and the behaviours only a real tenant can confirm are listed in
 
 ### Status at a glance
 
-As of 2026-08-20 — RM-01 (the engine) is **complete**: 52 of 52 tasks. RM-06 (the console)
-is **in progress**: WP10 is done and WP11 is under way. 1,923 tests passing.
+As of 2026-08-21 — RM-01 (the engine) is **complete**: 52 of 52 tasks. RM-06 (the console)
+is **nearly complete**: WP10-WP13 are done and only WP14 (packaging, docs, the pilot)
+remains. 2,316 Python tests and 272 console tests passing.
 
 | Work package | Scope | Done | Status |
 |---|---|---|---|
@@ -270,9 +273,9 @@ is **in progress**: WP10 is done and WP11 is under way. 1,923 tests passing.
 | WP8 | Integration, end-to-end pilot, release readiness | 4 / 4 | **Done** |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 4 / 4 | **Done** |
 | WP10 | Configuration store, secret references, audit log | 4 / 4 | **Done** (console, RM-06) |
-| WP11 | Selection rule engine, source tree, run history | 2 / 4 | In progress (console, RM-06) |
-| WP12 | REST API, authentication, generated client | 0 / 9 | Not started (console, RM-06) |
-| WP13 | Console SPA | 0 / 8 | Not started (console, RM-06) |
+| WP11 | Selection rule engine, source tree, run history | 4 / 4 | **Done** (console, RM-06) |
+| WP12 | REST API, authentication, generated client | 9 / 9 | **Done** (console, RM-06) |
+| WP13 | Console SPA | 8 / 8 | **Done** (console, RM-06) |
 | WP14 | One image, operator docs, console-driven pilot | 0 / 3 | Not started (console, RM-06) |
 
 **v0.1 ships the engine and the console together.** WP0-WP4 and WP7-WP9 are the engine
@@ -320,6 +323,24 @@ tenant has been involved.
 - **It ships as one container.** `serve` runs the service — one process, one job per pair —
   as a non-root user with state on a mounted volume. `SIGTERM` pauses the scheduler and lets
   a cycle already running finish rather than throwing away API budget already spent.
+- **An operator runs the whole loop in a browser.** Sign in, register endpoints against the
+  connectors this image contains, define a sync pair, narrow its scope with ordered rules
+  and watch a live preview of exactly which objects fall in or out, review the planned
+  writes, then run it and read the history — no config file, no restart. The API, the
+  console, `/healthz` and `/metrics` are one process on one port, so there is no CORS and
+  the console cannot drift from the engine it configures.
+- **Rule order is the meaning, and the preview cannot lie.** Rules evaluate top to bottom
+  and the last match decides; the console renders them in that order and every verdict it
+  shows — included, excluded, or "cannot tell" — comes from the engine's own evaluator, the
+  same code the real sync runs. A tag rule against a source that cannot report tags is
+  reported as undetermined in its own right, never quietly folded into "excluded".
+- **The console never handles a credential.** An endpoint binds a *named reference* to a
+  secret, and secret-typed fields are stripped from the settings schema before it reaches
+  the browser — so the form has no field to type a password into. The session cookie is
+  `HttpOnly` and the SPA never reads it; nothing but the theme preference is persisted.
+- **Configuration is authenticated and fails closed.** One administrator identity, a hashed
+  credential from the environment, a CSRF token on every mutating request, and a refusal to
+  start at all if no credential is configured.
 - **Deploying it is documented.** [`docs/runbook.md`](docs/runbook.md) covers deploy,
   configure, dry-run, confirm identity, read an orphan report and diagnose a red healthcheck;
   [`deploy/`](deploy/) has per-tenant config and secret templates plus cadence defaults with
@@ -338,11 +359,16 @@ tenant has been involved.
 - **No glossary sync.** Databricks has no glossary to source one from, so the Qlik glossary
   write path is Track B (decision D5).
 - **No two-way sync and no access-control sync.** Both are out of v1 by design.
-- **No console and no HTTP API.** There is no REST API and no SPA (WP12-WP14 are unbuilt),
-  so nothing serves a browser yet. The configuration store and the selection rule engine
-  underneath them do exist (WP10, and WP11 in part) — but nothing calls them at runtime:
-  the engine still reads its configuration from the environment at startup and still has
-  no HTTP surface beyond `/healthz` and `/metrics`.
+- **Not yet one container image.** The console is built separately (`pnpm -C console build`)
+  and pointed at with `serve --console-assets`; folding the Node build stage into the image
+  so one artifact ships both halves is WP14.
+- **No operator documentation.** Console setup, the administrator credential, secret
+  references and the selection rule model are not written up yet (WP14).
+- **A dry run cannot report unresolved references.** The engine plans a write without
+  calling the target, and dataset-member (D2) and owner (D3) resolution happens inside that
+  call — so a dry run's unresolved-reference section is always empty, whatever the tenant
+  contains. The dry-run screen says so rather than implying nothing was unresolved. An
+  actual run reports them honestly. See `sync/loop.py`'s dry-run branches.
 
 ### Known-unverified behavior
 
@@ -374,7 +400,7 @@ packages/
   qlabs-connector-databricks/   # read-only source connector                                 (WP4)
   qlabs-connector-collibra/     # read-only source connector                (WP5, Track B, RM-05)
   qlabs-connector-snowflake/    # read-only source connector                (WP6, Track B, RM-05)
-console/                        # the operator console SPA — not built yet          (WP13)
+console/                        # the operator console SPA — Vite + React            (WP13)
 planning/                       # design, research & plan — a separately-governed OKF bundle
 ```
 
@@ -405,13 +431,47 @@ it. [`docs/runbook.md`](docs/runbook.md) is the operator guide, and
 [`docs/tenant-verification.md`](docs/tenant-verification.md) is the checklist to run
 **before** pointing this at production, because it has never run against a live tenant.
 
+### Opening the console
+
+The console is a separate build with its own toolchain (Node 22, pnpm 11), outside the uv
+workspace. Build it, then point the service at the built assets:
+
+```bash
+pnpm -C console install --frozen-lockfile
+pnpm -C console build                                # -> console/dist
+
+uv run python scripts/make_admin_hash.py             # the administrator credential
+# put the QLABS_CONSOLE_ADMIN__PASSWORD_HASH line it prints into .env
+
+qlabs-catalog-sync serve --config config.yaml \
+    --console-assets console/dist --port 8080
+```
+
+Then open `http://127.0.0.1:8080` and sign in. Without a credential configured the service
+refuses to start, deliberately — it will not serve an unauthenticated console. Without
+`--console-assets` the API, `/healthz` and `/metrics` still serve and `/` says the console
+is not installed.
+
+`pnpm -C console dev` runs the Vite dev server instead, but the API is same-origin by
+design (no CORS), so the dev server needs the service proxied behind it.
+
 ### Working on the code
+
+Two gates, and a change is not done while either fails.
 
 ```bash
 uv sync --all-packages              # install every workspace member + dev group
 uv run ruff check packages scripts  # lint
 uv run mypy                         # strict type-check
 uv run pytest -q                    # tests
+uv run python scripts/gen_openapi.py --check   # the committed API contract is current
+```
+
+```bash
+pnpm -C console typecheck           # tsc --noEmit (vitest does NOT typecheck)
+pnpm -C console lint
+pnpm -C console test --run
+pnpm -C console a11y                # axe-core over every *.a11y.test.tsx
 ```
 
 ## Working on it
