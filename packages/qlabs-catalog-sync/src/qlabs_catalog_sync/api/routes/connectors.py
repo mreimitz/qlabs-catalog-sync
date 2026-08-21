@@ -51,11 +51,13 @@ per-entity-type ordering) rather than imported from it.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from qlabs_catalog_sync.discovery import ConnectorRegistry
-from qlabs_catalog_sync_sdk.contract import CapabilityManifestBase
+from qlabs_catalog_sync_sdk.contract import CapabilityManifestBase, Connector
 from qlabs_catalog_sync_sdk.manifest import CapabilityManifest, ConcurrencyMode, FieldCapabilityMode
 from qlabs_catalog_sync_sdk.models import EntityType
 
@@ -121,6 +123,23 @@ class ConnectorInfo(BaseModel):
     """The connector's live ``capabilities()``. Set only when ``available`` -- and even
     then, ``None`` when the connector cannot describe itself until it is configured, in
     which case ``manifest_unavailable_reason`` says so. See the module docstring."""
+    config_schema: dict[str, JsonValue] | None = None
+    """The JSON Schema of this connector's own ``ConfigModel`` -- what an endpoint's
+    ``settings`` must look like -- with every secret-typed property **removed**, not merely
+    flagged. C2: an endpoint holds a named secret *reference*, never a value, and the server
+    rejects an inline secret in ``settings`` (``InlineSecretRejectedError``). Shipping a
+    schema the console could render a credential input from would invite exactly the shape
+    the server refuses, so the stripping happens here rather than being left to every client
+    to remember. ``None`` when the connector is unavailable.
+
+    Set only when ``available``. The console generates its settings form from this instead of
+    hardcoding a field list per connector, which would be wrong the day a connector changes."""
+    config_secret_fields: list[str] = []
+    """The property names removed from ``config_schema`` because they are secret-typed
+    (pydantic renders a ``SecretStr`` as ``format: password``/``writeOnly``). Named, not
+    hidden: an operator needs to know the connector *has* a ``client_secret`` and that it
+    comes from the bound secret reference -- otherwise the generated form looks incomplete
+    and they go looking for somewhere to type it. Never accompanied by a value."""
     manifest_unavailable_reason: str | None = None
     """Set only when ``available`` and ``manifest`` is ``None``: why this connector
     cannot report a capability manifest from an unconfigured class. Human-readable and
@@ -181,6 +200,54 @@ def capability_manifest_out(manifest: CapabilityManifestBase) -> CapabilityManif
     )
 
 
+def _split_secret_properties(
+    schema: dict[str, Any],
+) -> tuple[dict[str, JsonValue], list[str]]:
+    """Split a ``ConfigModel`` JSON Schema into (schema without secret properties, the names
+    removed).
+
+    A pydantic ``SecretStr`` renders as ``{"format": "password", "writeOnly": true}``; either
+    marker alone is treated as secret, because being wrong in the permissive direction here
+    means shipping a schema a console could build a credential input from. ``required`` is
+    filtered to match -- a required property that is not in ``properties`` would make every
+    generated form permanently invalid.
+    """
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return cast(dict[str, JsonValue], schema), []
+
+    secret_names = sorted(
+        name
+        for name, prop in properties.items()
+        if isinstance(prop, dict) and (prop.get("format") == "password" or prop.get("writeOnly"))
+    )
+    if not secret_names:
+        return cast(dict[str, JsonValue], schema), []
+
+    stripped = dict(schema)
+    stripped["properties"] = {
+        name: prop for name, prop in properties.items() if name not in secret_names
+    }
+    required = schema.get("required")
+    if isinstance(required, list):
+        stripped["required"] = [name for name in required if name not in secret_names]
+    return cast(dict[str, JsonValue], stripped), secret_names
+
+
+def _config_schema_for(
+    connector_cls: type[Connector],
+) -> tuple[dict[str, JsonValue] | None, list[str]]:
+    """This connector's settings schema, secret properties removed. Never raises: a connector
+    whose ``ConfigModel`` cannot produce a schema simply reports none, exactly as one that
+    cannot produce a capability manifest does -- one connector must never take the listing
+    down with it."""
+    try:
+        raw = connector_cls.ConfigModel.model_json_schema()
+    except Exception:  # noqa: BLE001 -- a connector's ConfigModel may fail for any reason
+        return None, []
+    return _split_secret_properties(raw)
+
+
 def _describe_available(registry: ConnectorRegistry, name: str) -> ConnectorInfo:
     """Describe one connector that discovery loaded successfully.
 
@@ -191,20 +258,30 @@ def _describe_available(registry: ConnectorRegistry, name: str) -> ConnectorInfo
     down with it. One connector that cannot describe itself must never hide every other
     connector in the image.
     """
+    connector_cls = registry.get_connector(name)
+    config_schema, secret_fields = _config_schema_for(connector_cls)
     try:
-        manifest = registry.get_connector(name)().capabilities()
+        manifest = connector_cls().capabilities()
     except Exception as exc:  # noqa: BLE001 -- a connector may refuse for any reason
         return ConnectorInfo(
             name=name,
             available=True,
             manifest=None,
+            config_schema=config_schema,
+            config_secret_fields=secret_fields,
             manifest_unavailable_reason=(
                 "this connector reports what it supports only once an endpoint using it "
                 "has been configured, because its capabilities depend on that "
                 f"configuration. Register an endpoint to see its manifest. ({exc})"
             ),
         )
-    return ConnectorInfo(name=name, available=True, manifest=capability_manifest_out(manifest))
+    return ConnectorInfo(
+        name=name,
+        available=True,
+        manifest=capability_manifest_out(manifest),
+        config_schema=config_schema,
+        config_secret_fields=secret_fields,
+    )
 
 
 def build_connectors_router(registry: ConnectorRegistry) -> APIRouter:

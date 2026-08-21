@@ -209,6 +209,28 @@
             ],
             "title": "Broken Stage"
           },
+          "config_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Schema"
+          },
+          "config_secret_fields": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Config Secret Fields",
+            "type": "array"
+          },
           "distribution": {
             "anyOf": [
               {
