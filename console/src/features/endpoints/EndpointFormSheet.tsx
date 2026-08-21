@@ -5,7 +5,7 @@
 // endpoint over to a different connector's settings shape is not "editing", it is registering a
 // new endpoint under an old name, and this screen does not need to make that easy) and which
 // endpoint API call submit calls.
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import {
   Alert,
   AlertDescription,
@@ -35,8 +35,10 @@ import {
   type ConnectorInfo,
   type EndpointOut,
 } from "./endpointsApi";
+import { describeConfigSchema, missingRequiredFields } from "./configSchemaForm";
 import { classifyEndpointError, type TopLevelField } from "./errorMapping";
 import { ManifestPanel } from "./ManifestPanel";
+import { SchemaSettingsForm } from "./SchemaSettingsForm";
 import { newSettingsRow, rowsToSettings, settingsToRows, SettingsEditor, type SettingsRow } from "./SettingsEditor";
 
 const ROLE_VALUES = ["source", "target"] as const;
@@ -66,12 +68,55 @@ export function EndpointFormSheet({
   const [role, setRole] = useState<Role | undefined>(undefined);
   const [secretRef, setSecretRef] = useState("");
   const [enabled, setEnabled] = useState(false);
+  // `settingsRows` is the WHOLE editor when the selected connector has no `config_schema`
+  // (`SettingsEditor`, unchanged from T13.3). When it does, `schemaFieldValues` holds every
+  // schema-described property this form has touched or pre-loaded (`SchemaSettingsForm.tsx`'s
+  // own doc comment explains why that record IS the "touched" tracking), and
+  // `extraSettingsRows` holds the leftover stored keys that connector's CURRENT schema does not
+  // describe -- rendered via the same `SettingsEditor` UI, under "Additional settings", so they
+  // are shown and kept rather than silently dropped on save (`configSchemaForm.ts`'s
+  // `unknownSettingNames`). All three are (re)populated together by `seedSettingsState` below;
+  // exactly one of ("settingsRows") or ("schemaFieldValues" + "extraSettingsRows") is actually
+  // rendered/submitted at a time, chosen by whether `configSchema` (below) is non-null.
   const [settingsRows, setSettingsRows] = useState<SettingsRow[]>([]);
+  const [schemaFieldValues, setSchemaFieldValues] = useState<Record<string, unknown>>({});
+  const [extraSettingsRows, setExtraSettingsRows] = useState<SettingsRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<TopLevelField, string>>>({});
   const [settingsBannerError, setSettingsBannerError] = useState<string | null>(null);
   const [settingsFieldErrors, setSettingsFieldErrors] = useState<Record<string, string>>({});
+
+  /** Populates all three settings representations above from one connector + one stored
+   * `settings` record -- the one place that decides, per key, whether it becomes a typed field's
+   * value, an "Additional settings" row, or (a stored key that happens to match a secret-typed
+   * field name) neither. That last case is a deliberate exception to "never drop a stored
+   * setting": re-submitting it would only ever be rejected by the server
+   * (`InlineSecretRejectedError`, C2), and rendering it as an editable row would be exactly the
+   * "offer an input for a secret field" shape this form must never offer -- so it is excluded
+   * from every representation, not silently kept in a fourth, never-rendered place. */
+  function seedSettingsState(connectorName: string | undefined, settings: Record<string, unknown>) {
+    const info = connectors.find((entry) => entry.name === connectorName);
+    const schema = info?.config_schema ?? null;
+    if (schema) {
+      const schemaDescriptors = describeConfigSchema(schema);
+      const knownNames = new Set(schemaDescriptors.map((descriptor) => descriptor.name));
+      const secretNames = new Set(info?.config_secret_fields ?? []);
+      const typedValues: Record<string, unknown> = {};
+      const extras: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(settings)) {
+        if (knownNames.has(key)) typedValues[key] = value;
+        else if (!secretNames.has(key)) extras[key] = value;
+      }
+      setSchemaFieldValues(typedValues);
+      setExtraSettingsRows(settingsToRows(extras));
+      setSettingsRows([newSettingsRow()]);
+    } else {
+      setSchemaFieldValues({});
+      setExtraSettingsRows([]);
+      setSettingsRows(Object.keys(settings).length > 0 ? settingsToRows(settings) : [newSettingsRow()]);
+    }
+  }
 
   // Re-seed every time the sheet opens (both create and edit) -- so a leftover draft from a
   // previous open (or a previous endpoint) never survives into the next one.
@@ -88,25 +133,49 @@ export function EndpointFormSheet({
       setRole(existing.role);
       setSecretRef(existing.secret_ref ?? "");
       setEnabled(existing.enabled);
-      setSettingsRows(settingsToRows(existing.settings));
+      seedSettingsState(existing.connector, existing.settings);
     } else {
       setName("");
       setConnector(undefined);
       setRole(undefined);
       setSecretRef("");
       setEnabled(false);
-      setSettingsRows([newSettingsRow()]);
+      seedSettingsState(undefined, {});
     }
     // `existing` is derived fresh from `mode` on every render; keying off its identity directly
     // would re-run on every keystroke elsewhere in the tree. `open` plus the endpoint's own
     // `name` is what actually changes between "open the sheet for a different row" events.
-  }, [open, existing?.name]);
+    // `connectors` only changes identity when `EndpointsScreen` re-fetches (its own `fetchAll`),
+    // never from a keystroke in this sheet, so it is safe to list here without re-running on
+    // every render.
+  }, [open, existing?.name, connectors]);
+
+  /** The Connector field's `onValueChange` (create mode only -- it is locked, below, once an
+   * endpoint exists). Switching connectors mid-registration starts settings over rather than
+   * carrying over values keyed by the PREVIOUS connector's field names: a value that happened to
+   * share a name with the new connector's own field would silently masquerade as if the operator
+   * had chosen it, and one that didn't would just become a confusing, unexplained "Additional
+   * settings" row for a connector it was never entered against. */
+  function handleConnectorChange(value: string) {
+    setConnector(value);
+    seedSettingsState(value, {});
+  }
 
   const selectedConnectorInfo = connectors.find((entry) => entry.name === connector);
   const availableConnectors = connectors.filter((entry) => entry.available);
   const unavailableConnectors = connectors.filter((entry) => !entry.available);
+  const configSchema = selectedConnectorInfo?.config_schema ?? null;
+  const secretFields = selectedConnectorInfo?.config_secret_fields ?? [];
+  // Computed once here (not inside `SchemaSettingsForm`) because the Submit gate below needs it
+  // too -- one parse of `config_schema`, not two disagreeing ones.
+  const schemaDescriptors = useMemo(() => describeConfigSchema(configSchema), [configSchema]);
 
-  const canSubmit = name.trim().length > 0 && !!connector && !!role && !submitting;
+  const canSubmit =
+    name.trim().length > 0 &&
+    !!connector &&
+    !!role &&
+    !submitting &&
+    missingRequiredFields(schemaDescriptors, schemaFieldValues).length === 0;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,7 +186,13 @@ export function EndpointFormSheet({
     setSettingsBannerError(null);
     setSettingsFieldErrors({});
 
-    const settings = rowsToSettings(settingsRows);
+    // Schema-driven: the typed fields' own record plus whatever "Additional settings" rows are
+    // still there (never overlapping keys -- `extraSettingsRows` only ever holds keys
+    // `schemaDescriptors` does not describe, by construction in `seedSettingsState`/
+    // `handleConnectorChange`). Fallback: exactly today's behaviour, unchanged.
+    const settings = configSchema
+      ? { ...schemaFieldValues, ...rowsToSettings(extraSettingsRows) }
+      : rowsToSettings(settingsRows);
     const trimmedSecretRef = secretRef.trim();
 
     const result = existing
@@ -190,7 +265,7 @@ export function EndpointFormSheet({
             />
           </FieldRow>
 
-          <Select value={connector} onValueChange={(value) => setConnector(value)}>
+          <Select value={connector} onValueChange={handleConnectorChange} disabled={isEdit}>
             <FieldRow label="Connector" error={fieldErrors.connector}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a discovered connector" />
@@ -266,23 +341,62 @@ export function EndpointFormSheet({
 
           <div className="flex flex-col gap-2">
             <Label>Settings</Label>
-            <p className="text-body text-muted-foreground">
-              Non-secret configuration for this connector instance. A value is parsed as JSON when
-              valid (e.g. <code>true</code>, <code>8080</code>) and kept as plain text otherwise. A
-              connector's own secret-typed fields are rejected here -- bind a secret reference
-              above instead.
-            </p>
-            {settingsBannerError ? (
-              <Alert variant="destructive">
-                <AlertDescription>{settingsBannerError}</AlertDescription>
-              </Alert>
-            ) : null}
-            <SettingsEditor
-              rows={settingsRows}
-              onRowsChange={setSettingsRows}
-              fieldErrors={settingsFieldErrors}
-              disabled={submitting}
-            />
+            {configSchema ? (
+              <>
+                <p className="text-body text-muted-foreground">
+                  Generated from "{selectedConnectorInfo?.name}"'s own configuration schema.
+                  Required fields are marked; a secret-typed field is never entered here -- see
+                  "Secret-typed fields" below and bind a secret reference above instead.
+                </p>
+                {settingsBannerError ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>{settingsBannerError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                <SchemaSettingsForm
+                  descriptors={schemaDescriptors}
+                  secretFields={secretFields}
+                  values={schemaFieldValues}
+                  onValuesChange={setSchemaFieldValues}
+                  fieldErrors={settingsFieldErrors}
+                  disabled={submitting}
+                />
+                <div className="flex flex-col gap-2 pt-2">
+                  <Label className="text-caption text-muted-foreground">Additional settings</Label>
+                  <p className="text-caption text-muted-foreground">
+                    {extraSettingsRows.length > 0
+                      ? `Stored on this endpoint but not described by "${selectedConnectorInfo?.name}"'s current configuration schema (e.g. left over from an earlier connector version). Kept as-is on save unless removed here.`
+                      : `Anything "${selectedConnectorInfo?.name}"'s configuration schema does not already describe above. Most connectors reject an unrecognised key -- this exists for the rare setting the schema does not (yet) describe.`}
+                  </p>
+                  <SettingsEditor
+                    rows={extraSettingsRows}
+                    onRowsChange={setExtraSettingsRows}
+                    fieldErrors={settingsFieldErrors}
+                    disabled={submitting}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-body text-muted-foreground">
+                  Non-secret configuration for this connector instance. A value is parsed as JSON
+                  when valid (e.g. <code>true</code>, <code>8080</code>) and kept as plain text
+                  otherwise. A connector's own secret-typed fields are rejected here -- bind a
+                  secret reference above instead.
+                </p>
+                {settingsBannerError ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>{settingsBannerError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                <SettingsEditor
+                  rows={settingsRows}
+                  onRowsChange={setSettingsRows}
+                  fieldErrors={settingsFieldErrors}
+                  disabled={submitting}
+                />
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
