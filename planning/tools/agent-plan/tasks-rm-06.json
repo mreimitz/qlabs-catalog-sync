@@ -457,7 +457,7 @@
       ],
       "dod": "Reordering rules changes the preview and the tree consistently; every node can be traced to its deciding rule; a draft is previewable before saving and discardable; a catalog with thousands of tables stays responsive.",
       "verify": "pnpm -C console typecheck && pnpm -C console test --run",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "id": "T13.6",
