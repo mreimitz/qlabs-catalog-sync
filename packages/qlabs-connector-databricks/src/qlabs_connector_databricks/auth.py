@@ -58,8 +58,13 @@ from databricks.sdk.errors.platform import (
     Unauthenticated,
 )
 
+from qlabs_catalog_sync_sdk.auth import (
+    ApiKeyAuthProvider,
+    AuthProvider,
+    OAuth2ClientCredentialsProvider,
+    TokenRequestEncoding,
+)
 from qlabs_catalog_sync_sdk.auth import Clock as AuthClock
-from qlabs_catalog_sync_sdk.auth import OAuth2ClientCredentialsProvider, TokenRequestEncoding
 from qlabs_catalog_sync_sdk.exceptions import AuthError, ConnectorError, TransientError
 
 from .config import OAUTH_SCOPE, DatabricksConfig
@@ -68,6 +73,7 @@ __all__ = [
     "OAUTH_SCOPE",
     "AuthClock",
     "WorkspaceClientFactory",
+    "build_auth_provider",
     "build_oauth_provider",
     "default_workspace_client_factory",
     "fetch_bearer_token",
@@ -91,6 +97,11 @@ def build_oauth_provider(
     ``clock`` is likewise injected (defaults to the provider's own real-time clock) so
     tests can prove refresh-before-expiry caching deterministically, without sleeping.
     """
+    if config.client_id is None or config.client_secret is None:
+        raise AuthError(
+            "this endpoint is not configured with an OAuth M2M service principal; "
+            "build_auth_provider selects the right provider for either credential route"
+        )
     return OAuth2ClientCredentialsProvider(
         token_url=config.token_url,
         client_id=config.client_id,
@@ -102,19 +113,48 @@ def build_oauth_provider(
     )
 
 
-async def fetch_bearer_token(provider: OAuth2ClientCredentialsProvider) -> str:
-    """Fetch (or reuse the cached, still-valid) access token as a bare bearer value.
+def build_auth_provider(
+    config: DatabricksConfig,
+    *,
+    transport: httpx.AsyncClient,
+    clock: AuthClock | None = None,
+) -> AuthProvider:
+    """Build the auth provider for whichever credential route ``config`` declares.
+
+    A personal access token is already the wire shape everything downstream wants -- the
+    ``WorkspaceClient`` this connector builds is a bearer-token client, and the SDK's
+    :class:`~qlabs_catalog_sync_sdk.auth.ApiKeyAuthProvider` names Databricks PATs in its
+    own docstring -- so the PAT route is the OAuth route with the token *fetch* removed,
+    not a second auth path. Nothing after this function knows which one it got.
+
+    ``DatabricksConfig`` guarantees exactly one route is configured, so the choice here is
+    a total function over a validated config rather than a guess.
+    """
+    if config.token is not None:
+        # No transport and no clock: there is no endpoint to call and nothing to expire.
+        # A PAT is revoked in the workspace, not refreshed here, and a revoked one shows
+        # up as the 401 the error mapping already turns into AuthError.
+        return ApiKeyAuthProvider(config.token.get_secret_value())
+    return build_oauth_provider(config, transport=transport, clock=clock)
+
+
+async def fetch_bearer_token(provider: AuthProvider) -> str:
+    """Fetch (or reuse the cached, still-valid) token as a bare bearer value.
 
     ``provider.headers()`` returns ``{"Authorization": "Bearer <token>"}``; this strips
     the scheme so callers that need the raw token (building a ``WorkspaceClient``) don't
     each re-parse it. Raises :class:`~qlabs_catalog_sync_sdk.exceptions.AuthError` on any
-    failure — that is ``OAuth2ClientCredentialsProvider``'s own behavior, not something
-    this function adds.
+    failure — that is the provider's own behavior, not something this function adds.
+
+    Takes the :class:`~qlabs_catalog_sync_sdk.auth.AuthProvider` base rather than the
+    OAuth provider specifically, because a PAT-configured endpoint hands it a static
+    :class:`~qlabs_catalog_sync_sdk.auth.ApiKeyAuthProvider` and this function needs to
+    know nothing about the difference.
     """
     headers = await provider.headers()
     value = headers.get("Authorization", "")
     if not value.startswith("Bearer "):
-        raise AuthError("OAuth2 token endpoint did not yield a bearer-scheme token")
+        raise AuthError("credential provider did not yield a bearer-scheme token")
     return value.removeprefix("Bearer ").strip()
 
 

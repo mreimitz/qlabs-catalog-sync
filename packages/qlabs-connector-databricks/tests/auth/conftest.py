@@ -41,6 +41,21 @@ def build_config(**overrides: Any) -> DatabricksConfig:
     return DatabricksConfig(**values)
 
 
+def build_pat_config(**overrides: Any) -> DatabricksConfig:
+    """A minimally valid personal-access-token :class:`DatabricksConfig`.
+
+    The PAT alternative to :func:`build_config`'s OAuth service principal: same workspace,
+    same everything downstream, no ``client_id``/``client_secret`` and no token endpoint
+    in the picture at all.
+    """
+    values: dict[str, Any] = {
+        "host": "https://acme.cloud.databricks.com",
+        "token": "dapi-personal-access-token",
+    }
+    values.update(overrides)
+    return DatabricksConfig(**values)
+
+
 def build_ctx(config: DatabricksConfig | None = None) -> ConnectorContext[DatabricksConfig]:
     return ConnectorContext.build(
         config=config or build_config(), endpoint="databricks", clock=ManualClock()

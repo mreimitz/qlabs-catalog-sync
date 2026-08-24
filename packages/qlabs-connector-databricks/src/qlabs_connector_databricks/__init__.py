@@ -24,7 +24,7 @@ import httpx
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors.base import DatabricksError
 
-from qlabs_catalog_sync_sdk.auth import OAuth2ClientCredentialsProvider
+from qlabs_catalog_sync_sdk.auth import AuthProvider
 from qlabs_catalog_sync_sdk.config import ConnectorContext
 from qlabs_catalog_sync_sdk.contract import (
     CapabilityManifestBase,
@@ -41,7 +41,7 @@ from . import changes, read
 from .auth import (
     AuthClock,
     WorkspaceClientFactory,
-    build_oauth_provider,
+    build_auth_provider,
     default_workspace_client_factory,
     fetch_bearer_token,
     probe_unity_catalog,
@@ -91,7 +91,7 @@ class Connector(ConnectorABC):
             transport if transport is not None else httpx.AsyncClient()
         )
         self._clock = clock
-        self._token_provider: OAuth2ClientCredentialsProvider | None = None
+        self._token_provider: AuthProvider | None = None
         self._client: WorkspaceClient | None = None
         self._http: HttpEndpoint | None = None
         self._ctx: ConnectorContext[DatabricksConfig] | None = None
@@ -128,19 +128,22 @@ class Connector(ConnectorABC):
         """
         self._ctx = ctx
         config = ctx.config
-        self._token_provider = build_oauth_provider(
+        self._token_provider = build_auth_provider(
             config, transport=self._transport, clock=self._clock
         )
         await self._refresh_client()
         # Unity Catalog's REST surface is read straight over HTTP (read.py, changes.py):
         # databricks-sdk's client is synchronous and cannot be intercepted by respx, so
         # the SDK's HttpEndpoint carries the retry/backoff and pagination those modules
-        # need. The OAuth provider satisfies its auth protocol directly.
+        # need. Either credential route's provider satisfies its auth protocol directly.
         self._http = HttpEndpoint(config.host, auth=self._token_provider)
         ctx.logger.info(
             "databricks.setup.complete",
             host=config.host,
             has_sql_warehouse=config.has_sql_warehouse,
+            # Which credential route this endpoint took, never any part of the credential
+            # itself: "auth works but not the way I configured it" is otherwise invisible.
+            auth="personal_access_token" if config.uses_personal_access_token else "oauth_m2m",
         )
 
     async def _refresh_client(self) -> None:
