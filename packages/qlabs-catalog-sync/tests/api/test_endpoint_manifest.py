@@ -32,6 +32,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from prometheus_client import CollectorRegistry
+from pydantic import SecretStr, field_validator, model_validator
 
 from qlabs_catalog_sync.api.app import API_PREFIX, create_app
 from qlabs_catalog_sync.api.auth import CSRF_HEADER, AdminCredential, ConsoleAuth, hash_password
@@ -108,6 +109,69 @@ class _ConfigDependentConnector(Connector):
         raise NotImplementedError
 
 
+class _CredentialRouteConfig(ConnectorConfig):
+    """Two optional secret fields with a cross-field rule requiring exactly one -- the
+    real Databricks connector's shape (OAuth service principal *or* personal access
+    token), modelled minimally. Both are optional *by type* precisely because only one
+    route is ever set, so neither is ``is_required()`` and neither gets a placeholder
+    during settings validation."""
+
+    host: str
+    token: SecretStr | None = None
+    api_key: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_route(self) -> _CredentialRouteConfig:
+        configured = [name for name in ("token", "api_key") if getattr(self, name) is not None]
+        if not configured:
+            raise ValueError("configure exactly one credential route: 'token' or 'api_key'")
+        if len(configured) > 1:
+            raise ValueError("configure only one credential route, not both")
+        return self
+
+
+class _LeakyFieldConfig(ConnectorConfig):
+    """A connector whose *field* validator on a secret-typed field echoes the value it
+    rejected. Connector-authored and entirely possible; the route must never pass that
+    message on."""
+
+    token: SecretStr | None = None
+
+    @field_validator("token")
+    @classmethod
+    def _reject(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            raise ValueError(f"token {value.get_secret_value()!r} is not acceptable")
+        return value
+
+
+class _UnconfigurableConnector(Connector):
+    """Never reaches ``setup()``: building its ``ConnectorConfig`` is what fails."""
+
+    name = "unconfigurable"
+    ConfigModel = _CredentialRouteConfig
+
+    def capabilities(self) -> CapabilityManifestBase:
+        raise AssertionError("capabilities() must not be reached: the config never built")
+
+    async def setup(self, ctx: ConnectorContext[Any]) -> None:
+        raise AssertionError("setup() must not be reached: the config never built")
+
+    async def healthcheck(self) -> HealthStatus:
+        raise NotImplementedError
+
+    async def list_changed(self, entity_type: EntityType, since: Watermark) -> ListChangedResult:
+        raise NotImplementedError
+
+    async def read(self, ref: IdentityRef) -> NeutralEntity:
+        raise NotImplementedError
+
+
+class _LeakyConnector(_UnconfigurableConnector):
+    name = "leaky"
+    ConfigModel = _LeakyFieldConfig
+
+
 def _wrap_as_class(instance: Connector) -> type[Connector]:
     """Wrap a built connector instance as a zero-argument-constructible class.
 
@@ -137,7 +201,14 @@ def source_connector() -> FakeConnector:
 
 @pytest.fixture
 def registry(source_connector: FakeConnector) -> ConnectorRegistry:
-    return ConnectorRegistry({"fake": _wrap_as_class(source_connector)}, {})
+    return ConnectorRegistry(
+        {
+            "fake": _wrap_as_class(source_connector),
+            "unconfigurable": _UnconfigurableConnector,
+            "leaky": _LeakyConnector,
+        },
+        {},
+    )
 
 
 @pytest.fixture
@@ -339,3 +410,77 @@ def test_the_manifest_reflects_this_endpoint_s_configuration_not_the_connector_c
         "both endpoints reported the same manifest despite being configured differently "
         "-- this route is describing the connector class, not the endpoint"
     )
+
+
+def test_an_endpoint_with_no_credential_is_told_which_credential_is_missing(
+    signed_in: tuple[TestClient, str],
+) -> None:
+    """The commonest state a half-configured endpoint is in, and the one the console has
+    to be able to explain: settings are filled in, no credential is bound yet.
+
+    Building the ``ConnectorConfig`` raises a pydantic ``ValidationError``, which used to
+    land in the generic ``except Exception`` tier and come back as "failed unexpectedly
+    (ValidationError); see server logs (correlation id ...)". That is the right answer for
+    an unknown failure and a useless one here: it sends an operator to a log file to be
+    told they never set a credential. The connector's own cross-field message says exactly
+    what to do, carries no value, and is what this route now returns.
+    """
+    client, csrf = signed_in
+    created = client.post(
+        f"{API_PREFIX}/endpoints",
+        json={
+            "name": "half-configured",
+            "connector": "unconfigurable",
+            "role": "source",
+            "settings": {"host": "https://tenant.example"},
+        },
+        headers={CSRF_HEADER: csrf},
+    )
+    assert created.status_code == 201, created.text
+
+    response = client.get(f"{API_PREFIX}/endpoints/half-configured/manifest")
+
+    assert response.status_code == 200, response.text
+    reason = response.json()["unavailable_reason"]
+    assert response.json()["manifest"] is None
+    assert "configure exactly one credential route" in reason
+    assert "correlation id" not in reason, (
+        "a missing credential is a known, explainable state -- not an unexpected failure"
+    )
+
+
+def test_a_rejected_secret_field_never_echoes_the_value_it_rejected(
+    signed_in: tuple[TestClient, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Surfacing validation detail must not become a way for a credential to escape.
+
+    A connector's *field* validator on a secret-typed field is free to write
+    ``f"token {value!r} is not acceptable"``. The route reports which field failed and
+    withholds that message, because the field is one of the connector's own secret-typed
+    fields -- the same single definition the configuration service refuses inline secrets
+    by. Model-level messages are trusted (see the test above); field-level ones on a
+    secret are not, and this test is what fails if that distinction is ever dropped.
+    """
+    client, csrf = signed_in
+    monkeypatch.setenv("LEAKY__TOKEN", _CREDENTIAL_MATERIAL)
+    created = client.post(
+        f"{API_PREFIX}/endpoints",
+        json={
+            "name": "leaky-endpoint",
+            "connector": "leaky",
+            "role": "source",
+            "settings": {},
+            "secret_ref": "env:LEAKY",
+        },
+        headers={CSRF_HEADER: csrf},
+    )
+    assert created.status_code == 201, created.text
+
+    response = client.get(f"{API_PREFIX}/endpoints/leaky-endpoint/manifest")
+
+    assert response.status_code == 200, response.text
+    assert _CREDENTIAL_MATERIAL not in response.text, (
+        "a secret-typed field's own validator message was echoed back to the client"
+    )
+    reason = response.json()["unavailable_reason"]
+    assert "token" in reason and "withheld" in reason

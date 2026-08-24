@@ -193,6 +193,51 @@ async def test_create_endpoint_with_secret_field_absent_from_settings_succeeds(
     assert row.settings == {"space_id": "acme"}
 
 
+async def test_a_connector_with_two_optional_credential_routes_is_registerable(
+    svc: ConfigService,
+) -> None:
+    """A cross-field rule about *credentials* must not make an endpoint unregisterable.
+
+    ``FakeCredentialRouteConfig`` requires exactly one of two secret-typed fields, both
+    optional by type -- the real Databricks connector's shape. Neither is
+    ``is_required()``, so neither gets a settings-validation placeholder, so the rule
+    fires with nothing set. Enforcing it here is a three-way deadlock: naming a route is
+    "incomplete", naming none is "absent", and supplying the missing half inline is
+    refused as an inline secret (decision C2). Which credential is bound is
+    ``secret_ref``'s question, answered by ``secret-resolve`` and the healthcheck.
+    """
+    row = await svc.create_endpoint(
+        name="two_routes_endpoint",
+        connector="two_routes",
+        role=EndpointRole.SOURCE,
+        settings={"host": "tenant.example"},
+        secret_ref="env:TWO_ROUTES",
+        actor=ACTOR,
+        now=NOW,
+    )
+    assert row.settings == {"host": "tenant.example"}
+
+
+async def test_a_model_level_rule_over_plain_settings_is_still_enforced(
+    svc: ConfigService, engine: Engine
+) -> None:
+    """The skip above is scoped to connectors with an *unsupplied* secret field, and this
+    pins the other side of it: ``FakeDatabricksConfig`` declares no secrets at all, so
+    nothing about it is unjudgeable and an ordinary settings problem still fails the
+    write."""
+    with pytest.raises(EndpointSettingsValidationError):
+        await svc.create_endpoint(
+            name="no_host",
+            connector="databricks",
+            role=EndpointRole.SOURCE,
+            settings={},
+            actor=ACTOR,
+            now=NOW,
+        )
+    assert _generation(engine) == 0
+    assert not _endpoint_exists(engine, "no_host")
+
+
 async def test_create_endpoint_unknown_connector_names_available_connectors(
     svc: ConfigService, engine: Engine
 ) -> None:

@@ -23,7 +23,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Final
 
-from pydantic import SecretBytes, SecretStr
+from pydantic import SecretBytes, SecretStr, model_validator
 
 from qlabs_catalog_sync.discovery import ConnectorRegistry
 from qlabs_catalog_sync_sdk.config import ConnectorConfig, ConnectorContext
@@ -64,6 +64,32 @@ class FakeQlikConfig(ConnectorConfig):
     refresh_token: SecretBytes | None = None
 
 
+class FakeCredentialRouteConfig(ConnectorConfig):
+    """A connector offering two credential routes with a cross-field rule requiring
+    exactly one -- the real Databricks connector's shape (OAuth service principal *or*
+    personal access token).
+
+    Both credential fields are optional *by type*, because only ever one route is set, so
+    neither is ``is_required()`` and neither is given a placeholder during settings
+    validation. That combination is what makes the model-level rule unjudgeable from
+    ``settings`` alone, and it is the shape that once made such a connector impossible to
+    register at all.
+    """
+
+    host: str
+    token: SecretStr | None = None
+    api_key: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_route(self) -> FakeCredentialRouteConfig:
+        configured = [name for name in ("token", "api_key") if getattr(self, name) is not None]
+        if not configured:
+            raise ValueError("configure exactly one credential route: 'token' or 'api_key'")
+        if len(configured) > 1:
+            raise ValueError("configure only one credential route, not both")
+        return self
+
+
 class _StubConnector(Connector):
     """Every abstract method ``Connector`` declares, stubbed. Never called in this
     suite -- ``ConfigService`` only ever reads ``.ConfigModel`` off the class."""
@@ -94,7 +120,19 @@ class FakeQlikConnector(_StubConnector):
     ConfigModel = FakeQlikConfig
 
 
+class FakeCredentialRouteConnector(_StubConnector):
+    name = "two_routes"
+    ConfigModel = FakeCredentialRouteConfig
+
+
 def make_registry() -> ConnectorRegistry:
     """A registry with exactly the two v1 endpoint roles: ``"databricks"`` (read-only
     source) and ``"qlik"`` (the sole write target, per ``WRITE_CONNECTOR_NAME``)."""
-    return ConnectorRegistry({"databricks": FakeDatabricksConnector, "qlik": FakeQlikConnector}, {})
+    return ConnectorRegistry(
+        {
+            "databricks": FakeDatabricksConnector,
+            "qlik": FakeQlikConnector,
+            "two_routes": FakeCredentialRouteConnector,
+        },
+        {},
+    )

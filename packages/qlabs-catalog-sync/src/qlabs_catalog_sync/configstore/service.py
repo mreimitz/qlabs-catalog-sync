@@ -303,6 +303,22 @@ def _validate_endpoint_settings(
        given :data:`_SETTINGS_VALIDATION_PLACEHOLDER` first -- a missing secret is
        ``secret_ref``'s problem, not ``settings``'s, so it must never fail this check.
 
+    A **model-level** error (pydantic reports an empty ``loc`` for a cross-field
+    validator) is skipped whenever the connector declares a secret field this pass did
+    not supply -- i.e. an *optional* secret-typed field, which gets no placeholder. Such
+    a rule cannot be judged from ``settings`` alone: the Databricks connector's
+    "configure exactly one credential route -- ``client_id`` + ``client_secret``, or
+    ``token``" is exactly this shape, and both of its credential fields are optional by
+    type because only one route is ever set. Without the skip, *every* Databricks
+    endpoint is unregisterable: naming a route is rejected as incomplete, naming none is
+    rejected as absent, and supplying the missing half inline is rejected by the check
+    above -- a three-way deadlock where the console can create no endpoint at all. What
+    that rule is really asking about is credentials, which is ``secret_ref``'s question,
+    answered by ``GET /endpoints/{name}/secret-resolve`` and by the healthcheck, both of
+    which resolve the secret backend for real and report the same validator's message
+    then. This pass keeps its own narrower job: settings are well-typed, carry no unknown
+    keys, and satisfy every rule judgeable without a credential.
+
     Raises :class:`EndpointSettingsValidationError` naming exactly the non-secret
     problems pydantic found (an error attributed to a placeholder secret field, which
     should never happen given the placeholder is always well-typed, is reported in full
@@ -319,14 +335,26 @@ def _validate_endpoint_settings(
         for name, field_info in config_model.model_fields.items()
         if name in secret_fields and field_info.is_required()
     }
+    #: Secret-typed fields this pass leaves unset -- the optional ones. Their presence is
+    #: what makes a cross-field rule unjudgeable here; with none of them, every
+    #: model-level error is about data ``settings`` really does own, and still reported.
+    unsupplied_secret_fields = secret_fields - placeholders.keys()
     try:
         config_model.model_validate({**settings, **placeholders})
     except ValidationError as exc:
+        errors = exc.errors()
         real_problems = [
             f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
-            for error in exc.errors()
+            for error in errors
             if not (error["loc"] and error["loc"][0] in placeholders)
+            and not (not error["loc"] and unsupplied_secret_fields)
         ]
+        if not real_problems and any(
+            not error["loc"] and unsupplied_secret_fields for error in errors
+        ):
+            # Every problem was a cross-field rule about credentials this pass cannot
+            # supply. Not a settings error -- see the docstring.
+            return
         detail = "; ".join(real_problems) if real_problems else str(exc)
         raise EndpointSettingsValidationError(connector, detail) from exc
 

@@ -41,6 +41,8 @@ of its own for that case, it just never intercepts it.
   :class:`~qlabs_catalog_sync.config.SecretNotFoundError`/
   :class:`~qlabs_catalog_sync.configstore.secrets.SecretRefFormatError` names only the
   endpoint/key/backend or the malformed reference string -- never a value -- and anything
+  :class:`EndpointConfigInvalidError` names only field names and connector-authored
+  validator prose (see :func:`_config_validation_reason`), and anything
   else unrecognized gets a generic, value-free reason with the real exception logged
   server-side only (mirrors ``api.errors``'s own generic-500 tier, which this route never
   reaches for a healthcheck precisely because it is caught here first).
@@ -55,7 +57,7 @@ from datetime import UTC, datetime
 from typing import Any, Final, cast
 
 from fastapi import APIRouter, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from qlabs_catalog_sync.config import SecretNotFoundError
 from qlabs_catalog_sync.configstore.models import EndpointRow
@@ -64,6 +66,7 @@ from qlabs_catalog_sync.configstore.secrets import (
     SecretRefFormatError,
     resolve_connector_kwargs,
     resolve_status,
+    secret_field_names,
 )
 from qlabs_catalog_sync.configstore.service import UNSET, ConfigService, EndpointNotFoundError
 from qlabs_catalog_sync.configstore.types import EndpointRole
@@ -77,7 +80,7 @@ from ..auth import require_session
 from ..errors import API_ERROR_RESPONSES
 from .connectors import CapabilityManifestOut, capability_manifest_out
 
-__all__ = ["build_endpoints_router"]
+__all__ = ["EndpointConfigInvalidError", "build_endpoints_router"]
 
 _LOG = get_logger("qlabs.catalog_sync.api.routes.endpoints")
 
@@ -221,6 +224,59 @@ class EndpointManifestOut(BaseModel):
 # --------------------------------------------------------------------------------------
 
 
+class EndpointConfigInvalidError(Exception):
+    """An endpoint's stored settings plus its resolved secrets do not make a valid
+    ``ConnectorConfig`` -- e.g. no credential route is configured at all.
+
+    Exists so this route can tell "the operator has not finished configuring this
+    endpoint" apart from "something unexpected blew up", which the generic
+    ``except Exception`` tier cannot: a pydantic ``ValidationError`` reaching that tier
+    becomes a correlation id and a type name, which is the correct treatment for an
+    unknown failure and a useless one for the commonest configuration mistake there is.
+    ``reason`` is built by :func:`_config_validation_reason` and is safe to surface.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _config_validation_reason(exc: ValidationError, config_model: type[ConnectorConfig]) -> str:
+    """Render ``exc`` into an operator-facing reason that cannot carry a secret value.
+
+    Three things keep a credential out of the result:
+
+    * ``include_input=False`` drops pydantic's ``input`` from every error, which is the
+      one part of a ``ValidationError`` guaranteed to be the raw value -- the specific
+      leak ``_run_connector_healthcheck``'s generic tier exists to prevent.
+    * A **field-level** error naming one of ``config_model``'s own secret-typed fields
+      (:func:`~qlabs_catalog_sync.configstore.secrets.secret_field_names`, the same
+      single definition the configuration service refuses inline secrets by) never
+      surfaces its ``msg`` at all: a connector's own field validator is free to write
+      ``f"bad token {value!r}"``, and this is the one place that would be echoed.
+    * A **model-level** error (empty ``loc``, i.e. a cross-field validator) does surface
+      its ``msg``, which is hand-written connector prose -- the same trust already placed
+      in ``ConnectorError.message`` (``qlabs_catalog_sync_sdk.exceptions``'s module
+      docstring: a connector must never put credential material in it). This is the
+      branch that carries the useful sentence, e.g. Databricks' "configure exactly one
+      credential route".
+    """
+    secret_fields = secret_field_names(config_model)
+    problems: list[str] = []
+    for error in exc.errors(include_url=False, include_input=False):
+        loc = error["loc"]
+        message = error["msg"].removeprefix("Value error, ")
+        if not loc:
+            problems.append(message)
+            continue
+        name = ".".join(str(part) for part in loc)
+        if loc[0] in secret_fields:
+            problems.append(f"{name}: invalid value (withheld -- this field is a secret)")
+        else:
+            problems.append(f"{name}: {message}")
+    return "this endpoint is not fully configured: " + "; ".join(problems)
+
+
 def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> ConnectorConfig:
     """Resolve ``row``'s credential reference and build its connector's own
     ``ConnectorConfig``. Shared by every route that needs a live connector instance --
@@ -239,7 +295,12 @@ def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> C
     value) environment prefix instead.
 
     Raises whatever resolution or validation raises -- each caller maps those to its own
-    surface, and neither ever lets one reach the client carrying a resolved value.
+    surface, and neither ever lets one reach the client carrying a resolved value. The one
+    translation done here rather than by a caller is pydantic's ``ValidationError``, which
+    becomes an :class:`EndpointConfigInvalidError` carrying a reason
+    :func:`_config_validation_reason` has already made safe: doing it here means both
+    callers get the same treatment from the same code, which is the same argument that put
+    credential resolution itself in this one function.
     """
     config_model_cls = cast(type[ConnectorConfig], connector_cls.ConfigModel)
     kwargs: dict[str, Any]
@@ -250,7 +311,10 @@ def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> C
     else:
         kwargs = dict(row.settings)
         locator = row.name
-    return config_model_cls.for_endpoint(locator, **kwargs)
+    try:
+        return config_model_cls.for_endpoint(locator, **kwargs)
+    except ValidationError as exc:
+        raise EndpointConfigInvalidError(_config_validation_reason(exc, config_model_cls)) from exc
 
 
 async def _run_connector_healthcheck(
@@ -300,6 +364,13 @@ async def _run_connector_healthcheck(
         # Both name only the endpoint/key/backend or the malformed reference string --
         # never a resolved value (see each class's own docstring).
         return HealthStatus.unhealthy(row.name, str(exc), checked_at=now)
+    except EndpointConfigInvalidError as exc:
+        # An endpoint nobody has finished configuring -- the commonest reason a
+        # healthcheck cannot run at all. Its reason is built value-free by
+        # _config_validation_reason; without this branch it lands in the generic tier
+        # below and the operator is told to go read a correlation id in the server log
+        # to learn that they never set a credential.
+        return HealthStatus.unhealthy(row.name, exc.reason, checked_at=now)
     except Exception as exc:
         # Anything else unrecognized: a connector bug, a config-validation failure while
         # building its ConnectorConfig, ... str(exc) is NOT assumed safe here (unlike the
@@ -358,6 +429,8 @@ async def _read_connector_manifest(
         return None, exc.message
     except (SecretNotFoundError, SecretRefFormatError) as exc:
         return None, str(exc)
+    except EndpointConfigInvalidError as exc:
+        return None, exc.reason
     except Exception as exc:
         correlation_id = str(uuid.uuid4())
         _LOG.error(
