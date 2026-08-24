@@ -11,30 +11,40 @@ grow, a concept of users, groups, roles or scopes.
 What the operator configures
 ----------------------------
 
-**A password hash, never a password.** The configured value is a self-describing PHC-style
+**A password hash by preference.** The configured value is a self-describing PHC-style
 scrypt string produced by :func:`hash_password`::
 
     $scrypt$ln=16,r=8,p=2$<salt-b64>$<hash-b64>
 
-The alternative — configuring the plaintext password and hashing it at startup — was
-rejected: it puts a directly reusable credential into ``docker inspect``, the pod spec,
-the CI variable store and ``/proc/self/environ``, where every process in the container
-can read it. A hash there is not directly reusable, and anyone who *can* read it already
-holds the deployment's secrets. The cost is that the operator needs a step to produce the
-hash, so :func:`hash_password` is a plain function they can run without the password ever
-entering shell history::
+A hash rather than the password because the password puts a directly reusable credential
+into ``docker inspect``, the pod spec, the CI variable store and ``/proc/self/environ``,
+where every process in the container can read it. A hash there is not directly reusable,
+and anyone who *can* read it already holds the deployment's secrets. The cost is that the
+operator needs a step to produce the hash, so :func:`hash_password` is a plain function
+they can run without the password ever entering shell history — ``scripts/make_admin_hash.py``
+prints the line to configure::
 
-    uv run python -c "from getpass import getpass; \\
-        from qlabs_catalog_sync.api.auth import hash_password; print(hash_password(getpass()))"
+    uv run python scripts/make_admin_hash.py
 
-It is read through the existing :class:`~qlabs_catalog_sync.config.SecretBackend` — the
-same abstraction endpoint credentials use (T2.3, C2) — under the fixed endpoint key
-:data:`ADMIN_SECRET_ENDPOINT`, so the shipped
-:class:`~qlabs_catalog_sync.config.EnvironmentSecretBackend` reads it from
-``QLABS_CONSOLE_ADMIN__PASSWORD_HASH`` and a future Vault backend resolves the same
-reference without this module changing. This module never reads ``os.environ`` itself:
-"a reference to a credential, resolved through a backend" already has one implementation
-in this codebase and does not get a second.
+**A plaintext password where that reasoning does not apply.** That whole argument is about
+an environment that is a shared secret store. It is not about a container on the operator's
+own laptop, where the environment holds nothing anyone else can reach and the setup step is
+pure friction. So :data:`ADMIN_PASSWORD_KEY` — ``QLABS_CONSOLE_ADMIN__PASSWORD`` — takes
+the password itself and :func:`load_admin_credential` hashes it once at startup, producing a
+credential identical to the configured-hash one. It is deliberately the second choice, not
+an equal alternative: the hash wins when both are set, and taking this path logs
+``console.auth.plaintext_password`` at ``warning`` every startup so a deployment that
+reached for it by accident says so in its own logs. :data:`MIN_PASSWORD_LENGTH` applies to
+both paths — the convenience is skipping a command, not skipping the password policy.
+
+Both keys are read through the existing
+:class:`~qlabs_catalog_sync.config.SecretBackend` — the same abstraction endpoint
+credentials use (T2.3, C2) — under the fixed endpoint key :data:`ADMIN_SECRET_ENDPOINT`,
+so the shipped :class:`~qlabs_catalog_sync.config.EnvironmentSecretBackend` reads them
+from ``QLABS_CONSOLE_ADMIN__PASSWORD_HASH`` / ``QLABS_CONSOLE_ADMIN__PASSWORD`` and a
+future Vault backend resolves the same references without this module changing. This
+module never reads ``os.environ`` itself: "a reference to a credential, resolved through a
+backend" already has one implementation in this codebase and does not get a second.
 
 Failing closed
 --------------
@@ -151,6 +161,7 @@ _LOG = get_logger("qlabs.catalog_sync.api.auth")
 
 __all__ = [
     "ADMIN_PASSWORD_HASH_KEY",
+    "ADMIN_PASSWORD_KEY",
     "ADMIN_SECRET_ENDPOINT",
     "ADMIN_USERNAME_KEY",
     "AUTH_SESSION_ROUTE",
@@ -189,12 +200,25 @@ __all__ = [
 #: credential is filed under. With the shipped
 #: :class:`~qlabs_catalog_sync.config.EnvironmentSecretBackend` this normalizes to the
 #: ``QLABS_CONSOLE_ADMIN`` environment-variable prefix, so the hash is read from
-#: ``QLABS_CONSOLE_ADMIN__PASSWORD_HASH`` and the (optional) username from
+#: ``QLABS_CONSOLE_ADMIN__PASSWORD_HASH``, the plaintext-password alternative from
+#: ``QLABS_CONSOLE_ADMIN__PASSWORD``, and the (optional) username from
 #: ``QLABS_CONSOLE_ADMIN__USERNAME``.
 ADMIN_SECRET_ENDPOINT: Final[str] = "qlabs_console_admin"
 
-#: Backend key holding the PHC-style scrypt hash :func:`hash_password` produces.
+#: Backend key holding the PHC-style scrypt hash :func:`hash_password` produces. The
+#: preferred way to configure the credential; see :data:`ADMIN_PASSWORD_KEY` for the
+#: opt-in alternative and why it is second choice.
 ADMIN_PASSWORD_HASH_KEY: Final[str] = "password_hash"
+
+#: Backend key holding the administrator's password *in the clear*, hashed once at startup
+#: by :meth:`AdminCredential.from_password`. The convenience path for a deployment where
+#: the environment is not a shared secret store -- a local container, a developer machine --
+#: read from ``QLABS_CONSOLE_ADMIN__PASSWORD`` by the shipped backend. It is second choice,
+#: not equivalent: the value here *is* a directly reusable credential wherever the
+#: environment is readable, so :func:`load_admin_credential` prefers
+#: :data:`ADMIN_PASSWORD_HASH_KEY` when both are set and warns whenever it falls back to
+#: this one.
+ADMIN_PASSWORD_KEY: Final[str] = "password"
 
 #: Backend key holding the administrator's username. Optional; defaults to
 #: :data:`DEFAULT_ADMIN_USERNAME`. Read through the same backend as the hash rather than
@@ -369,11 +393,12 @@ def _derive(password: str, params: ScryptParams, salt: bytes) -> bytes:
 def hash_password(password: str, *, params: ScryptParams = DEFAULT_SCRYPT_PARAMS) -> str:
     """Encode ``password`` as the PHC-style scrypt string the deployment configures.
 
-    This is operator tooling, not a request path: run it once, put the result in
-    ``QLABS_CONSOLE_ADMIN__PASSWORD_HASH`` (or the equivalent secret-manager entry), and
-    the password itself never has to exist anywhere the deployment can read it. The salt
-    is fresh per call, so hashing the same password twice gives two different strings and
-    neither reveals that they match.
+    This is operator tooling and startup code, never a request path: run it once, put the
+    result in ``QLABS_CONSOLE_ADMIN__PASSWORD_HASH`` (or the equivalent secret-manager
+    entry), and the password itself never has to exist anywhere the deployment can read it.
+    :meth:`AdminCredential.from_password` calls it once at startup for deployments that
+    configure the password instead. The salt is fresh per call, so hashing the same
+    password twice gives two different strings and neither reveals that they match.
 
     Raises :class:`AuthConfigurationError` — with a message that never echoes the input —
     for a password shorter than :data:`MIN_PASSWORD_LENGTH`.
@@ -465,6 +490,24 @@ class AdminCredential:
         params, salt, digest = _parse_password_hash(encoded.strip())
         return cls(username=cleaned_username, params=params, salt=salt, digest=digest)
 
+    @classmethod
+    def from_password(
+        cls, password: str, *, username: str, params: ScryptParams = DEFAULT_SCRYPT_PARAMS
+    ) -> AdminCredential:
+        """Build a credential by hashing ``password`` here and now, with a fresh salt.
+
+        The credential this returns is indistinguishable from one built by
+        :meth:`from_password_hash` — same derivation, same constant-time
+        :meth:`verify` — and the plaintext is not retained. What differs is only where the
+        plaintext lived beforehand: see :data:`ADMIN_PASSWORD_KEY`.
+
+        Raises :class:`AuthConfigurationError` — with a message that never echoes the
+        input — for a password shorter than :data:`MIN_PASSWORD_LENGTH`.
+        """
+        return cls.from_password_hash(
+            hash_password(password, params=params), username=username
+        )
+
     def verify(self, *, username: str, password: str) -> bool:
         """``True`` when ``username``/``password`` are the configured administrator's.
 
@@ -488,11 +531,17 @@ def load_admin_credential(*, backend: SecretBackend | None = None) -> AdminCrede
     """Read the administrator credential through ``backend``, or refuse (C7).
 
     ``backend`` defaults to :class:`~qlabs_catalog_sync.config.EnvironmentSecretBackend`,
-    the same one endpoint credentials use, so the hash lives in
-    ``QLABS_CONSOLE_ADMIN__PASSWORD_HASH`` today and in a secret manager the day a Vault
-    backend exists, with no change here.
+    the same one endpoint credentials use, so the credential lives in the environment today
+    and in a secret manager the day a Vault backend exists, with no change here.
 
-    Raises :class:`AuthNotConfiguredError` when nothing is configured, and
+    Two keys can carry it. :data:`ADMIN_PASSWORD_HASH_KEY` holds a hash and is preferred;
+    :data:`ADMIN_PASSWORD_KEY` holds a password in the clear, is hashed here at startup,
+    and is logged as ``console.auth.plaintext_password`` at ``warning`` every time it is
+    used. When both are set the hash wins — resolving it the other way would let a stray
+    ``QLABS_CONSOLE_ADMIN__PASSWORD`` in a shell profile silently replace a deployment's
+    real credential.
+
+    Raises :class:`AuthNotConfiguredError` when neither is configured, and
     :class:`AuthConfigurationError` when what is configured cannot be used. Both are
     logged once, here, at the moment they are raised — this function runs at startup and
     nothing on a request path calls it, so "logged once at start" is a property of where
@@ -501,22 +550,35 @@ def load_admin_credential(*, backend: SecretBackend | None = None) -> AdminCrede
     """
     active: SecretBackend = backend if backend is not None else EnvironmentSecretBackend()
 
-    try:
-        encoded = active.get_secret(endpoint=ADMIN_SECRET_ENDPOINT, key=ADMIN_PASSWORD_HASH_KEY)
-    except SecretNotFoundError as exc:
-        # exc's message names the endpoint, key, backend and expected variable -- never a
-        # value (see qlabs_catalog_sync.config.SecretNotFoundError).
+    def _lookup(key: str) -> SecretStr | None:
+        try:
+            return active.get_secret(endpoint=ADMIN_SECRET_ENDPOINT, key=key)
+        except SecretNotFoundError:
+            return None
+
+    encoded = _lookup(ADMIN_PASSWORD_HASH_KEY)
+    plaintext = _lookup(ADMIN_PASSWORD_KEY) if encoded is None else None
+
+    if encoded is None and plaintext is None:
+        # The message names the endpoint, both keys and the environment variables they
+        # normalize to -- never a value.
+        hash_variable = f"{ADMIN_SECRET_ENDPOINT.upper()}__{ADMIN_PASSWORD_HASH_KEY.upper()}"
+        password_variable = f"{ADMIN_SECRET_ENDPOINT.upper()}__{ADMIN_PASSWORD_KEY.upper()}"
         _LOG.error(
             "console.auth.not_configured",
-            reason=str(exc),
             secret_endpoint=ADMIN_SECRET_ENDPOINT,
             secret_key=ADMIN_PASSWORD_HASH_KEY,
+            alternative_secret_key=ADMIN_PASSWORD_KEY,
         )
         raise AuthNotConfiguredError(
             "no administrator credential is configured, so the console and API refuse to "
-            f"serve (C7): {exc}. Produce a hash with "
-            "qlabs_catalog_sync.api.auth.hash_password and configure it there."
+            f"serve (C7). Set {hash_variable} to a hash produced by "
+            "qlabs_catalog_sync.api.auth.hash_password (scripts/make_admin_hash.py prints "
+            f"the line), or -- for a local deployment -- set {password_variable} to the "
+            "password itself and it will be hashed at startup."
         ) from None
+
+    source_key = ADMIN_PASSWORD_HASH_KEY if encoded is not None else ADMIN_PASSWORD_KEY
 
     try:
         username = active.get_secret(
@@ -526,23 +588,43 @@ def load_admin_credential(*, backend: SecretBackend | None = None) -> AdminCrede
         username = DEFAULT_ADMIN_USERNAME
 
     try:
-        credential = AdminCredential.from_password_hash(
-            encoded.get_secret_value(), username=username
-        )
+        if encoded is not None:
+            credential = AdminCredential.from_password_hash(
+                encoded.get_secret_value(), username=username
+            )
+        else:
+            assert plaintext is not None  # noqa: S101 -- narrowed by the guard above
+            credential = AdminCredential.from_password(
+                plaintext.get_secret_value(), username=username
+            )
     except AuthConfigurationError as exc:
         _LOG.error(
             "console.auth.credential_malformed",
             reason=str(exc),
             secret_endpoint=ADMIN_SECRET_ENDPOINT,
-            secret_key=ADMIN_PASSWORD_HASH_KEY,
+            secret_key=source_key,
         )
         raise
+
+    if encoded is None:
+        _LOG.warning(
+            "console.auth.plaintext_password",
+            secret_endpoint=ADMIN_SECRET_ENDPOINT,
+            secret_key=ADMIN_PASSWORD_KEY,
+            preferred_secret_key=ADMIN_PASSWORD_HASH_KEY,
+            reason=(
+                "the administrator password is configured in the clear and was hashed at "
+                "startup; anything that can read this deployment's environment holds a "
+                "directly reusable credential"
+            ),
+        )
 
     _LOG.info(
         "console.auth.configured",
         username=credential.username,
         kdf=_HASH_SCHEME,
         kdf_params=credential.params.encode(),
+        secret_key=source_key,
     )
     return credential
 

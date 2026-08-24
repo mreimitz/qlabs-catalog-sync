@@ -21,6 +21,12 @@ Set that, and optionally ``QLABS_CONSOLE_ADMIN__USERNAME`` (it defaults to ``adm
 rather than serving an unauthenticated console — see ``api/auth.py``.
 
 The password is never printed, never logged, and never written to a file by this script.
+
+If the deployment is only ever your own machine -- a local Docker container, a debug run --
+you can skip this script and set ``QLABS_CONSOLE_ADMIN__PASSWORD`` to the password itself
+instead; the service hashes it at startup and logs a warning that it did. The hash is still
+the right choice anywhere the environment is a shared secret store, and it wins if both are
+set.
 """
 
 from __future__ import annotations

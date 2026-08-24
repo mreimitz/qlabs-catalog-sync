@@ -48,6 +48,7 @@ from pydantic import SecretStr
 from qlabs_catalog_sync.api.app import API_PREFIX, create_app
 from qlabs_catalog_sync.api.auth import (
     ADMIN_PASSWORD_HASH_KEY,
+    ADMIN_PASSWORD_KEY,
     ADMIN_SECRET_ENDPOINT,
     ADMIN_USERNAME_KEY,
     AUTH_SESSION_ROUTE,
@@ -286,6 +287,128 @@ def test_the_refusal_is_not_logged_per_request(captured_logs: list[Any]) -> None
         client.get("/healthz")
 
     assert [e for e in captured_logs if e.get("event") == "console.auth.not_configured"] == []
+
+
+# --------------------------------------------------------------------------------------
+# The plaintext-password escape hatch (local deployments)
+# --------------------------------------------------------------------------------------
+
+
+def plaintext_backend(
+    *, password: str = PASSWORD, username: str | None = USERNAME
+) -> MappingSecretBackend:
+    """A backend holding a *password* under :data:`ADMIN_PASSWORD_KEY` and no hash."""
+    values = {(ADMIN_SECRET_ENDPOINT, ADMIN_PASSWORD_KEY): password}
+    if username is not None:
+        values[(ADMIN_SECRET_ENDPOINT, ADMIN_USERNAME_KEY)] = username
+    return MappingSecretBackend(values)
+
+
+def test_a_plaintext_password_configures_the_credential() -> None:
+    """``QLABS_CONSOLE_ADMIN__PASSWORD`` is hashed at startup and works like a hash.
+
+    This is the convenience path for a deployment where the environment is not a shared
+    secret store -- a local container, a developer machine -- and it has to produce a
+    credential indistinguishable from the hash path, or it is not actually an alternative.
+    """
+    credential = load_admin_credential(backend=plaintext_backend())
+
+    assert credential.username == USERNAME
+    assert credential.verify(username=USERNAME, password=PASSWORD)
+    assert not credential.verify(username=USERNAME, password=WRONG_PASSWORD)
+    assert not credential.verify(username="somebody-else", password=PASSWORD)
+
+
+def test_the_plaintext_password_defaults_the_username_like_the_hash_path_does() -> None:
+    credential = load_admin_credential(backend=plaintext_backend(username=None))
+
+    assert credential.username == DEFAULT_ADMIN_USERNAME
+
+
+def test_a_configured_hash_wins_over_a_configured_plaintext_password() -> None:
+    """Both set is a misconfiguration, and the *safer* value has to be the one that counts.
+
+    Resolving it the other way would mean a stray ``QLABS_CONSOLE_ADMIN__PASSWORD`` left in
+    a shell profile could silently replace a deployment's real credential.
+    """
+    backend = MappingSecretBackend(
+        {
+            (ADMIN_SECRET_ENDPOINT, ADMIN_PASSWORD_HASH_KEY): PASSWORD_HASH,
+            (ADMIN_SECRET_ENDPOINT, ADMIN_PASSWORD_KEY): WRONG_PASSWORD,
+            (ADMIN_SECRET_ENDPOINT, ADMIN_USERNAME_KEY): USERNAME,
+        }
+    )
+
+    credential = load_admin_credential(backend=backend)
+
+    assert credential.verify(username=USERNAME, password=PASSWORD)
+    assert not credential.verify(username=USERNAME, password=WRONG_PASSWORD)
+
+
+def test_the_plaintext_password_path_warns_that_it_is_the_weaker_choice(
+    captured_logs: list[Any],
+) -> None:
+    """It must be visible in the logs of a deployment that took this path by accident."""
+    load_admin_credential(backend=plaintext_backend())
+
+    warnings = [e for e in captured_logs if e.get("event") == "console.auth.plaintext_password"]
+    assert len(warnings) == 1
+    assert warnings[0]["log_level"] == "warning"
+
+
+def test_the_plaintext_password_never_reaches_a_log_record(captured_logs: list[Any]) -> None:
+    """The sentinel discipline the hash path is held to, applied to the password variable."""
+    load_admin_credential(backend=plaintext_backend())
+
+    rendered = json.dumps([{k: str(v) for k, v in e.items()} for e in captured_logs])
+    assert PASSWORD not in rendered
+
+
+def test_a_plaintext_password_below_the_minimum_length_is_refused() -> None:
+    """``hash_password``'s length floor is the only password policy a hash-based credential
+    leaves available, so the convenience path must not be a way around it."""
+    short = "SENTINEL-x"[:MIN_PASSWORD_LENGTH - 1]
+
+    with pytest.raises(AuthConfigurationError) as excinfo:
+        load_admin_credential(backend=plaintext_backend(password=short))
+
+    assert short not in str(excinfo.value)
+    assert str(MIN_PASSWORD_LENGTH) in str(excinfo.value)
+
+
+def test_a_refused_plaintext_password_is_logged_without_its_value(
+    captured_logs: list[Any],
+) -> None:
+    with pytest.raises(AuthConfigurationError):
+        load_admin_credential(backend=plaintext_backend(password="short"))
+
+    events = [e for e in captured_logs if e.get("event") == "console.auth.credential_malformed"]
+    assert len(events) == 1
+    assert "short" not in json.dumps({k: str(v) for k, v in events[0].items()})
+
+
+def test_the_refusal_names_the_password_variable_too() -> None:
+    """With neither variable set, the operator has to learn about *both* ways out."""
+    with pytest.raises(AuthNotConfiguredError) as excinfo:
+        load_admin_credential(backend=MappingSecretBackend())
+
+    message = str(excinfo.value).upper()
+    assert ADMIN_PASSWORD_HASH_KEY.upper() in message
+    assert ADMIN_PASSWORD_KEY.upper() in message
+
+
+def test_console_auth_from_environment_accepts_a_plaintext_password() -> None:
+    """The deployment's one call has to work through the convenience path as well, all the
+    way to a real sign-in over HTTP."""
+    auth = console_auth_from_environment(backend=plaintext_backend())
+    assert auth.username == USERNAME
+
+    app, _ = build_app(auth=auth)
+    response = client_for(app).post(
+        SESSION_PATH, json={"username": USERNAME, "password": PASSWORD}
+    )
+
+    assert response.status_code == 200
 
 
 def test_building_an_app_with_no_auth_at_all_is_logged_as_a_warning(

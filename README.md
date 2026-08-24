@@ -475,6 +475,12 @@ pnpm -C console build                                # -> console/dist
 
 uv run python scripts/make_admin_hash.py             # the administrator credential
 # put the QLABS_CONSOLE_ADMIN__PASSWORD_HASH line it prints into .env
+#
+# For a local-only deployment you can skip that step and put the password itself in .env
+# instead -- it is hashed at startup:
+#   QLABS_CONSOLE_ADMIN__PASSWORD='at-least-12-characters'
+# The hash is the right choice anywhere the environment is a shared secret store, and wins
+# if both are set.
 
 qlabs-catalog-sync serve --config config.yaml \
     --console-assets console/dist --port 8080
