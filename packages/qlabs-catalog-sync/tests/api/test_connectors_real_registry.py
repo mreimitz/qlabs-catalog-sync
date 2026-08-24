@@ -36,6 +36,7 @@ from prometheus_client import CollectorRegistry
 from qlabs_catalog_sync.api.app import API_PREFIX, create_app
 from qlabs_catalog_sync.api.auth import CSRF_HEADER, AdminCredential, ConsoleAuth, hash_password
 from qlabs_catalog_sync.api.routes.connectors import ConnectorInfo
+from qlabs_catalog_sync.configstore.secrets import secret_field_names
 from qlabs_catalog_sync.configstore.service import ConfigService
 from qlabs_catalog_sync.discovery import ConnectorRegistry, discover_connectors
 from qlabs_catalog_sync.observability import HealthRegistry
@@ -194,14 +195,89 @@ def test_a_secret_typed_field_never_reaches_the_client(
         checked += 1
         properties = item["config_schema"].get("properties", {})
         for name, prop in properties.items():
-            assert prop.get("format") != "password", (
+            # Recursive, not a top-level check. A REQUIRED SecretStr renders its markers
+            # flat; an OPTIONAL one (SecretStr | None) renders them inside `anyOf`. A
+            # top-level-only assertion passes happily on the second shape -- which is how
+            # Databricks' client_secret and token, both optional because only one auth route
+            # is ever set, once reached the console as ordinary settings inputs.
+            assert not _is_secret_shaped(prop), (
                 f"{item['name']}.{name} is a secret-typed property and reached the client"
             )
-            assert not prop.get("writeOnly"), (
-                f"{item['name']}.{name} is write-only (secret-typed) and reached the client"
-            )
-        assert name not in item["config_schema"].get("required", []) or True
     assert checked, "no connector reported a config schema -- this test proved nothing"
+
+
+def _is_secret_shaped(prop: object) -> bool:
+    """A pydantic secret's JSON Schema markers, at any depth reachable through the
+    composition keywords. Written out here rather than imported from the route it checks:
+    a test that reuses the implementation's own predicate cannot catch that predicate being
+    wrong, which is exactly the bug this guards."""
+    if not isinstance(prop, dict):
+        return False
+    if prop.get("format") == "password" or prop.get("writeOnly"):
+        return True
+    return any(
+        _is_secret_shaped(branch)
+        for keyword in ("anyOf", "oneOf", "allOf")
+        for branch in (prop.get(keyword) or [])
+    )
+
+
+def test_every_connectors_named_secret_fields_match_its_models_own_types(
+    app: FastAPI, real_registry: ConnectorRegistry
+) -> None:
+    """The listing's ``config_secret_fields`` and the service's own definition of a secret
+    field must never disagree.
+
+    They are two answers to one question -- "which of this connector's fields hold a
+    credential" -- and the console builds its form from the first while the server enforces
+    the second. A field the listing forgets is rendered as an ordinary settings input that
+    the server then refuses on save: an operator typing a credential into a box that can
+    never accept it. This asserts the listing is exactly the type-derived set, for every
+    connector actually installed.
+    """
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get(f"{API_PREFIX}/connectors")
+    assert response.status_code == 200, response.text
+
+    checked = 0
+    for item in response.json():
+        if not item["available"] or item["config_schema"] is None:
+            continue
+        checked += 1
+        connector_cls = real_registry.get_connector(item["name"])
+        expected = secret_field_names(connector_cls.ConfigModel)
+        assert set(item["config_secret_fields"]) == set(expected), (
+            f"{item['name']}: the listing names {item['config_secret_fields']} as secret, "
+            f"but its ConfigModel declares {sorted(expected)}"
+        )
+    assert checked, "no connector reported a config schema -- this test proved nothing"
+
+
+def test_an_optional_secret_field_is_still_recognised_as_a_secret(
+    app: FastAPI, real_registry: ConnectorRegistry
+) -> None:
+    """The specific regression: a credential that is optional *by type* because the connector
+    offers two auth routes and only one is ever set.
+
+    Databricks declares ``client_secret`` and ``token`` that way. Both are credentials; both
+    must be named as secret and kept out of the settings schema, exactly like a required one.
+    """
+    if "databricks" not in real_registry.names():
+        pytest.skip("the 'databricks' connector is not installed here")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get(f"{API_PREFIX}/connectors")
+    assert response.status_code == 200, response.text
+    databricks = next(item for item in response.json() if item["name"] == "databricks")
+
+    assert set(databricks["config_secret_fields"]) >= {"client_secret", "token"}
+    properties = databricks["config_schema"]["properties"]
+    assert "client_secret" not in properties
+    assert "token" not in properties
+    # The non-secret half of the same model is untouched -- this strips credentials, not
+    # every optional field.
+    assert "host" in properties and "client_id" in properties
 
 
 def test_the_removed_secret_fields_are_named_not_silently_dropped(

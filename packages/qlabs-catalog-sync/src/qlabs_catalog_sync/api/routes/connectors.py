@@ -56,6 +56,7 @@ from typing import Any, cast
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, JsonValue
 
+from qlabs_catalog_sync.configstore.secrets import secret_field_names
 from qlabs_catalog_sync.discovery import ConnectorRegistry
 from qlabs_catalog_sync_sdk.contract import CapabilityManifestBase, Connector
 from qlabs_catalog_sync_sdk.manifest import CapabilityManifest, ConcurrencyMode, FieldCapabilityMode
@@ -200,17 +201,56 @@ def capability_manifest_out(manifest: CapabilityManifestBase) -> CapabilityManif
     )
 
 
+def _property_is_secret_shaped(prop: object) -> bool:
+    """Whether one JSON Schema property renders a pydantic secret.
+
+    A required ``SecretStr`` renders flat -- ``{"format": "password", "writeOnly": true}`` --
+    but an **optional** one (``SecretStr | None``, which is how a connector spells a
+    credential that is only set on one of two auth routes) renders those markers one level
+    down, inside ``anyOf``. Checking only the top level therefore missed exactly the fields
+    most likely to exist: Databricks' ``client_secret`` and ``token``. Missing one is not a
+    cosmetic slip -- the console then renders it as an ordinary settings input, inviting an
+    operator to type a credential into a field meant to be stored in the clear.
+
+    So the composition keywords are searched too, and either marker alone counts: being wrong
+    in the permissive direction here costs a field moved out of the settings form, and being
+    wrong in the other direction costs a credential in plaintext.
+    """
+    if not isinstance(prop, dict):
+        return False
+    if prop.get("format") == "password" or prop.get("writeOnly"):
+        return True
+    for keyword in ("anyOf", "oneOf", "allOf"):
+        branches = prop.get(keyword)
+        if isinstance(branches, list) and any(
+            _property_is_secret_shaped(branch) for branch in branches
+        ):
+            return True
+    return False
+
+
 def _split_secret_properties(
     schema: dict[str, Any],
+    declared_secret_fields: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, JsonValue], list[str]]:
     """Split a ``ConfigModel`` JSON Schema into (schema without secret properties, the names
     removed).
 
-    A pydantic ``SecretStr`` renders as ``{"format": "password", "writeOnly": true}``; either
-    marker alone is treated as secret, because being wrong in the permissive direction here
-    means shipping a schema a console could build a credential input from. ``required`` is
-    filtered to match -- a required property that is not in ``properties`` would make every
-    generated form permanently invalid.
+    ``declared_secret_fields`` is the authority:
+    :func:`~qlabs_catalog_sync.configstore.secrets.secret_field_names` reads the model's own
+    field *types*, which is the same single definition the configuration service refuses
+    inline secrets by and the resolver looks up credentials by. Deriving this list a second
+    way, from the rendered schema, is how the three could ever disagree -- and a field this
+    route failed to call secret while the service still refuses it inline is a form that
+    invites input the server will always reject.
+
+    The rendered-schema scan (:func:`_property_is_secret_shaped`) is kept as well, unioned in,
+    for a ``ConfigModel`` whose secret-ness is expressed in a way the type walk does not see.
+    Two independent detectors, union rather than intersection: the failure this must not have
+    is a credential-shaped field left in the settings form.
+
+    ``required`` is filtered to match -- a required property that is not in ``properties``
+    would make every generated form permanently invalid.
     """
     properties = schema.get("properties")
     if not isinstance(properties, dict):
@@ -219,7 +259,7 @@ def _split_secret_properties(
     secret_names = sorted(
         name
         for name, prop in properties.items()
-        if isinstance(prop, dict) and (prop.get("format") == "password" or prop.get("writeOnly"))
+        if name in declared_secret_fields or _property_is_secret_shaped(prop)
     )
     if not secret_names:
         return cast(dict[str, JsonValue], schema), []
@@ -245,7 +285,7 @@ def _config_schema_for(
         raw = connector_cls.ConfigModel.model_json_schema()
     except Exception:  # noqa: BLE001 -- a connector's ConfigModel may fail for any reason
         return None, []
-    return _split_secret_properties(raw)
+    return _split_secret_properties(raw, secret_field_names(connector_cls.ConfigModel))
 
 
 def _describe_available(registry: ConnectorRegistry, name: str) -> ConnectorInfo:

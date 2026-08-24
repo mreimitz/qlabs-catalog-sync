@@ -31,6 +31,7 @@ no static assets present") while also being correct once assets do exist:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
@@ -45,6 +46,47 @@ def path_is_under_api_prefix(path: str, *, api_prefix: str) -> bool:
     ``api_prefix`` and must therefore never receive the SPA shell -- only the JSON error
     model, whatever the reason for the miss."""
     return path == api_prefix or path.startswith(f"{api_prefix}/")
+
+
+#: ``index.html`` must be revalidated on every load, never served from cache on a guess.
+#:
+#: The bundler gives every JS/CSS file a content hash in its name, so a deploy changes which
+#: files ``index.html`` points at -- which makes ``index.html`` the one file that decides
+#: whether a browser is running the new console or the old one. Served with no
+#: ``Cache-Control`` at all, a browser is free to invent a freshness lifetime from
+#: ``Last-Modified`` and skip revalidating entirely, and the operator gets the previous build
+#: after an upgrade with no indication anything is stale -- "I deployed it and the UI did not
+#: change", diagnosable only by knowing to hard-refresh.
+#:
+#: ``no-cache`` does not mean "do not store": the response is still cached and the ``ETag``
+#: still makes the revalidation a 304 with no body. It means "ask first", which for a 430-byte
+#: HTML file is free.
+_INDEX_CACHE_HEADERS: Final[dict[str, str]] = {"Cache-Control": "no-cache"}
+
+#: A content-hashed asset can be cached indefinitely: its name changes when its bytes do, so a
+#: stale copy is unreachable rather than merely old. ``immutable`` additionally tells the
+#: browser not to revalidate even on an explicit reload.
+_HASHED_ASSET_CACHE_HEADERS: Final[dict[str, str]] = {
+    "Cache-Control": "public, max-age=31536000, immutable"
+}
+
+#: Where the bundler puts content-hashed files. Everything else under the console root -- a
+#: favicon, a manifest, an unhashed image -- keeps the conservative default, because nothing
+#: guarantees its name changes when its content does.
+_HASHED_ASSET_DIRECTORY: Final[str] = "assets"
+
+
+def _cache_headers_for(path: Path, root: Path) -> dict[str, str]:
+    """How long a browser may keep this file without asking again.
+
+    Split by whether the bundler content-hashes the name, not by file extension: the hash is
+    what makes "cache forever" safe, and a ``.js`` file served from outside the hashed
+    directory has no such guarantee.
+    """
+    relative = path.relative_to(root)
+    if relative.parts and relative.parts[0] == _HASHED_ASSET_DIRECTORY:
+        return _HASHED_ASSET_CACHE_HEADERS
+    return _INDEX_CACHE_HEADERS
 
 
 def mount_static(app: FastAPI, *, static_dir: Path | None, api_prefix: str) -> None:
@@ -92,6 +134,6 @@ def mount_static(app: FastAPI, *, static_dir: Path | None, api_prefix: str) -> N
 
         candidate = (resolved_root / full_path.lstrip("/")).resolve()
         if candidate.is_relative_to(resolved_root) and candidate.is_file():
-            return FileResponse(candidate)
+            return FileResponse(candidate, headers=_cache_headers_for(candidate, resolved_root))
 
-        return FileResponse(index_path)
+        return FileResponse(index_path, headers=_INDEX_CACHE_HEADERS)

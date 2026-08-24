@@ -153,3 +153,45 @@ def test_healthz_and_metrics_still_win_over_the_spa_fallback_when_assets_exist(
     assert _SPA_SENTINEL not in healthz.text
     assert "text/plain" in metrics_content_type or "version=" in metrics_content_type
     assert _SPA_SENTINEL not in metrics.text
+
+
+def test_the_spa_shell_is_never_served_from_cache_without_asking(tmp_path: Path) -> None:
+    """``index.html`` is what decides which build a browser is running.
+
+    Every JS and CSS file the bundler emits is content-hashed, so a deploy changes only
+    *which* files ``index.html`` points at. Served with no ``Cache-Control``, a browser may
+    invent a freshness lifetime from ``Last-Modified`` and skip revalidating -- and an
+    operator who has just upgraded keeps getting the previous console, with nothing on screen
+    to say so and no way to diagnose it short of knowing to hard-refresh. That is a deploy
+    that silently did not take effect, which is why this is pinned rather than left to a
+    browser default.
+    """
+    static_dir = write_console_dist(tmp_path, index_html=_SPA_SENTINEL)
+    app = build_app(static_dir=static_dir)
+    client = TestClient(app)
+
+    for path in ("/", "/endpoints"):
+        response = client.get(path)
+
+        assert response.status_code == 200
+        assert response.text == _SPA_SENTINEL
+        assert "no-cache" in response.headers.get("cache-control", ""), (
+            f"{path} lets a browser keep a stale console shell without revalidating"
+        )
+
+
+def test_a_content_hashed_asset_is_cached_indefinitely(tmp_path: Path) -> None:
+    """The other half, and the reason the shell can afford to revalidate every load: a
+    hashed file's name changes when its bytes do, so a stale copy is unreachable rather than
+    merely old. Without this the shell's ``no-cache`` would turn every page load into a full
+    re-download of the bundle."""
+    static_dir = write_console_dist(tmp_path)
+    app = build_app(static_dir=static_dir)
+    client = TestClient(app)
+
+    response = client.get("/assets/index-abc123.js")
+
+    assert response.status_code == 200
+    cache_control = response.headers.get("cache-control", "")
+    assert "immutable" in cache_control
+    assert "max-age=31536000" in cache_control
