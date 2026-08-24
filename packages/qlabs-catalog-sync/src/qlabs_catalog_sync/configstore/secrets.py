@@ -64,23 +64,31 @@ from __future__ import annotations
 
 import types
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Final, Union, get_args, get_origin
 
 from pydantic import SecretBytes, SecretStr
 from pydantic_settings import BaseSettings
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from qlabs_catalog_sync.config import (
     EnvironmentSecretBackend,
     SecretBackend,
     SecretNotFoundError,
 )
+from qlabs_catalog_sync.configstore.crypto import EncryptedSecret, SecretCipher
+from qlabs_catalog_sync.configstore.models import EndpointSecretRow
 from qlabs_catalog_sync_sdk.config import ConnectorConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 __all__ = [
+    "DB_SCHEME",
+    "ENV_SCHEME",
     "SUPPORTED_SECRET_REF_SCHEMES",
+    "DatabaseSecretBackend",
+    "backend_for",
     "SecretRef",
     "SecretRefFormatError",
     "SecretResolveStatus",
@@ -94,7 +102,21 @@ __all__ = [
 #: ``SecretBackend`` exists, a ``"vault:..."`` reference is rejected at parse time as
 #: unsupported (see :class:`SecretRefFormatError`) rather than accepted and left to
 #: fail confusingly later.
-SUPPORTED_SECRET_REF_SCHEMES: frozenset[str] = frozenset({"env"})
+SUPPORTED_SECRET_REF_SCHEMES: frozenset[str] = frozenset({"env", "db"})
+
+#: The scheme an endpoint uses when its credentials are stored in the configuration
+#: database, sealed (amended C2 -- see :mod:`qlabs_catalog_sync.configstore.crypto`). Its
+#: locator is the endpoint's own name, because the ciphertext is bound to that name at
+#: seal time: unlike ``env:``, whose locator is deliberately decoupled so two endpoints can
+#: share one set of environment variables, a stored credential belongs to exactly one
+#: endpoint and cannot be pointed at another.
+DB_SCHEME: Final[str] = "db"
+
+#: The scheme for the original environment backend. Still fully supported: a deployment
+#: that already resolves credentials from the environment keeps working untouched, and a
+#: container orchestrated by something that injects secrets as environment variables has no
+#: reason to move.
+ENV_SCHEME: Final[str] = "env"
 
 
 class SecretRefFormatError(ValueError):
@@ -239,6 +261,80 @@ def secret_field_names(config_model: type[BaseSettings]) -> frozenset[str]:
     return frozenset(field.name for field in _secret_fields(config_model))
 
 
+@dataclass(frozen=True, slots=True)
+class DatabaseSecretBackend:
+    """:class:`~qlabs_catalog_sync.config.SecretBackend` over sealed credentials stored
+    in the configuration database (amended C2).
+
+    Satisfies the same protocol :class:`~qlabs_catalog_sync.config.EnvironmentSecretBackend`
+    does, so everything downstream of it -- :func:`resolve_connector_kwargs`,
+    :func:`resolve_status`, the healthcheck and manifest routes, the engine's connector
+    pool -- is unchanged by which backend an endpoint uses. That was the point of having a
+    protocol; this is the second implementation that proves it was.
+
+    Synchronous on purpose: ``SecretBackend.get_secret`` is a sync method, and the
+    configuration store is a synchronous SQLAlchemy engine that async callers already
+    reach through ``asyncio.to_thread`` (``ConfigService._unit_of_work``). A backend that
+    needed its own event loop would be the one thing that could not slot into the existing
+    protocol.
+
+    A missing row raises :class:`~qlabs_catalog_sync.config.SecretNotFoundError` with a
+    hint pointing at the console rather than at an environment variable -- for an endpoint
+    whose credentials live in the database, telling the operator to go set
+    ``DATABRICKS__CLIENT_SECRET`` would be actively wrong.
+    """
+
+    session_factory: Callable[[], Session]
+    cipher: SecretCipher
+
+    def get_secret(self, *, endpoint: str, key: str) -> SecretStr:
+        with self.session_factory() as session:
+            row = session.scalar(
+                select(EndpointSecretRow).where(
+                    EndpointSecretRow.endpoint == endpoint, EndpointSecretRow.field == key
+                )
+            )
+            if row is None:
+                raise SecretNotFoundError(
+                    endpoint=endpoint,
+                    key=key,
+                    backend="database",
+                    hint=(
+                        "no credential has been saved for this field yet -- enter it in the console"
+                    ),
+                )
+            sealed = EncryptedSecret(ciphertext=row.ciphertext, nonce=row.nonce, key_id=row.key_id)
+        return self.cipher.decrypt(sealed, endpoint=endpoint, field=key)
+
+
+def backend_for(
+    ref: SecretRef,
+    *,
+    session_factory: Callable[[], Session] | None = None,
+    cipher: SecretCipher | None = None,
+) -> SecretBackend:
+    """The backend that resolves ``ref``, chosen by its scheme.
+
+    One function, so "which backend does this endpoint use" has a single answer every
+    caller shares -- the healthcheck route, the manifest route and the engine's connector
+    pool must never disagree about it, because disagreeing means one of them silently
+    reads a credential from somewhere the operator did not configure.
+
+    A ``db:`` reference needs both a session factory and a cipher; a caller that has
+    neither (a unit test resolving an ``env:`` reference, say) can omit both. Asking for a
+    database backend without them is a programming error, not an operator error, so it
+    raises ``ValueError`` rather than a typed configuration failure.
+    """
+    if ref.scheme == DB_SCHEME:
+        if session_factory is None or cipher is None:
+            raise ValueError(
+                "resolving a 'db:' secret reference needs a configuration-store session "
+                "factory and a SecretCipher"
+            )
+        return DatabaseSecretBackend(session_factory=session_factory, cipher=cipher)
+    return EnvironmentSecretBackend()
+
+
 def _require_supported_scheme(ref: SecretRef) -> None:
     if ref.scheme not in SUPPORTED_SECRET_REF_SCHEMES:
         supported = ", ".join(sorted(SUPPORTED_SECRET_REF_SCHEMES))
@@ -281,7 +377,7 @@ def resolve_connector_kwargs(
     :func:`resolve_status` for a query that never returns one at all.
     """
     _require_supported_scheme(ref)
-    active_backend: SecretBackend = backend if backend is not None else EnvironmentSecretBackend()
+    active_backend: SecretBackend = backend if backend is not None else backend_for(ref)
     resolved: dict[str, Any] = dict(settings) if settings is not None else {}
     for field in _secret_fields(config_model):
         try:
@@ -326,7 +422,7 @@ def resolve_status(
             reason=f"scheme {ref.scheme!r} is not yet supported; supported schemes: {supported}",
         )
 
-    active_backend: SecretBackend = backend if backend is not None else EnvironmentSecretBackend()
+    active_backend: SecretBackend = backend if backend is not None else backend_for(ref)
     secret_fields = _secret_fields(config_model)
     problems: list[str] = []
     found = 0
@@ -345,10 +441,16 @@ def resolve_status(
         return SecretResolveStatus(
             resolvable=True, reason="connector declares no secret fields to resolve"
         )
+    # Name the backend the reference actually chose, not a hardcoded one: an operator reading
+    # "resolved via the environment backend" under an endpoint whose credentials they typed into
+    # this console would reasonably conclude the console had not saved them.
+    backend_label = (
+        "the console's encrypted store" if ref.scheme == DB_SCHEME else "the environment"
+    )
     return SecretResolveStatus(
         resolvable=True,
         reason=(
-            f"resolved {found} of {len(secret_fields)} secret field(s) via the environment "
-            "backend (every required field resolved)"
+            f"resolved {found} of {len(secret_fields)} secret field(s) from {backend_label} "
+            "(every required field resolved)"
         ),
     )

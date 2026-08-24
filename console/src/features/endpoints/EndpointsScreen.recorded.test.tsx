@@ -398,7 +398,12 @@ describe("EndpointsScreen -- schema-driven settings form (recorded config_schema
 
     expect(screen.queryByText("leaked-value")).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue("leaked-value")).not.toBeInTheDocument();
-    expect(document.querySelector('input[type="password"]')).toBeNull();
+    // The credentials panel (amended C2) does render masked inputs here -- and every one of
+    // them is EMPTY. That is the stronger statement now that credentials can be stored: no
+    // saved or leaked credential is ever pre-filled into a control, so nothing can be read
+    // back out of the DOM, whatever the server happened to send.
+    const masked = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="password"]'));
+    expect(masked.every((input) => input.value === "")).toBe(true);
   });
 
   it(

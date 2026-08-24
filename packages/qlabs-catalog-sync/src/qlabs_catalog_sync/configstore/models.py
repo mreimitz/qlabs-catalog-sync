@@ -96,6 +96,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -123,6 +124,7 @@ __all__ = [
     "ConfigChangeRow",
     "ConfigGenerationRow",
     "EndpointRow",
+    "EndpointSecretRow",
     "SelectionOverrideRow",
     "SelectionRuleRow",
     "SyncPairRow",
@@ -144,6 +146,58 @@ class EndpointRow(Base):
     secret_ref: Mapped[str | None] = mapped_column(String(255))
     settings: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
+class EndpointSecretRow(Base):
+    """One credential an operator entered in the console, sealed (amended C2).
+
+    The exception to "no column in this schema may hold a credential": these columns hold
+    **ciphertext**, sealed with AES-256-GCM under a master key that lives outside the
+    database entirely (``configstore.crypto``). ``tests/configstore/test_credentials.py``
+    allows this table by name and separately proves the stored bytes are not the
+    plaintext, so the guarantee is tested rather than asserted in a comment.
+
+    Why a table rather than another column on ``endpoints``: a connector declares *n*
+    secret-typed fields, not one (Databricks has ``client_secret`` and ``token``, one per
+    credential route), each is set, replaced and cleared independently, and each is sealed
+    under its own nonce. One row per ``(endpoint, field)`` is what makes "replace only the
+    client secret" a single-row write instead of a read-modify-write of a JSON blob.
+
+    ``endpoint`` cascades on delete: a sealed credential for an endpoint that no longer
+    exists is unopenable by construction (the endpoint name is bound into the ciphertext)
+    and keeping it would be keeping a credential nobody can account for. This is the same
+    reasoning as ``selection_rules``, and the opposite of ``config_changes``, which must
+    outlive what it describes.
+
+    ``key_id`` records which master key sealed the row -- see ``crypto.key_id_of``. It is
+    what turns "running with the wrong key" into a message that says so, and what makes a
+    future key rotation legible: re-sealed rows are the ones whose ``key_id`` has moved.
+    """
+
+    __tablename__ = "endpoint_secrets"
+    __table_args__ = (
+        UniqueConstraint("endpoint", "field", name="uq_endpoint_secrets_endpoint_field"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    endpoint: Mapped[str] = mapped_column(
+        String(128), ForeignKey("endpoints.name", ondelete="CASCADE"), nullable=False
+    )
+    #: The connector config field this credential is for -- ``"client_secret"``,
+    #: ``"token"``. Always one of the connector's own secret-typed field names, which is
+    #: what ``configstore.secrets.secret_field_names`` already defines once for the whole
+    #: system; the service validates against it rather than accepting any string.
+    field: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: AES-256-GCM ciphertext, tag included. Never a plaintext, never a reversible encoding.
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    #: The per-value random nonce this ciphertext was sealed under. Not secret; unique.
+    nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    #: Which master key sealed it (``crypto.key_id_of``) -- not the key, and not derived
+    #: from it in any way that can be walked back.
+    key_id: Mapped[str] = mapped_column(String(32), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)

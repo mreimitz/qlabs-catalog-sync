@@ -53,13 +53,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Final, cast
 
 from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
-from qlabs_catalog_sync.config import SecretNotFoundError
+from qlabs_catalog_sync.config import SecretBackend, SecretNotFoundError
 from qlabs_catalog_sync.configstore.models import EndpointRow
 from qlabs_catalog_sync.configstore.secrets import (
     SecretRef,
@@ -164,6 +165,43 @@ class EndpointUpdateRequest(BaseModel):
     settings: dict[str, JsonValue] | None = None
     secret_ref: str | None = Field(default=None, max_length=255)
     enabled: bool | None = None
+
+
+class StoredSecretOut(BaseModel):
+    """Whether one secret-typed field has a stored credential -- never which one.
+
+    Mirrors :class:`~qlabs_catalog_sync.configstore.service.StoredSecretStatus` field for
+    field, and like it has nothing capable of holding a value. ``updated_at`` is what lets
+    the console say "saved 3 minutes ago" without ever reading the credential back, which
+    is the only feedback a write-only field can honestly give.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    is_set: bool
+    updated_at: datetime | None = None
+    key_id: str | None = None
+
+
+class StoredSecretWriteRequest(BaseModel):
+    """The one request body in this API that carries a credential.
+
+    It travels in a request body over the console's own session-authenticated,
+    CSRF-protected origin and is never echoed back: there is no route that returns a
+    stored credential, so the value is write-only from the moment it arrives.
+    ``extra="forbid"`` so a client cannot smuggle extra fields alongside it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str = Field(
+        min_length=1,
+        description=(
+            "The credential itself. Write-only: no route ever returns it, and it is "
+            "sealed before it reaches the database."
+        ),
+    )
 
 
 class SecretResolveOut(BaseModel):
@@ -277,7 +315,12 @@ def _config_validation_reason(exc: ValidationError, config_model: type[Connector
     return "this endpoint is not fully configured: " + "; ".join(problems)
 
 
-def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> ConnectorConfig:
+def _connector_config_for(
+    row: EndpointRow,
+    connector_cls: type[Connector],
+    *,
+    backend_factory: Callable[[SecretRef], SecretBackend],
+) -> ConnectorConfig:
     """Resolve ``row``'s credential reference and build its connector's own
     ``ConnectorConfig``. Shared by every route that needs a live connector instance --
     :func:`_run_connector_healthcheck` and :func:`_read_connector_manifest` -- because
@@ -306,7 +349,9 @@ def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> C
     kwargs: dict[str, Any]
     if row.secret_ref is not None:
         ref = SecretRef.parse(row.secret_ref)
-        kwargs = resolve_connector_kwargs(ref, config_model_cls, settings=row.settings)
+        kwargs = resolve_connector_kwargs(
+            ref, config_model_cls, settings=row.settings, backend=backend_factory(ref)
+        )
         locator = ref.locator
     else:
         kwargs = dict(row.settings)
@@ -318,7 +363,10 @@ def _connector_config_for(row: EndpointRow, connector_cls: type[Connector]) -> C
 
 
 async def _run_connector_healthcheck(
-    row: EndpointRow, connector_cls: type[Connector]
+    row: EndpointRow,
+    connector_cls: type[Connector],
+    *,
+    backend_factory: Callable[[SecretRef], SecretBackend],
 ) -> HealthStatus:
     """Build, ``setup()`` and ``healthcheck()`` a fresh instance of ``connector_cls`` for
     ``row``, catching everything into a :class:`HealthStatus` rather than raising.
@@ -343,7 +391,9 @@ async def _run_connector_healthcheck(
     now = datetime.now(UTC)
     connector: Connector | None = None
     try:
-        connector_config = _connector_config_for(row, connector_cls)
+        connector_config = _connector_config_for(
+            row, connector_cls, backend_factory=backend_factory
+        )
 
         connector = connector_cls()
         ctx = ConnectorContext.build(config=connector_config, endpoint=row.name)
@@ -401,7 +451,10 @@ async def _run_connector_healthcheck(
 
 
 async def _read_connector_manifest(
-    row: EndpointRow, connector_cls: type[Connector]
+    row: EndpointRow,
+    connector_cls: type[Connector],
+    *,
+    backend_factory: Callable[[SecretRef], SecretBackend],
 ) -> tuple[CapabilityManifestOut | None, str | None]:
     """``setup()`` a throwaway instance of ``connector_cls`` for ``row`` and return its
     ``capabilities()``, or ``(None, reason)`` -- never raising.
@@ -417,7 +470,9 @@ async def _read_connector_manifest(
     """
     connector: Connector | None = None
     try:
-        connector_config = _connector_config_for(row, connector_cls)
+        connector_config = _connector_config_for(
+            row, connector_cls, backend_factory=backend_factory
+        )
         connector = connector_cls()
         ctx = ConnectorContext.build(config=connector_config, endpoint=row.name)
         async with asyncio.timeout(HEALTHCHECK_TIMEOUT_SECONDS):
@@ -569,8 +624,70 @@ def build_endpoints_router(config_service: ConfigService, registry: ConnectorReg
             )
         ref = SecretRef.parse(row.secret_ref)
         config_model_cls = cast(type[ConnectorConfig], connector_cls.ConfigModel)
-        result = resolve_status(ref, config_model_cls)
+        result = resolve_status(
+            ref, config_model_cls, backend=config_service.secret_backend_for(ref)
+        )
         return SecretResolveOut(resolvable=result.resolvable, reason=result.reason)
+
+    @router.get(
+        "/{name}/secrets",
+        response_model=list[StoredSecretOut],
+        responses=API_ERROR_RESPONSES,
+        summary="Which of this endpoint's secret-typed fields have a stored credential",
+    )
+    async def list_endpoint_secrets(name: str) -> list[StoredSecretOut]:
+        """Every secret-typed field this endpoint's connector declares, and whether a
+        credential is stored for it.
+
+        Fields with nothing stored are listed too: "this connector wants a client secret
+        and none has been entered" is precisely what the console has to render, and a
+        response that only listed what exists could not say it.
+        """
+        statuses = await config_service.list_endpoint_secrets(name)
+        return [
+            StoredSecretOut(
+                field=status_row.field,
+                is_set=status_row.is_set,
+                updated_at=status_row.updated_at,
+                key_id=status_row.key_id,
+            )
+            for status_row in statuses
+        ]
+
+    @router.put(
+        "/{name}/secrets/{field}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses=API_ERROR_RESPONSES,
+        summary="Store or replace one credential for this endpoint",
+    )
+    async def put_endpoint_secret(
+        name: str, field: str, payload: StoredSecretWriteRequest, request: Request
+    ) -> Response:
+        """Seal a credential and store it (amended C2).
+
+        ``PUT`` rather than ``POST`` because it is idempotent in the way that matters:
+        submitting the same credential twice leaves the endpoint in the same state, and
+        re-submitting is exactly what an operator does after a typo. 204 with no body,
+        because the only thing this route could return is the value it was just given.
+        """
+        session = require_session(request)
+        await config_service.set_endpoint_secret(
+            name, field, payload.value, actor=session.username, now=datetime.now(UTC)
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.delete(
+        "/{name}/secrets/{field}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses=API_ERROR_RESPONSES,
+        summary="Remove one stored credential from this endpoint",
+    )
+    async def delete_endpoint_secret(name: str, field: str, request: Request) -> Response:
+        session = require_session(request)
+        await config_service.clear_endpoint_secret(
+            name, field, actor=session.username, now=datetime.now(UTC)
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.post(
         "/{name}/healthcheck",
@@ -586,7 +703,9 @@ def build_endpoints_router(config_service: ConfigService, registry: ConnectorReg
         # connector that is not installed is a registration problem to fix, not a health
         # signal (see the module docstring).
         connector_cls = registry.get_connector(row.connector)
-        result = await _run_connector_healthcheck(row, connector_cls)
+        result = await _run_connector_healthcheck(
+            row, connector_cls, backend_factory=config_service.secret_backend_for
+        )
         return EndpointHealthOut(
             endpoint=row.name,
             state=result.state,
@@ -614,7 +733,9 @@ def build_endpoints_router(config_service: ConfigService, registry: ConnectorReg
         # Same reasoning as the healthcheck route: an endpoint naming a connector that is
         # not installed is a registration problem, not a manifest result.
         connector_cls = registry.get_connector(row.connector)
-        manifest, reason = await _read_connector_manifest(row, connector_cls)
+        manifest, reason = await _read_connector_manifest(
+            row, connector_cls, backend_factory=config_service.secret_backend_for
+        )
         return EndpointManifestOut(endpoint=row.name, manifest=manifest, unavailable_reason=reason)
 
     return router

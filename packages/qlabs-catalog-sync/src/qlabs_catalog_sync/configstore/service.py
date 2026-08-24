@@ -59,6 +59,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Final
 
@@ -70,16 +71,27 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from qlabs_catalog_sync.config import WRITE_CONNECTOR_NAME, ManualEditPolicy
+from qlabs_catalog_sync.config import (
+    WRITE_CONNECTOR_NAME,
+    ManualEditPolicy,
+    SecretBackend,
+)
 from qlabs_catalog_sync.configstore import audit
 from qlabs_catalog_sync.configstore.audit import FieldChange
+from qlabs_catalog_sync.configstore.crypto import SecretCipher
 from qlabs_catalog_sync.configstore.models import (
     EndpointRow,
+    EndpointSecretRow,
     SelectionOverrideRow,
     SelectionRuleRow,
     SyncPairRow,
 )
-from qlabs_catalog_sync.configstore.secrets import SecretRef, secret_field_names
+from qlabs_catalog_sync.configstore.secrets import (
+    DB_SCHEME,
+    SecretRef,
+    backend_for,
+    secret_field_names,
+)
 from qlabs_catalog_sync.configstore.types import (
     ChangeEntityKind,
     EndpointRole,
@@ -92,6 +104,7 @@ from qlabs_catalog_sync.state.db import create_state_engine
 from qlabs_catalog_sync_sdk.models import EntityType
 
 __all__ = [
+    "SECRET_AUDIT_FIELD_PREFIX",
     "UNSET",
     "ConfigService",
     "ConfigServiceError",
@@ -99,7 +112,11 @@ __all__ = [
     "EndpointInUseError",
     "EndpointNotFoundError",
     "EndpointSettingsValidationError",
+    "EmptySecretValueError",
     "InlineSecretRejectedError",
+    "SecretNotStoredError",
+    "StoredSecretStatus",
+    "UnknownSecretFieldError",
     "SelectionOverrideAlreadyExistsError",
     "SelectionOverrideNotFoundError",
     "SelectionRuleNotFoundError",
@@ -111,6 +128,13 @@ __all__ = [
 ]
 
 _logger = structlog.get_logger("qlabs.catalog_sync.configstore.service")
+
+#: Prefix that marks a ``config_changes.field`` as being about a *stored credential*
+#: rather than an ordinary endpoint column -- ``"secret:client_secret"``. A credential
+#: change is a real configuration change and must be attributable like any other, but its
+#: ``old_value``/``new_value`` can only ever be ``"set"``/``None``: the audit log is dumped,
+#: exported and read by people, so a value must not be able to reach it even by accident.
+SECRET_AUDIT_FIELD_PREFIX: Final[str] = "secret:"
 
 
 # --------------------------------------------------------------------------------------
@@ -197,6 +221,67 @@ class EndpointSettingsValidationError(ConfigServiceError):
         super().__init__(f"settings for connector {connector!r} are invalid: {detail}")
         self.connector = connector
         self.detail = detail
+
+
+class UnknownSecretFieldError(ConfigServiceError):
+    """A credential was offered for a field the connector does not declare as secret.
+
+    Names the fields it *does* declare, because the operator is almost always one
+    connector's vocabulary away from the right answer (``token`` versus ``client_secret``),
+    and because storing a credential nothing will ever read is worse than refusing it.
+    """
+
+    def __init__(self, endpoint: str, field: str, declared: Sequence[str]) -> None:
+        joined = ", ".join(repr(name) for name in declared) or "none"
+        super().__init__(
+            f"endpoint {endpoint!r} has no secret-typed field {field!r}; "
+            f"its connector declares: {joined}"
+        )
+        self.endpoint = endpoint
+        self.field = field
+        self.declared = tuple(declared)
+
+
+class EmptySecretValueError(ConfigServiceError):
+    """An empty string was offered as a credential.
+
+    Refused rather than stored: an empty credential fails at the tenant with a confusing
+    authentication error, and "I meant to remove it" has its own explicit, separately
+    audited operation.
+    """
+
+    def __init__(self, endpoint: str, field: str) -> None:
+        super().__init__(
+            f"the credential for endpoint {endpoint!r}, field {field!r} must not be empty; "
+            f"to remove a stored credential, clear it instead"
+        )
+        self.endpoint = endpoint
+        self.field = field
+
+
+class SecretNotStoredError(ConfigServiceError):
+    """Asked to clear a credential that was never stored."""
+
+    def __init__(self, endpoint: str, field: str) -> None:
+        super().__init__(f"endpoint {endpoint!r} has no stored credential for field {field!r}")
+        self.endpoint = endpoint
+        self.field = field
+
+
+@dataclass(frozen=True, slots=True)
+class StoredSecretStatus:
+    """Whether one secret-typed field has a stored credential -- never which one.
+
+    Same shape and same reasoning as
+    :class:`~qlabs_catalog_sync.configstore.secrets.SecretResolveStatus`: there is no
+    field here a credential could be assigned to, so this type cannot become a way for one
+    to reach the console, whatever a future caller does with it.
+    """
+
+    field: str
+    is_set: bool
+    updated_at: datetime | None
+    key_id: str | None
 
 
 class SyncPairNotFoundError(ConfigServiceError, LookupError):
@@ -453,19 +538,34 @@ class ConfigService:
     """CRUD, audit and generation for the console's configuration store, one
     transaction per write (see the module docstring)."""
 
-    def __init__(self, engine: Engine, registry: ConnectorRegistry) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        registry: ConnectorRegistry,
+        *,
+        cipher: SecretCipher | None = None,
+    ) -> None:
         self._engine = engine
         self._session_factory: sessionmaker[Session] = sessionmaker(
             bind=engine, expire_on_commit=False, future=True
         )
         self._registry = registry
+        #: Resolved on first use by :meth:`_require_cipher`, not here -- see that method
+        #: for why a deployment with no master key must still be able to start. Passing one
+        #: explicitly is for tests and for a future key source that is not the environment.
+        self._cipher = cipher
 
     @classmethod
     def from_url(
-        cls, url: str, registry: ConnectorRegistry, *, echo: bool = False
+        cls,
+        url: str,
+        registry: ConnectorRegistry,
+        *,
+        echo: bool = False,
+        cipher: SecretCipher | None = None,
     ) -> ConfigService:
         """Build a service from a SQLAlchemy URL (mirrors ``StateStore.from_url``)."""
-        return cls(create_state_engine(url, echo=echo), registry)
+        return cls(create_state_engine(url, echo=echo), registry, cipher=cipher)
 
     @property
     def engine(self) -> Engine:
@@ -703,6 +803,198 @@ class ConfigService:
                 old_value=old_value,
             )
             _logger.info("endpoint_deleted", endpoint=name, actor=actor)
+
+        async with self._unit_of_work() as session:
+            await asyncio.to_thread(_write, session)
+
+    # ====================================================================================
+    # Stored credentials (amended C2)
+    # ====================================================================================
+
+    def _require_cipher(self) -> SecretCipher:
+        """This deployment's :class:`~qlabs_catalog_sync.configstore.crypto.SecretCipher`.
+
+        Resolved lazily and cached, not built in ``__init__``, so a deployment with no
+        master key configured still starts, still serves, and still manages endpoints that
+        use ``env:`` references -- and hits
+        :class:`~qlabs_catalog_sync.configstore.crypto.MasterKeyMissingError` only at the
+        moment it actually tries to store or read a credential, where the message names
+        the two variables and the generator script. Refusing to boot would punish every
+        deployment that never adopted stored credentials at all.
+        """
+        if self._cipher is None:
+            self._cipher = SecretCipher.from_environment()
+        return self._cipher
+
+    def secret_backend_for(self, ref: SecretRef) -> SecretBackend:
+        """The :class:`~qlabs_catalog_sync.config.SecretBackend` that resolves ``ref``.
+
+        Deliberately a method on the service rather than a free function: a ``db:``
+        reference resolves against *this* configuration store, with *this* deployment's
+        master key, and the service is the only object that holds both. Every caller that
+        builds a connector -- the healthcheck and manifest routes, the preview route, the
+        engine's connector pool -- passes this same method, so all four resolve an
+        endpoint's credentials identically. Four call sites each choosing their own
+        backend is how one of them ends up silently reading a credential from a place the
+        operator never configured.
+
+        An ``env:`` reference does not touch the store at all, so this is also correct,
+        and cheap, for a deployment that never adopted stored credentials.
+        """
+        if ref.scheme == DB_SCHEME:
+            return backend_for(
+                ref, session_factory=self._session_factory, cipher=self._require_cipher()
+            )
+        return backend_for(ref)
+
+    def _secret_fields_of(self, session: Session, endpoint: str) -> frozenset[str]:
+        """The secret-typed field names ``endpoint``'s connector declares.
+
+        Goes through the same
+        :func:`~qlabs_catalog_sync.configstore.secrets.secret_field_names` the inline-secret
+        rejection and the resolution path use. One definition: a field this accepts is
+        exactly a field the resolver will look for, and exactly a field ``settings``
+        refuses to carry.
+        """
+        row = session.get(EndpointRow, endpoint)
+        if row is None:
+            raise EndpointNotFoundError(endpoint)
+        connector_cls = self._registry.get_connector(row.connector)
+        return secret_field_names(connector_cls.ConfigModel)
+
+    async def list_endpoint_secrets(self, endpoint: str) -> list[StoredSecretStatus]:
+        """Which of ``endpoint``'s secret-typed fields have a stored credential.
+
+        Every field the connector declares is listed, set or not, because "this connector
+        wants a client secret and none is stored" is exactly what the console has to be
+        able to render. :class:`StoredSecretStatus` has no field capable of holding a
+        value -- like ``SecretResolveStatus``, that is enforced by the type rather than by
+        remembering not to put one there.
+        """
+
+        def _read() -> list[StoredSecretStatus]:
+            with self._session_factory() as session:
+                declared = self._secret_fields_of(session, endpoint)
+                stored = {
+                    row.field: row
+                    for row in session.scalars(
+                        select(EndpointSecretRow).where(EndpointSecretRow.endpoint == endpoint)
+                    ).all()
+                }
+                return [
+                    StoredSecretStatus(
+                        field=field,
+                        is_set=field in stored,
+                        updated_at=stored[field].updated_at if field in stored else None,
+                        key_id=stored[field].key_id if field in stored else None,
+                    )
+                    for field in sorted(declared)
+                ]
+
+        return await asyncio.to_thread(_read)
+
+    async def set_endpoint_secret(
+        self, endpoint: str, field: str, value: str, *, actor: str, now: datetime
+    ) -> None:
+        """Seal ``value`` and store it as ``endpoint``'s ``field`` credential.
+
+        Rejects a ``field`` the connector does not declare as secret-typed
+        (:class:`UnknownSecretFieldError`) rather than storing a credential nothing will
+        ever read, and rejects an empty value: clearing is
+        :meth:`clear_endpoint_secret`, an explicit and separately-audited act, not a side
+        effect of submitting a blank form field.
+
+        The audit row names the field and records ``"set"`` -- never the value, and never
+        a length or a prefix of it, both of which are real leaks for a short credential.
+        """
+        if not value:
+            raise EmptySecretValueError(endpoint, field)
+
+        def _write(session: Session) -> None:
+            declared = self._secret_fields_of(session, endpoint)
+            if field not in declared:
+                raise UnknownSecretFieldError(endpoint, field, sorted(declared))
+
+            sealed = self._require_cipher().encrypt(value, endpoint=endpoint, field=field)
+            existing = session.scalar(
+                select(EndpointSecretRow).where(
+                    EndpointSecretRow.endpoint == endpoint, EndpointSecretRow.field == field
+                )
+            )
+            if existing is None:
+                session.add(
+                    EndpointSecretRow(
+                        endpoint=endpoint,
+                        field=field,
+                        ciphertext=sealed.ciphertext,
+                        nonce=sealed.nonce,
+                        key_id=sealed.key_id,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            else:
+                existing.ciphertext = sealed.ciphertext
+                existing.nonce = sealed.nonce
+                existing.key_id = sealed.key_id
+                existing.updated_at = now
+            session.flush()
+            audit.record_update(
+                session,
+                entity_kind=ChangeEntityKind.ENDPOINT,
+                entity_id=endpoint,
+                actor=actor,
+                now=now,
+                changes=[
+                    audit.FieldChange(
+                        field=f"{SECRET_AUDIT_FIELD_PREFIX}{field}",
+                        old_value="set" if existing is not None else None,
+                        new_value="set",
+                    )
+                ],
+            )
+            _logger.info("endpoint_secret_stored", endpoint=endpoint, field=field, actor=actor)
+
+        async with self._unit_of_work() as session:
+            await asyncio.to_thread(_write, session)
+
+    async def clear_endpoint_secret(
+        self, endpoint: str, field: str, *, actor: str, now: datetime
+    ) -> None:
+        """Delete ``endpoint``'s stored ``field`` credential.
+
+        Raises :class:`SecretNotStoredError` when there is nothing to clear, rather than
+        succeeding silently: "I removed that credential" and "there was never one there"
+        are different answers to the operator's question, and only one of them means the
+        endpoint just changed.
+        """
+
+        def _write(session: Session) -> None:
+            self._secret_fields_of(session, endpoint)  # raises if the endpoint is gone
+            existing = session.scalar(
+                select(EndpointSecretRow).where(
+                    EndpointSecretRow.endpoint == endpoint, EndpointSecretRow.field == field
+                )
+            )
+            if existing is None:
+                raise SecretNotStoredError(endpoint, field)
+            session.delete(existing)
+            session.flush()
+            audit.record_update(
+                session,
+                entity_kind=ChangeEntityKind.ENDPOINT,
+                entity_id=endpoint,
+                actor=actor,
+                now=now,
+                changes=[
+                    audit.FieldChange(
+                        field=f"{SECRET_AUDIT_FIELD_PREFIX}{field}",
+                        old_value="set",
+                        new_value=None,
+                    )
+                ],
+            )
+            _logger.info("endpoint_secret_cleared", endpoint=endpoint, field=field, actor=actor)
 
         async with self._unit_of_work() as session:
             await asyncio.to_thread(_write, session)

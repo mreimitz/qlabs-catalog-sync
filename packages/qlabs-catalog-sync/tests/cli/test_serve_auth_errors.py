@@ -83,7 +83,7 @@ def test_the_empty_password_error_names_the_variable_to_edit(
     cli_deps: CliDeps,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """"Password must not be empty" is only actionable if it says *which* password."""
+    """ "Password must not be empty" is only actionable if it says *which* password."""
     monkeypatch.setenv(PASSWORD_VARIABLE, "")
 
     result = _invoke_serve(runner, tmp_path, state_db_url, cli_deps)

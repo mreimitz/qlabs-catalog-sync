@@ -37,6 +37,7 @@ import {
 } from "./endpointsApi";
 import { describeConfigSchema, missingRequiredFields } from "./configSchemaForm";
 import { classifyEndpointError, type TopLevelField } from "./errorMapping";
+import { CredentialsPanel } from "./CredentialsPanel";
 import { ManifestPanel } from "./ManifestPanel";
 import { SchemaSettingsForm } from "./SchemaSettingsForm";
 import { newSettingsRow, rowsToSettings, settingsToRows, SettingsEditor, type SettingsRow } from "./SettingsEditor";
@@ -327,17 +328,28 @@ export function EndpointFormSheet({
 
           <FieldRow
             label="Secret reference"
-            description='A reference to a secret in the configured backend (e.g. "env:QLIK_ACME") -- never a credential value itself. Leave blank for an endpoint with no bound secret yet.'
+            description={
+              'Where this endpoint\'s credentials come from -- never a credential value itself. ' +
+              '"db:<endpoint name>" keeps them in this console, entered below and encrypted ' +
+              'before they are stored. "env:PREFIX" reads them from the server\'s environment ' +
+              'instead, for a deployment whose secrets are injected by something else. Leave ' +
+              'blank for an endpoint with no credentials bound yet.'
+            }
             error={fieldErrors.secret_ref}
           >
             <Input
               type="text"
               value={secretRef}
               onChange={(event) => setSecretRef(event.target.value)}
-              placeholder="env:QLIK_ACME"
+              placeholder="db:my_endpoint"
               autoComplete="off"
             />
           </FieldRow>
+
+          <CredentialsPanel
+            endpointName={mode.kind === "edit" ? mode.endpoint.name : null}
+            secretFields={secretFields}
+          />
 
           <div className="flex flex-col gap-2">
             <Label>Settings</Label>

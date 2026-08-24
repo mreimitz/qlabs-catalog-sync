@@ -514,9 +514,7 @@ class AdminCredential:
         Raises :class:`AuthConfigurationError` — with a message that never echoes the
         input — for an empty password.
         """
-        return cls.from_password_hash(
-            hash_password(password, params=params), username=username
-        )
+        return cls.from_password_hash(hash_password(password, params=params), username=username)
 
     def verify(self, *, username: str, password: str) -> bool:
         """``True`` when ``username``/``password`` are the configured administrator's.
@@ -621,8 +619,7 @@ def load_admin_credential(*, backend: SecretBackend | None = None) -> AdminCrede
         # rule in this module is that nothing derived from a credential gets re-exposed
         # by accident.
         raise AuthConfigurationError(
-            f"{exc} (configured in "
-            f"{ADMIN_SECRET_ENDPOINT.upper()}__{source_key.upper()})"
+            f"{exc} (configured in {ADMIN_SECRET_ENDPOINT.upper()}__{source_key.upper()})"
         ) from None
 
     if encoded is None:

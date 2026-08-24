@@ -2825,6 +2825,66 @@
         "title": "SourceTreePageOut",
         "type": "object"
       },
+      "StoredSecretOut": {
+        "additionalProperties": false,
+        "description": "Whether one secret-typed field has a stored credential -- never which one.\n\nMirrors :class:`~qlabs_catalog_sync.configstore.service.StoredSecretStatus` field for\nfield, and like it has nothing capable of holding a value. ``updated_at`` is what lets\nthe console say \"saved 3 minutes ago\" without ever reading the credential back, which\nis the only feedback a write-only field can honestly give.",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "is_set": {
+            "title": "Is Set",
+            "type": "boolean"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "field",
+          "is_set"
+        ],
+        "title": "StoredSecretOut",
+        "type": "object"
+      },
+      "StoredSecretWriteRequest": {
+        "additionalProperties": false,
+        "description": "The one request body in this API that carries a credential.\n\nIt travels in a request body over the console's own session-authenticated,\nCSRF-protected origin and is never echoed back: there is no route that returns a\nstored credential, so the value is write-only from the moment it arrives.\n``extra=\"forbid\"`` so a client cannot smuggle extra fields alongside it.",
+        "properties": {
+          "value": {
+            "description": "The credential itself. Write-only: no route ever returns it, and it is sealed before it reaches the database.",
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "StoredSecretWriteRequest",
+        "type": "object"
+      },
       "SyncPairCreateRequest": {
         "additionalProperties": false,
         "description": "Create a sync pair. ``source``/``target`` name already-registered endpoints\n(``routes/endpoints.py``, T12.3); the v1 direction guardrail and the disabled-endpoint\ncheck (see the module docstring) both apply here.",
@@ -4034,6 +4094,150 @@
           }
         },
         "summary": "Whether this endpoint's secret reference resolves (C2)",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/endpoints/{name}/secrets": {
+      "get": {
+        "description": "Every secret-typed field this endpoint's connector declares, and whether a\ncredential is stored for it.\n\nFields with nothing stored are listed too: \"this connector wants a client secret\nand none has been entered\" is precisely what the console has to render, and a\nresponse that only listed what exists could not say it.",
+        "operationId": "list_endpoint_secrets_api_endpoints__name__secrets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StoredSecretOut"
+                  },
+                  "title": "Response List Endpoint Secrets Api Endpoints  Name  Secrets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Which of this endpoint's secret-typed fields have a stored credential",
+        "tags": [
+          "endpoints"
+        ]
+      }
+    },
+    "/api/endpoints/{name}/secrets/{field}": {
+      "delete": {
+        "operationId": "delete_endpoint_secret_api_endpoints__name__secrets__field__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field",
+            "required": true,
+            "schema": {
+              "title": "Field",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Remove one stored credential from this endpoint",
+        "tags": [
+          "endpoints"
+        ]
+      },
+      "put": {
+        "description": "Seal a credential and store it (amended C2).\n\n``PUT`` rather than ``POST`` because it is idempotent in the way that matters:\nsubmitting the same credential twice leaves the endpoint in the same state, and\nre-submitting is exactly what an operator does after a typo. 204 with no body,\nbecause the only thing this route could return is the value it was just given.",
+        "operationId": "put_endpoint_secret_api_endpoints__name__secrets__field__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field",
+            "required": true,
+            "schema": {
+              "title": "Field",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoredSecretWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Every error this API returns shares this shape."
+          }
+        },
+        "summary": "Store or replace one credential for this endpoint",
         "tags": [
           "endpoints"
         ]

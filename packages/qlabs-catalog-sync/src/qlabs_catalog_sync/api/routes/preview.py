@@ -151,14 +151,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Final, Literal, cast
 
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from qlabs_catalog_sync.config import SecretNotFoundError
+from qlabs_catalog_sync.config import SecretBackend, SecretNotFoundError
 from qlabs_catalog_sync.configstore.models import EndpointRow, SyncPairRow
 from qlabs_catalog_sync.configstore.secrets import (
     SecretRef,
@@ -545,7 +545,10 @@ async def _require_source_endpoint(config_service: ConfigService, pair: SyncPair
 
 @contextlib.asynccontextmanager
 async def _open_source_connector(
-    registry: ConnectorRegistry, endpoint: EndpointRow
+    registry: ConnectorRegistry,
+    endpoint: EndpointRow,
+    *,
+    backend_factory: Callable[[SecretRef], SecretBackend],
 ) -> AsyncIterator[Connector]:
     """``setup()`` a fresh connector instance for ``endpoint`` and yield it, closing it
     on the way out either way. Never returns a partially-usable connector: every failure
@@ -564,7 +567,9 @@ async def _open_source_connector(
         kwargs: dict[str, Any]
         if endpoint.secret_ref is not None:
             ref = SecretRef.parse(endpoint.secret_ref)
-            kwargs = resolve_connector_kwargs(ref, config_model_cls, settings=endpoint.settings)
+            kwargs = resolve_connector_kwargs(
+                ref, config_model_cls, settings=endpoint.settings, backend=backend_factory(ref)
+            )
             locator = ref.locator
         else:
             kwargs = dict(endpoint.settings)
@@ -894,7 +899,9 @@ def build_preview_router(config_service: ConfigService, registry: ConnectorRegis
 
         try:
             async with asyncio.timeout(SOURCE_TREE_TIMEOUT_SECONDS):
-                async with _open_source_connector(registry, endpoint) as source:
+                async with _open_source_connector(
+                    registry, endpoint, backend_factory=config_service.secret_backend_for
+                ) as source:
                     page = await _collect_page(
                         source,
                         rule_set,
@@ -936,7 +943,9 @@ def build_preview_router(config_service: ConfigService, registry: ConnectorRegis
 
         try:
             async with asyncio.timeout(PREVIEW_TIMEOUT_SECONDS):
-                async with _open_source_connector(registry, endpoint) as source:
+                async with _open_source_connector(
+                    registry, endpoint, backend_factory=config_service.secret_backend_for
+                ) as source:
                     run = await _run_preview(
                         source,
                         rule_set,

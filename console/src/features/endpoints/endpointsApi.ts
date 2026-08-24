@@ -23,6 +23,7 @@ export type EndpointUpdateRequest = components["schemas"]["EndpointUpdateRequest
 export type EndpointHealthOut = components["schemas"]["EndpointHealthOut"];
 export type EndpointManifestOut = components["schemas"]["EndpointManifestOut"];
 export type SecretResolveOut = components["schemas"]["SecretResolveOut"];
+export type StoredSecretOut = components["schemas"]["StoredSecretOut"];
 export type CapabilityManifestOut = components["schemas"]["CapabilityManifestOut"];
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
@@ -113,6 +114,61 @@ export async function resolveEndpointSecret(name: string): Promise<ApiResult<Sec
       params: { path: { name } },
     });
     if (data) return ok(data);
+    return fail(error);
+  } catch (caught) {
+    return fail(caught);
+  }
+}
+
+/** `GET /api/endpoints/{name}/secrets` -- every secret-typed field this endpoint's connector
+ * declares, and whether a credential has been saved for it. Never the credential: the response
+ * has no field capable of carrying one. Fields with nothing saved are listed too, which is what
+ * lets the form render "this connector wants a client secret and none has been entered". */
+export async function listEndpointSecrets(name: string): Promise<ApiResult<StoredSecretOut[]>> {
+  try {
+    const { data, error } = await apiClient.GET("/api/endpoints/{name}/secrets", {
+      params: { path: { name } },
+    });
+    if (data) return ok(data);
+    return fail(error);
+  } catch (caught) {
+    return fail(caught);
+  }
+}
+
+/** `PUT /api/endpoints/{name}/secrets/{field}` -- save or replace one credential. The only
+ * request in this console that carries a credential value; it is sealed server-side before it
+ * reaches the database and no route ever returns it. Idempotent, which is what re-submitting
+ * after a typo needs to be. */
+export async function putEndpointSecret(
+  name: string,
+  field: string,
+  value: string,
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await apiClient.PUT("/api/endpoints/{name}/secrets/{field}", {
+      params: { path: { name, field } },
+      body: { value },
+    });
+    if (!error) return ok(undefined);
+    return fail(error);
+  } catch (caught) {
+    return fail(caught);
+  }
+}
+
+/** `DELETE /api/endpoints/{name}/secrets/{field}` -- remove one saved credential. A 404 means
+ * there was nothing stored, which is a different answer than "removed" and is surfaced as
+ * such. */
+export async function deleteEndpointSecret(
+  name: string,
+  field: string,
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await apiClient.DELETE("/api/endpoints/{name}/secrets/{field}", {
+      params: { path: { name, field } },
+    });
+    if (!error) return ok(undefined);
     return fail(error);
   } catch (caught) {
     return fail(caught);

@@ -166,9 +166,10 @@ contract, round-trip, idempotency, HTTP-behavior and capability-honesty suites.
 
 Configuration is a set of **sync pairs**. A pair names its source endpoint, the target Qlik
 space, which entity types to sync, the poll cadence, the policy for values edited by hand
-in the target, and whether product activation is enabled. Credentials come from environment
-variables or a secret manager; connectors never read the environment themselves, and
-secrets are redacted from logs and never written to state.
+in the target, and whether product activation is enabled. Credentials are entered in the
+console and stored encrypted, or read from environment variables where a deployment already
+injects them that way; connectors never read the environment themselves, and secrets are
+redacted from logs and never written to state.
 
 **Which objects a pair syncs is a rule set, not a fixed list.** Rules are ordered, each one
 includes or excludes by name pattern, source tag or owner, and the last rule that matches an
@@ -183,9 +184,12 @@ cadence with jitter, and a pair never overlaps itself.
 
 **A browser console configures all of it.** Endpoints, pairs and selection rules live in the
 service's own database rather than in environment variables, so they can be edited while it
-runs and take effect without a restart. Credentials stay outside: an endpoint stores a *named
-reference* to a secret — an environment variable, later a secret manager — and the console
-shows only whether it resolves and whether the endpoint is healthy. Adding a catalog means
+runs and take effect without a restart. **Credentials included:** a client's credential is
+typed into the console, encrypted before it is stored, and takes effect immediately — no file
+on the host, no restart, nothing to do per client except fill in the form. An endpoint that is
+already fed by an external secret injector can point at an environment variable instead. Either
+way the console shows only whether the credential resolves and whether the endpoint is healthy;
+no route ever returns a stored credential. Adding a catalog means
 registering an instance of a connector already present in the image; nothing is downloaded or
 installed from the browser. Every configuration change is recorded in an append-only log.
 
@@ -275,7 +279,7 @@ tests and 272 console tests passing.
 | WP7 | Identity map, field diff, owner correlation | 4 / 4 | **Done** |
 | WP8 | Integration, end-to-end pilot, release readiness | 4 / 4 | **Done** |
 | WP9 | Packaging, deployment, runbook, v0.1 tag | 4 / 4 | **Done** |
-| WP10 | Configuration store, secret references, audit log | 4 / 4 | **Done** (console, RM-06) |
+| WP10 | Configuration store, stored credentials, audit log | 4 / 4 | **Done** (console, RM-06) |
 | WP11 | Selection rule engine, source tree, run history | 4 / 4 | **Done** (console, RM-06) |
 | WP12 | REST API, authentication, generated client | 9 / 9 | **Done** (console, RM-06) |
 | WP13 | Console SPA | 8 / 8 | **Done** (console, RM-06) |
@@ -350,10 +354,14 @@ tenant has been involved.
   shows — included, excluded, or "cannot tell" — comes from the engine's own evaluator, the
   same code the real sync runs. A tag rule against a source that cannot report tags is
   reported as undetermined in its own right, never quietly folded into "excluded".
-- **The console never handles a credential.** An endpoint binds a *named reference* to a
-  secret, and secret-typed fields are stripped from the settings schema before it reaches
-  the browser — so the form has no field to type a password into. The session cookie is
-  `HttpOnly` and the SPA never reads it; nothing but the theme preference is persisted.
+- **A credential goes in and never comes back out.** The console accepts one, seals it with
+  AES-256-GCM under a key held outside the database, and stores only the ciphertext — bound to
+  the endpoint and field it belongs to, so it cannot be moved to another. No route returns a
+  stored credential, the form never pre-fills one, and the audit log records that a field was
+  set, not what it was set to. A stolen database file yields nothing without the key. Secret
+  fields are still stripped from the ordinary settings form, so a credential can never be
+  saved in the clear as plain configuration. The session cookie is `HttpOnly` and the SPA
+  never reads it; nothing but the theme preference is persisted.
 - **Configuration is authenticated and fails closed.** One administrator identity, a hashed
   credential from the environment, a CSRF token on every mutating request, and a refusal to
   start at all if no credential is configured.
@@ -384,8 +392,12 @@ tenant has been involved.
 - **Not yet one container image.** The console is built separately (`pnpm -C console build`)
   and pointed at with `serve --console-assets`; folding the Node build stage into the image
   so one artifact ships both halves is WP14.
-- **No operator documentation.** Console setup, the administrator credential, secret
-  references and the selection rule model are not written up yet (WP14).
+- **No operator documentation.** Console setup, the administrator credential, the
+  credential-store master key and the selection rule model are not written up yet (WP14).
+- **No key rotation.** A stored credential records which master key sealed it, so the
+  service says so plainly when it is started with the wrong one — but there is no command
+  that re-seals existing credentials under a new key. Rotating today means re-entering each
+  credential in the console.
 - **A dry run cannot report unresolved references.** The engine plans a write without
   calling the target, and dataset-member (D2) and owner (D3) resolution happens inside that
   call — so a dry run's unresolved-reference section is always empty, whatever the tenant
@@ -483,6 +495,14 @@ uv run python scripts/make_admin_hash.py             # the administrator credent
 # if both are set. There is no password-strength policy on either route -- any non-empty
 # password is accepted, because the operator configuring it is the one signing in.
 
+uv run python scripts/make_secret_key.py             # the credential-store master key
+# Encrypts every credential entered in the console. ONE key per installation, set once at
+# install time -- adding a client never touches it. Put it in a file and point
+# QLABS_SECRET_KEY_FILE at it (preferred), or set QLABS_SECRET_KEY inline in .env.
+# Keep it: a lost key means every stored credential has to be entered again, and there is
+# no way to recover one from the database alone. Keep it off the same medium as your
+# database backups -- holding both is the one case the encryption does not protect against.
+
 qlabs-catalog-sync serve --config config.yaml \
     --console-assets console/dist --port 8080
 ```
@@ -491,6 +511,14 @@ Then open `http://127.0.0.1:8080` and sign in. Without a credential configured t
 refuses to start, deliberately — it will not serve an unauthenticated console. Without
 `--console-assets` the API, `/healthz` and `/metrics` still serve and `/` says the console
 is not installed.
+
+**Adding a client, end to end, from the browser:** register the endpoint (name it, pick its
+connector, fill in host and space), set its secret reference to `db:<endpoint name>`, save,
+then reopen it and type the tenant credential into the **Credentials** panel. It is encrypted
+on arrival and takes effect immediately — the next healthcheck uses it, with no restart. A
+deployment whose secrets are already injected as environment variables can use
+`env:<PREFIX>` instead and skip the master key entirely; the two can coexist, endpoint by
+endpoint.
 
 To just look at the console without a tenant, point `--config` at
 [`deploy/config/local-console.yaml`](deploy/config/local-console.yaml) — it declares no

@@ -73,12 +73,13 @@ import contextlib
 import hashlib
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from pydantic import ValidationError
 
-from qlabs_catalog_sync.config import SecretNotFoundError, SyncPairConfig
+from qlabs_catalog_sync.config import SecretBackend, SecretNotFoundError, SyncPairConfig
 from qlabs_catalog_sync.configstore.models import (
     EndpointRow,
     SelectionOverrideRow,
@@ -173,6 +174,7 @@ async def build_connector_for_endpoint(
     registry: ConnectorRegistry,
     *,
     metrics: MetricsHandle | None = None,
+    backend_factory: Callable[[SecretRef], SecretBackend] | None = None,
 ) -> Connector:
     """Build, ``setup()`` and return a live connector for ``row``.
 
@@ -214,7 +216,10 @@ async def build_connector_for_endpoint(
     if row.secret_ref is not None:
         ref = SecretRef.parse(row.secret_ref)
         try:
-            kwargs = resolve_connector_kwargs(ref, config_model_cls, settings=row.settings)
+            backend = backend_factory(ref) if backend_factory is not None else None
+            kwargs = resolve_connector_kwargs(
+                ref, config_model_cls, settings=row.settings, backend=backend
+            )
         except SecretNotFoundError as exc:
             # SecretNotFoundError's message names the endpoint, the key and the variable
             # it looked for -- never a value (T10.2 pins this).
@@ -386,7 +391,10 @@ class StoreConnectorPool:
 
             try:
                 connector = await build_connector_for_endpoint(
-                    row, self._registry, metrics=self._metrics
+                    row,
+                    self._registry,
+                    metrics=self._metrics,
+                    backend_factory=self._config_service.secret_backend_for,
                 )
             except Exception:
                 # The stored configuration has moved on, so whatever is cached was built

@@ -390,8 +390,11 @@ describe("EndpointsScreen", () => {
   });
 
   // --------------------------------------------------------------------------------------
-  // MUTATION #7 -- settings rows are always plain text; the only credential-adjacent field is
-  // the secret REFERENCE, and it is a plain text reference, never a masked/password entry.
+  // MUTATION #7 -- settings rows and the secret REFERENCE field are always plain text. A
+  // credential has its own panel (CredentialsPanel, amended C2) and is the ONE masked input in
+  // this form; it appears only when editing a registered endpoint, never here. The rule this
+  // pins is therefore narrower than it once was, and more useful: a credential must not be
+  // typeable into a field that will be stored in the clear as ordinary settings.
   // --------------------------------------------------------------------------------------
   it("MUTATION #7 -- no settings row or the secret-reference field ever renders as a maskable credential input", async () => {
     const fetchMock = installFetchMock();
@@ -406,8 +409,8 @@ describe("EndpointsScreen", () => {
     await screen.findByRole("heading", { name: "Register endpoint" });
 
     // The secret REFERENCE field: a plain text input, never type="password" -- it holds a
-    // reference string ("env:QLIK_ACME"), not a credential value.
-    const secretRefInput = screen.getByPlaceholderText("env:QLIK_ACME");
+    // reference string ("db:my_endpoint", "env:QLIK_ACME"), not a credential value.
+    const secretRefInput = screen.getByPlaceholderText("db:my_endpoint");
     expect(secretRefInput).toHaveAttribute("type", "text");
 
     await user.click(screen.getByRole("button", { name: "Add setting" }));
@@ -418,6 +421,8 @@ describe("EndpointsScreen", () => {
     // mask/imply it is safe to type a credential into).
     expect(screen.queryByRole("checkbox", { name: /secret/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: /secret/i })).not.toBeInTheDocument();
+    // Register mode offers no credential input at all: a credential is sealed against the
+    // endpoint it belongs to, so there is nothing to attach one to until the endpoint exists.
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
@@ -442,7 +447,7 @@ describe("EndpointsScreen", () => {
     await user.click(await screen.findByRole("option", { name: "fake" }));
     await user.click(screen.getByRole("combobox", { name: "Role" }));
     await user.click(await screen.findByRole("option", { name: "source" }));
-    await user.type(screen.getByPlaceholderText("env:QLIK_ACME"), "env:FAKE");
+    await user.type(screen.getByPlaceholderText("db:my_endpoint"), "env:FAKE");
 
     let capturedBody: unknown = null;
     routes["POST /api/endpoints"] = async (request: Request) => {

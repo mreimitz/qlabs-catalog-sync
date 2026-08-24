@@ -425,9 +425,7 @@ def test_console_auth_from_environment_accepts_a_plaintext_password() -> None:
     assert auth.username == USERNAME
 
     app, _ = build_app(auth=auth)
-    response = client_for(app).post(
-        SESSION_PATH, json={"username": USERNAME, "password": PASSWORD}
-    )
+    response = client_for(app).post(SESSION_PATH, json={"username": USERNAME, "password": PASSWORD})
 
     assert response.status_code == 200
 

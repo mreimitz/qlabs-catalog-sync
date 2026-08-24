@@ -46,14 +46,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from qlabs_catalog_sync.configstore.crypto import MasterKeyError
 from qlabs_catalog_sync.configstore.secrets import SecretRefFormatError
 from qlabs_catalog_sync.configstore.service import (
     ConfigServiceError,
+    EmptySecretValueError,
     EndpointAlreadyExistsError,
     EndpointInUseError,
     EndpointNotFoundError,
     EndpointSettingsValidationError,
     InlineSecretRejectedError,
+    SecretNotStoredError,
     SelectionOverrideAlreadyExistsError,
     SelectionOverrideNotFoundError,
     SelectionRuleNotFoundError,
@@ -62,6 +65,7 @@ from qlabs_catalog_sync.configstore.service import (
     SyncPairAlreadyExistsError,
     SyncPairEndpointError,
     SyncPairNotFoundError,
+    UnknownSecretFieldError,
 )
 from qlabs_catalog_sync.discovery import (
     ConnectorBrokenError,
@@ -221,6 +225,58 @@ def install_error_handlers(app: FastAPI) -> None:
         return _respond(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorModel(code="endpoint_settings_invalid", message=str(exc), entity=exc.connector),
+        )
+
+    @app.exception_handler(UnknownSecretFieldError)
+    async def _handle_unknown_secret_field(
+        request: Request, exc: UnknownSecretFieldError
+    ) -> JSONResponse:
+        return _respond(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorModel(
+                code="unknown_secret_field",
+                message=str(exc),
+                field=exc.field,
+                entity=exc.endpoint,
+            ),
+        )
+
+    @app.exception_handler(EmptySecretValueError)
+    async def _handle_empty_secret_value(
+        request: Request, exc: EmptySecretValueError
+    ) -> JSONResponse:
+        return _respond(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorModel(
+                code="empty_secret_value",
+                message=str(exc),
+                field=exc.field,
+                entity=exc.endpoint,
+            ),
+        )
+
+    @app.exception_handler(SecretNotStoredError)
+    async def _handle_secret_not_stored(
+        request: Request, exc: SecretNotStoredError
+    ) -> JSONResponse:
+        return _respond(
+            status.HTTP_404_NOT_FOUND,
+            ErrorModel(
+                code="secret_not_stored",
+                message=str(exc),
+                field=exc.field,
+                entity=exc.endpoint,
+            ),
+        )
+
+    @app.exception_handler(MasterKeyError)
+    async def _handle_master_key_error(request: Request, exc: MasterKeyError) -> JSONResponse:
+        # 503, not 500: the service is running and correct, the *deployment* is missing a
+        # piece of setup, and the message says which. A 500 would send an operator looking
+        # for a bug; the fix is one command and one variable.
+        return _respond(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            ErrorModel(code="master_key_unavailable", message=str(exc)),
         )
 
     @app.exception_handler(SyncPairNotFoundError)

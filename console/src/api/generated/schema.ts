@@ -177,6 +177,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/endpoints/{name}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which of this endpoint's secret-typed fields have a stored credential
+         * @description Every secret-typed field this endpoint's connector declares, and whether a
+         *     credential is stored for it.
+         *
+         *     Fields with nothing stored are listed too: "this connector wants a client secret
+         *     and none has been entered" is precisely what the console has to render, and a
+         *     response that only listed what exists could not say it.
+         */
+        get: operations["list_endpoint_secrets_api_endpoints__name__secrets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/endpoints/{name}/secrets/{field}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Store or replace one credential for this endpoint
+         * @description Seal a credential and store it (amended C2).
+         *
+         *     ``PUT`` rather than ``POST`` because it is idempotent in the way that matters:
+         *     submitting the same credential twice leaves the endpoint in the same state, and
+         *     re-submitting is exactly what an operator does after a typo. 204 with no body,
+         *     because the only thing this route could return is the value it was just given.
+         */
+        put: operations["put_endpoint_secret_api_endpoints__name__secrets__field__put"];
+        post?: never;
+        /** Remove one stored credential from this endpoint */
+        delete: operations["delete_endpoint_secret_api_endpoints__name__secrets__field__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pairs": {
         parameters: {
             query?: never;
@@ -1784,6 +1835,41 @@ export interface components {
             offset: number;
         };
         /**
+         * StoredSecretOut
+         * @description Whether one secret-typed field has a stored credential -- never which one.
+         *
+         *     Mirrors :class:`~qlabs_catalog_sync.configstore.service.StoredSecretStatus` field for
+         *     field, and like it has nothing capable of holding a value. ``updated_at`` is what lets
+         *     the console say "saved 3 minutes ago" without ever reading the credential back, which
+         *     is the only feedback a write-only field can honestly give.
+         */
+        StoredSecretOut: {
+            /** Field */
+            field: string;
+            /** Is Set */
+            is_set: boolean;
+            /** Key Id */
+            key_id?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * StoredSecretWriteRequest
+         * @description The one request body in this API that carries a credential.
+         *
+         *     It travels in a request body over the console's own session-authenticated,
+         *     CSRF-protected origin and is never echoed back: there is no route that returns a
+         *     stored credential, so the value is write-only from the moment it arrives.
+         *     ``extra="forbid"`` so a client cannot smuggle extra fields alongside it.
+         */
+        StoredSecretWriteRequest: {
+            /**
+             * Value
+             * @description The credential itself. Write-only: no route ever returns it, and it is sealed before it reaches the database.
+             */
+            value: string;
+        };
+        /**
          * SyncPairCreateRequest
          * @description Create a sync pair. ``source``/``target`` name already-registered endpoints
          *     (``routes/endpoints.py``, T12.3); the v1 direction guardrail and the disabled-endpoint
@@ -2439,6 +2525,101 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SecretResolveOut"];
                 };
+            };
+            /** @description Every error this API returns shares this shape. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    list_endpoint_secrets_api_endpoints__name__secrets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredSecretOut"][];
+                };
+            };
+            /** @description Every error this API returns shares this shape. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    put_endpoint_secret_api_endpoints__name__secrets__field__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                field: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoredSecretWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Every error this API returns shares this shape. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    delete_endpoint_secret_api_endpoints__name__secrets__field__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                field: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Every error this API returns shares this shape. */
             default: {
