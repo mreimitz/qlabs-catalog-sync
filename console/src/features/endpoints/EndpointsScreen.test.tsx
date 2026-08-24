@@ -390,50 +390,58 @@ describe("EndpointsScreen", () => {
   });
 
   // --------------------------------------------------------------------------------------
-  // MUTATION #7 -- settings rows and the secret REFERENCE field are always plain text. A
-  // credential has its own panel (CredentialsPanel, amended C2) and is the ONE masked input in
-  // this form; it appears only when editing a registered endpoint, never here. The rule this
-  // pins is therefore narrower than it once was, and more useful: a credential must not be
-  // typeable into a field that will be stored in the clear as ordinary settings.
+  // MUTATION #7 -- settings rows are always plain text. A credential is typed into the
+  // credentials panel, which encrypts it; a settings row is stored in the clear. So the rule
+  // is not "nothing is ever masked" -- it is that the two must never be the same control, and
+  // that no settings row ever invites a credential.
   // --------------------------------------------------------------------------------------
-  it("MUTATION #7 -- no settings row or the secret-reference field ever renders as a maskable credential input", async () => {
+  it("MUTATION #7 -- a settings row never invites a credential and is never a masked input", async () => {
     const fetchMock = installFetchMock();
     installApiRouter(fetchMock, {
       "GET /api/endpoints": jsonResponse(200, []),
-      "GET /api/connectors": jsonResponse(200, [connectorInfoFixture({ name: "fake" })]),
+      "GET /api/connectors": jsonResponse(200, [
+        connectorInfoFixture({ name: "fake", config_secret_fields: ["client_secret"] }),
+      ]),
     });
     renderScreen();
     const user = userEvent.setup();
     await screen.findByText("No endpoints registered yet");
     await user.click(screen.getAllByRole("button", { name: "Register endpoint" })[0]!);
     await screen.findByRole("heading", { name: "Register endpoint" });
-
-    // The secret REFERENCE field: a plain text input, never type="password" -- it holds a
-    // reference string ("db:my_endpoint", "env:QLIK_ACME"), not a credential value.
-    const secretRefInput = screen.getByPlaceholderText("db:my_endpoint");
-    expect(secretRefInput).toHaveAttribute("type", "text");
+    // A connector has to be chosen before either half of this exists: the settings editor is
+    // built from its schema, and which credentials it needs comes from its declared fields.
+    await user.click(screen.getByRole("combobox", { name: "Connector" }));
+    await user.click(await screen.findByRole("option", { name: "fake" }));
 
     await user.click(screen.getByRole("button", { name: "Add setting" }));
     const valueInput = screen.getAllByPlaceholderText("value").at(-1)!;
     expect(valueInput).toHaveAttribute("type", "text");
 
-    // No control anywhere in the form offers to mark a settings row "secret" (which would
-    // mask/imply it is safe to type a credential into).
+    // No control anywhere offers to mark a settings row "secret" -- which would imply it is
+    // safe to type a credential into a field that is stored in the clear.
     expect(screen.queryByRole("checkbox", { name: /secret/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: /secret/i })).not.toBeInTheDocument();
-    // Register mode offers no credential input at all: a credential is sealed against the
-    // endpoint it belongs to, so there is nothing to attach one to until the endpoint exists.
-    expect(document.querySelector('input[type="password"]')).toBeNull();
+
+    // The one masked control is the credential field, and it is not a settings row.
+    const masked = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="password"]'));
+    expect(masked).toHaveLength(1);
+    expect(masked[0]).toBe(screen.getByLabelText("client_secret"));
   });
 
   // --------------------------------------------------------------------------------------
   // End-to-end sanity: register, edit, enable/disable, delete -- "entirely from the browser".
   // --------------------------------------------------------------------------------------
-  it("registers a new endpoint end to end and shows it in the list with its secret status resolved", async () => {
+  it("registers a new endpoint and its credential in one submit, then shows it in the list", async () => {
+    // The whole operator workflow, as one action: name it, pick its connector and role, type
+    // the credential, press the button. Two requests go out behind that one press, because a
+    // credential can only be sealed against an endpoint that exists -- which is this system's
+    // sequencing problem, not the operator's, and must never surface as a second step.
     const fetchMock = installFetchMock();
     const routes: Routes = {
       "GET /api/endpoints": jsonResponse(200, []),
-      "GET /api/connectors": jsonResponse(200, [connectorInfoFixture({ name: "fake" })]),
+      "GET /api/connectors": jsonResponse(200, [
+        connectorInfoFixture({ name: "fake", config_secret_fields: ["client_secret"] }),
+      ]),
     };
     installApiRouter(fetchMock, routes);
     renderScreen();
@@ -447,9 +455,10 @@ describe("EndpointsScreen", () => {
     await user.click(await screen.findByRole("option", { name: "fake" }));
     await user.click(screen.getByRole("combobox", { name: "Role" }));
     await user.click(await screen.findByRole("option", { name: "source" }));
-    await user.type(screen.getByPlaceholderText("db:my_endpoint"), "env:FAKE");
+    await user.type(screen.getByLabelText("client_secret"), "typed-by-the-operator");
 
     let capturedBody: unknown = null;
+    let capturedSecret: unknown = null;
     routes["POST /api/endpoints"] = async (request: Request) => {
       capturedBody = await request.clone().json();
       return jsonResponse(
@@ -458,11 +467,15 @@ describe("EndpointsScreen", () => {
           name: "new_ep",
           connector: "fake",
           role: "source",
-          secret_ref: "env:FAKE",
+          secret_ref: "db:new_ep",
           settings: {},
           enabled: false,
         }),
       );
+    };
+    routes["PUT /api/endpoints/new_ep/secrets/client_secret"] = async (request: Request) => {
+      capturedSecret = await request.clone().json();
+      return new Response(null, { status: 204 });
     };
     routes["GET /api/endpoints/new_ep/secret-resolve"] = jsonResponse(200, secretResolveFixture());
     installApiRouter(fetchMock, routes);
@@ -473,13 +486,16 @@ describe("EndpointsScreen", () => {
     await screen.findByText("new_ep");
     expect(screen.queryByRole("heading", { name: "Register endpoint" })).not.toBeInTheDocument();
     expect(toastSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("new_ep"));
+    expect(capturedSecret).toEqual({ value: "typed-by-the-operator" });
+    // The form never asks where credentials should live and never sends an answer: the server
+    // binds "db:<name>" itself. A secret_ref in this body would mean the question came back.
     expect(capturedBody).toMatchObject({
       name: "new_ep",
       connector: "fake",
       role: "source",
-      secret_ref: "env:FAKE",
       settings: {},
     });
+    expect(capturedBody).not.toHaveProperty("secret_ref");
   });
 
   it("toggles enabled with an immediate PATCH request", async () => {

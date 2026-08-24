@@ -90,6 +90,7 @@ from qlabs_catalog_sync.configstore.secrets import (
     DB_SCHEME,
     SecretRef,
     backend_for,
+    default_secret_ref_for,
     secret_field_names,
 )
 from qlabs_catalog_sync.configstore.types import (
@@ -631,6 +632,7 @@ class ConfigService:
         role: EndpointRole,
         settings: Mapping[str, object] | None = None,
         secret_ref: str | None = None,
+        bind_default_secret_ref: bool = True,
         enabled: bool = False,
         actor: str,
         now: datetime,
@@ -645,9 +647,31 @@ class ConfigService:
         :class:`InlineSecretRejectedError` / :class:`EndpointSettingsValidationError`
         for a bad ``settings`` dict; :class:`EndpointAlreadyExistsError` when ``name``
         is already taken. None of these open a transaction -- see the module docstring.
+
+        ``secret_ref`` defaults to :func:`default_secret_ref_for`'s ``"db:<name>"`` whenever
+        the connector declares a secret-typed field at all: such an endpoint keeps its
+        credentials in this configuration store unless someone deliberately says otherwise.
+        That default is what lets registering an endpoint be
+        "name it, fill in its settings, type its credentials" with no fourth question about
+        where credentials come from -- a question that has one right answer for almost every
+        deployment and that an operator adding a client should never have to think about.
+        Passing an explicit ``"env:PREFIX"`` still works, unchanged, for a deployment whose
+        secrets are injected as environment variables. ``bind_default_secret_ref=False``
+        suppresses the default entirely, for the one caller that means *no* reference rather
+        than "the usual one": ``configstore.bootstrap``, importing an environment-declared
+        config whose per-field secret keys do not map onto a single reference, records that
+        as a skip and imports the endpoint with nothing bound rather than inventing a
+        binding the operator did not ask for.
         """
         connector_cls = self._registry.get_connector(connector)
-        if secret_ref is not None:
+        if secret_ref is None:
+            # Only when the connector actually wants a credential. An endpoint whose
+            # connector declares no secret-typed field is fully configured by `settings`
+            # alone, and giving it a reference to a credential store it will never read
+            # would be a lie the console then has to render.
+            if bind_default_secret_ref and secret_field_names(connector_cls.ConfigModel):
+                secret_ref = default_secret_ref_for(name)
+        else:
             SecretRef.parse(secret_ref)
         resolved_settings: dict[str, object] = dict(settings) if settings is not None else {}
         _validate_endpoint_settings(connector, connector_cls.ConfigModel, resolved_settings)
@@ -814,16 +838,18 @@ class ConfigService:
     def _require_cipher(self) -> SecretCipher:
         """This deployment's :class:`~qlabs_catalog_sync.configstore.crypto.SecretCipher`.
 
-        Resolved lazily and cached, not built in ``__init__``, so a deployment with no
-        master key configured still starts, still serves, and still manages endpoints that
-        use ``env:`` references -- and hits
-        :class:`~qlabs_catalog_sync.configstore.crypto.MasterKeyMissingError` only at the
-        moment it actually tries to store or read a credential, where the message names
-        the two variables and the generator script. Refusing to boot would punish every
-        deployment that never adopted stored credentials at all.
+        Resolved lazily and cached, not built in ``__init__``: a deployment that never
+        stores a credential never needs a key, and creating one at startup for a service
+        that will not use it is noise in a directory an operator has to reason about.
+
+        Nothing has to be configured for this to work. ``SecretCipher.for_database`` uses
+        an explicitly configured key when there is one and otherwise makes one beside this
+        service's own database the first time a credential is saved -- see
+        :mod:`~qlabs_catalog_sync.configstore.crypto` for what that default costs and what
+        it still protects.
         """
         if self._cipher is None:
-            self._cipher = SecretCipher.from_environment()
+            self._cipher = SecretCipher.for_database(self._engine.url)
         return self._cipher
 
     def secret_backend_for(self, ref: SecretRef) -> SecretBackend:

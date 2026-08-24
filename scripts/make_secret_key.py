@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Print a master key for the credential store, and how to install it.
 
-Run once per deployment::
+**You do not need to run this.** The service creates its own key beside its database the
+first time a credential is saved, so a fresh deployment works with nothing configured.
+
+Run it only to keep the key somewhere *other* than beside the database -- a mounted secret,
+a cloud secret manager -- so that a stolen backup carries the ciphertext and not the key::
 
     uv run python scripts/make_secret_key.py
 
@@ -42,7 +46,11 @@ from qlabs_catalog_sync.configstore.crypto import (  # noqa: E402
 def main() -> int:
     key = generate_master_key()
     print()
-    print("A new master key for the credential store:")
+    print("A new master key for the credential store.")
+    print()
+    print("You only need this to keep the key APART from the database -- otherwise the")
+    print("service makes its own beside the database and there is nothing to install.")
+    print()
     print()
     print(f"  {MASTER_KEY_ENV_VAR}={key}")
     print()

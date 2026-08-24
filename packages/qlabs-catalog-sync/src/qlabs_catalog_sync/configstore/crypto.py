@@ -25,18 +25,33 @@ environment backend it replaces. There is no way to encrypt without a key that l
 somewhere other than the ciphertext, so "no configuration outside the database at all" is
 not on the menu; one install-scoped value is the floor.
 
-**Where the key comes from.** :func:`load_master_key` reads, in order:
+**Where the key comes from, and why nobody has to supply one.** :func:`resolve_master_key`
+reads, in order:
 
-* ``QLABS_SECRET_KEY_FILE`` -- a path to a file holding the key. Preferred: a file has an
-  owner and a mode, it does not leak into ``ps``, a container's inspect output, or a crash
-  report the way an environment variable does, and it is what Docker/Kubernetes secret
-  mounts hand you.
-* ``QLABS_SECRET_KEY`` -- the key inline. Simpler for a laptop or a one-box deploy.
+* ``QLABS_SECRET_KEY_FILE`` -- a path to a file holding the key.
+* ``QLABS_SECRET_KEY`` -- the key inline.
+* **otherwise, a key file beside the service's own database, created on first use.**
 
-Both carry the same thing: 32 bytes, urlsafe-base64 encoded, as ``scripts/make_secret_key.py``
-prints. Reading the environment directly here is the same deliberate, scoped exception
-``config.EnvironmentSecretBackend`` documents for itself: this module *is* the settings
-machinery for the master key, so it is the one place allowed to look.
+The third case is the default, and it is deliberate. Requiring an operator to generate and
+install a key before they can save their first credential is one more setup step between
+"I want to add a client" and "the client is added" -- exactly the kind of step this whole
+change exists to delete. The service makes its own key the first time it needs one, writes
+it ``0600``, and says so once in the log.
+
+**What that costs, stated plainly.** A key sitting next to the database is weaker than a key
+somewhere else: anyone who can read both files can read every credential. It still defends
+the cases that actually happen most -- a database dump, a ``.sql`` export, a replica, a
+backup copied without its directory, a query-level leak -- because none of those carry the
+key file. A deployment that wants the stronger separation sets ``QLABS_SECRET_KEY_FILE`` to
+a mounted secret and gets it, with no other change. That is the trade this default makes:
+zero setup by default, full separation available, and the difference written down here
+rather than implied.
+
+Every form carries the same thing: 32 bytes, urlsafe-base64 encoded, as
+``scripts/make_secret_key.py`` prints. Reading the environment directly here is the same
+deliberate, scoped exception ``config.EnvironmentSecretBackend`` documents for itself: this
+module *is* the settings machinery for the master key, so it is the one place allowed to
+look.
 
 **Binding, so a ciphertext cannot be moved.** Each value is sealed with additional
 authenticated data of ``"<endpoint>\\x00<field>"``. Copying the ``client_secret``
@@ -69,13 +84,19 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Final
 
+import structlog
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pydantic import SecretStr
 
+_LOG = structlog.get_logger("qlabs.catalog_sync.configstore.crypto")
+
 __all__ = [
     "MASTER_KEY_ENV_VAR",
     "MASTER_KEY_FILE_ENV_VAR",
+    "default_key_path_for",
+    "ensure_key_file",
+    "resolve_master_key",
     "EncryptedSecret",
     "MasterKeyError",
     "MasterKeyMissingError",
@@ -235,6 +256,102 @@ def load_master_key(environ: dict[str, str] | None = None) -> bytes:
     raise MasterKeyMissingError()
 
 
+#: Name of the key file the service creates for itself beside its own database. Leading dot
+#: and an obvious name: an operator who lists that directory should be able to tell at a
+#: glance that the file matters and must be backed up separately from the database.
+DEFAULT_KEY_FILENAME: Final[str] = ".qlabs-secret.key"
+
+
+def default_key_path_for(database_url: object) -> Path:
+    """Where this deployment's key file lives when nothing configured one.
+
+    Beside the SQLite database the service already writes to, because that directory is
+    definitionally somewhere the process can write and somewhere the operator already knows
+    about. For a non-SQLite URL there is no such directory, so it falls back to the working
+    directory -- a Postgres deployment is past the point where an auto-generated key is the
+    right answer anyway, and should be setting ``QLABS_SECRET_KEY_FILE``.
+    """
+    # Ask the URL object for its own database path when it is one, rather than slicing the
+    # string: SQLAlchemy spells an absolute SQLite path with four slashes and a relative one
+    # with three, and getting that wrong puts the key somewhere other than beside the database
+    # -- which reads as "it generated a second key" the next time the service starts.
+    database = getattr(database_url, "database", None)
+    get_backend_name = getattr(database_url, "get_backend_name", None)
+    is_sqlite = (
+        get_backend_name() == "sqlite"
+        if callable(get_backend_name)
+        else str(database_url).startswith("sqlite:")
+    )
+    if is_sqlite and isinstance(database, str) and database and database != ":memory:":
+        return Path(database).parent / DEFAULT_KEY_FILENAME
+
+    text = str(database_url)
+    if text.startswith("sqlite:///") and not text.endswith(":memory:"):
+        return Path(text.removeprefix("sqlite:///")).parent / DEFAULT_KEY_FILENAME
+    return Path(DEFAULT_KEY_FILENAME)
+
+
+def ensure_key_file(path: Path) -> bytes:
+    """Read the key at ``path``, creating one if it is not there yet.
+
+    Written ``0600`` before anything is put in it -- created restricted, never created
+    world-readable and then tightened, which would leave a window where it was not. The
+    write is atomic (a temporary file in the same directory, then ``replace``) so a crash
+    mid-write cannot leave a truncated key that silently fails to open every credential.
+
+    Concurrent first starts are handled by re-reading after a lost race rather than
+    overwriting: two processes generating two keys and the second winning would strand
+    every credential the first one had already sealed.
+    """
+    if path.exists():
+        return _decode_key(path.read_text(encoding="utf-8").strip(), f"the key file at {path}")
+
+    generated = generate_master_key()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.touch(mode=0o600)
+        temporary.write_text(generated, encoding="utf-8")
+        # os.link + unlink rather than replace: link fails if the target already exists, so a
+        # process that lost the race leaves the winner's key in place instead of clobbering it.
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            return _decode_key(
+                path.read_text(encoding="utf-8").strip(), f"the key file at {path}"
+            )
+    finally:
+        temporary.unlink(missing_ok=True)
+
+    _LOG.warning(
+        "configstore.master_key_generated",
+        path=str(path),
+        detail=(
+            "created a new credential-encryption key beside the database. Back it up "
+            "separately from the database: losing it means every stored credential must be "
+            "entered again, and keeping both in one place means neither is protected from "
+            "whoever holds that copy. Set QLABS_SECRET_KEY_FILE to a mounted secret to keep "
+            "them apart."
+        ),
+    )
+    return _decode_key(generated, f"the key file at {path}")
+
+
+def resolve_master_key(database_url: object) -> bytes:
+    """This deployment's master key: configured if it was, generated on first use if not.
+
+    The order is the module docstring's: an explicitly configured key always wins, so a
+    deployment that has separated its key never silently falls back to a generated one
+    sitting next to its database.
+    """
+    env = os.environ
+    if (env.get(MASTER_KEY_FILE_ENV_VAR) or "").strip() or (
+        env.get(MASTER_KEY_ENV_VAR) or ""
+    ).strip():
+        return load_master_key()
+    return ensure_key_file(default_key_path_for(database_url))
+
+
 def _decode_key(encoded: str, source: str) -> bytes:
     try:
         # validate=True, and b64decode rather than urlsafe_b64decode: the urlsafe variant
@@ -276,8 +393,16 @@ class SecretCipher:
 
     @classmethod
     def from_environment(cls, environ: dict[str, str] | None = None) -> SecretCipher:
-        """Build from :func:`load_master_key`. Raises the same errors it does."""
+        """Build from :func:`load_master_key` -- configured key only, never generated."""
         key = load_master_key(environ)
+        return cls(key=key, key_id=key_id_of(key))
+
+    @classmethod
+    def for_database(cls, database_url: object) -> SecretCipher:
+        """Build from :func:`resolve_master_key`: the configured key, or one created beside
+        ``database_url`` on first use. This is what the running service uses, and the reason
+        saving a credential needs no setup step at all."""
+        key = resolve_master_key(database_url)
         return cls(key=key, key_id=key_id_of(key))
 
     @classmethod

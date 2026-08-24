@@ -116,15 +116,29 @@ describe("CredentialsPanel", () => {
     await waitFor(() => expect(screen.getByText("not set")).toBeInTheDocument());
   });
 
-  it("offers no credential input at all until the endpoint has been registered", async () => {
+  it("collects credentials while registering and hands them to the form", async () => {
+    // A credential cannot be sealed until its endpoint exists, so while registering the panel
+    // holds what was typed instead of writing it. It must not offer its own Save button here:
+    // there is one button on this form, and pressing it saves everything.
     const fetchMock = installFetchMock();
     installApiRouter(fetchMock, {});
-    renderPanel(null);
+    const pending: Record<string, string>[] = [];
+    render(
+      <ThemeProvider defaultTheme="light">
+        <CredentialsPanel
+          endpointName={null}
+          secretFields={["client_secret"]}
+          onPendingChange={(next) => pending.push(next)}
+        />
+      </ThemeProvider>,
+    );
+    const user = userEvent.setup();
 
-    // A credential is sealed against the endpoint it belongs to, so there is nothing to
-    // attach one to yet. Saying so beats offering an input whose save would fail.
-    expect(screen.getByText(/Register this endpoint first/)).toBeInTheDocument();
-    expect(document.querySelector('input[type="password"]')).toBeNull();
+    await user.type(screen.getByLabelText("client_secret"), "typed-while-registering");
+
+    expect(pending.at(-1)).toEqual({ client_secret: "typed-while-registering" });
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    // Nothing is written yet -- the form does that, once, after the endpoint exists.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

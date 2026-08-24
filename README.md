@@ -184,12 +184,11 @@ cadence with jitter, and a pair never overlaps itself.
 
 **A browser console configures all of it.** Endpoints, pairs and selection rules live in the
 service's own database rather than in environment variables, so they can be edited while it
-runs and take effect without a restart. **Credentials included:** a client's credential is
-typed into the console, encrypted before it is stored, and takes effect immediately — no file
-on the host, no restart, nothing to do per client except fill in the form. An endpoint that is
-already fed by an external secret injector can point at an environment variable instead. Either
-way the console shows only whether the credential resolves and whether the endpoint is healthy;
-no route ever returns a stored credential. Adding a catalog means
+runs and take effect without a restart. **Credentials included:** they are typed into the same
+form as everything else, encrypted before they are stored, and live immediately — no file on
+the host, no restart, no setup step, nothing to do per client except fill the form in and press
+Test connection. An endpoint fed by an external secret injector can point at an environment
+variable instead. Either way no route ever returns a stored credential. Adding a catalog means
 registering an instance of a connector already present in the image; nothing is downloaded or
 installed from the browser. Every configuration change is recorded in an append-only log.
 
@@ -495,13 +494,14 @@ uv run python scripts/make_admin_hash.py             # the administrator credent
 # if both are set. There is no password-strength policy on either route -- any non-empty
 # password is accepted, because the operator configuring it is the one signing in.
 
-uv run python scripts/make_secret_key.py             # the credential-store master key
-# Encrypts every credential entered in the console. ONE key per installation, set once at
-# install time -- adding a client never touches it. Put it in a file and point
-# QLABS_SECRET_KEY_FILE at it (preferred), or set QLABS_SECRET_KEY inline in .env.
-# Keep it: a lost key means every stored credential has to be entered again, and there is
-# no way to recover one from the database alone. Keep it off the same medium as your
-# database backups -- holding both is the one case the encryption does not protect against.
+# Nothing else to set up. Credentials entered in the console are encrypted with a key the
+# service creates for itself, beside its own database, the first time one is saved.
+#
+# For a deployment that wants the key kept apart from the database -- so a stolen backup
+# carries neither -- generate one and mount it instead:
+#     uv run python scripts/make_secret_key.py
+#     QLABS_SECRET_KEY_FILE=/run/secrets/qlabs-master.key
+# Either way: back the key up. Losing it means every stored credential must be entered again.
 
 qlabs-catalog-sync serve --config config.yaml \
     --console-assets console/dist --port 8080
@@ -512,13 +512,12 @@ refuses to start, deliberately — it will not serve an unauthenticated console.
 `--console-assets` the API, `/healthz` and `/metrics` still serve and `/` says the console
 is not installed.
 
-**Adding a client, end to end, from the browser:** register the endpoint (name it, pick its
-connector, fill in host and space), set its secret reference to `db:<endpoint name>`, save,
-then reopen it and type the tenant credential into the **Credentials** panel. It is encrypted
-on arrival and takes effect immediately — the next healthcheck uses it, with no restart. A
-deployment whose secrets are already injected as environment variables can use
-`env:<PREFIX>` instead and skip the master key entirely; the two can coexist, endpoint by
-endpoint.
+**Adding a client is one form.** Name the endpoint, pick its connector and role, fill in its
+host and space, type its credentials, save. Press **Test connection** and the console signs in
+to the tenant and tells you whether it worked. There is no step in between and nothing to
+decide about where credentials live — they are encrypted and kept with the endpoint. A
+deployment whose secrets are injected as environment variables can still point an endpoint at
+`env:<PREFIX>` through the API; the two coexist endpoint by endpoint.
 
 To just look at the console without a tenant, point `--config` at
 [`deploy/config/local-console.yaml`](deploy/config/local-console.yaml) — it declares no

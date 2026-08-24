@@ -360,6 +360,12 @@ async def bootstrap_from_environment(
                 role=_endpoint_role(endpoint),
                 settings=dict(endpoint.settings),
                 secret_ref=secret_ref,
+                # This import knows exactly which reference each endpoint should have, and
+                # `None` here means it determined the answer is "none" -- an environment
+                # convention it could not map onto a single reference, already recorded as a
+                # skip above. Letting create_endpoint substitute its usual "db:<name>" would
+                # overwrite that finding with a binding this config never asked for.
+                bind_default_secret_ref=False,
                 # True, not the schema default of False: an environment-only
                 # deployment never had an "enabled" concept before RM-06 -- if it was
                 # declared, it was active. Matching that prior behavior (the DoD's "an

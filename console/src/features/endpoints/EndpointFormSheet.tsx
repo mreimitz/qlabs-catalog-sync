@@ -31,6 +31,8 @@ import {
 
 import {
   createEndpoint,
+  putEndpointSecret,
+  runEndpointHealthcheck,
   updateEndpoint,
   type ConnectorInfo,
   type EndpointOut,
@@ -67,7 +69,6 @@ export function EndpointFormSheet({
   const [name, setName] = useState("");
   const [connector, setConnector] = useState<string | undefined>(undefined);
   const [role, setRole] = useState<Role | undefined>(undefined);
-  const [secretRef, setSecretRef] = useState("");
   const [enabled, setEnabled] = useState(false);
   // `settingsRows` is the WHOLE editor when the selected connector has no `config_schema`
   // (`SettingsEditor`, unchanged from T13.3). When it does, `schemaFieldValues` holds every
@@ -82,6 +83,15 @@ export function EndpointFormSheet({
   const [settingsRows, setSettingsRows] = useState<SettingsRow[]>([]);
   const [schemaFieldValues, setSchemaFieldValues] = useState<Record<string, unknown>>({});
   const [extraSettingsRows, setExtraSettingsRows] = useState<SettingsRow[]>([]);
+  /** Credentials typed while registering. An endpoint has to exist before one can be sealed
+   * against it, so they are held here and written immediately after the create succeeds --
+   * two requests behind the one button the operator pressed. */
+  const [pendingSecrets, setPendingSecrets] = useState<Record<string, string>>({});
+  /** The last "Test connection" result, rendered beside the button. Held here rather than
+   * toasted: it is the answer to a question the operator just asked, and it belongs next to
+   * the form they are still filling in. */
+  const [testResult, setTestResult] = useState<{ healthy: boolean; detail: string } | null>(null);
+  const [testing, setTesting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<TopLevelField, string>>>({});
@@ -128,18 +138,18 @@ export function EndpointFormSheet({
     setFieldErrors({});
     setSettingsBannerError(null);
     setSettingsFieldErrors({});
+    setPendingSecrets({});
+    setTestResult(null);
     if (existing) {
       setName(existing.name);
       setConnector(existing.connector);
       setRole(existing.role);
-      setSecretRef(existing.secret_ref ?? "");
       setEnabled(existing.enabled);
       seedSettingsState(existing.connector, existing.settings);
     } else {
       setName("");
       setConnector(undefined);
       setRole(undefined);
-      setSecretRef("");
       setEnabled(false);
       seedSettingsState(undefined, {});
     }
@@ -194,14 +204,11 @@ export function EndpointFormSheet({
     const settings = configSchema
       ? { ...schemaFieldValues, ...rowsToSettings(extraSettingsRows) }
       : rowsToSettings(settingsRows);
-    const trimmedSecretRef = secretRef.trim();
-
     const result = existing
       ? await updateEndpoint(existing.name, {
           connector,
           role,
           settings,
-          secret_ref: trimmedSecretRef.length > 0 ? trimmedSecretRef : null,
           enabled,
         })
       : await createEndpoint({
@@ -209,13 +216,28 @@ export function EndpointFormSheet({
           connector,
           role,
           settings,
-          secret_ref: trimmedSecretRef.length > 0 ? trimmedSecretRef : null,
           enabled,
         });
 
     setSubmitting(false);
 
     if (result.ok) {
+      // The endpoint exists now, so anything typed into the credentials panel can finally be
+      // sealed against it. Reported per field rather than as one all-or-nothing failure: an
+      // endpoint that saved with one of its two credentials rejected is a real, recoverable
+      // state, and closing the sheet claiming success would hide it.
+      const rejected: string[] = [];
+      for (const [field, value] of Object.entries(pendingSecrets)) {
+        const saved = await putEndpointSecret(result.data.name, field, value);
+        if (!saved.ok) rejected.push(`${field}: ${saved.error.message}`);
+      }
+      if (rejected.length > 0) {
+        setFormError(
+          `Endpoint "${result.data.name}" was saved, but its credentials were not: ${rejected.join("; ")}`,
+        );
+        onSaved(result.data);
+        return;
+      }
       toast.success(isEdit ? `Endpoint "${result.data.name}" updated.` : `Endpoint "${result.data.name}" registered.`);
       onSaved(result.data);
       onOpenChange(false);
@@ -236,6 +258,30 @@ export function EndpointFormSheet({
     } else {
       setFormError(classified.message);
     }
+  }
+
+  /** Run the endpoint's own connector healthcheck and report it inline.
+   *
+   * Only offered for an endpoint that exists: the check builds a real connector from stored
+   * settings and stored credentials and talks to the tenant, so there is nothing to test until
+   * both have been saved. A red result is an ordinary answer here, not an error -- "these
+   * credentials are wrong" is exactly what the operator pressed the button to find out. */
+  async function testConnection(endpointName: string) {
+    setTesting(true);
+    setTestResult(null);
+    const result = await runEndpointHealthcheck(endpointName);
+    setTesting(false);
+    if (!result.ok) {
+      setTestResult({ healthy: false, detail: result.error.message });
+      return;
+    }
+    const healthy = result.data.state === "healthy";
+    setTestResult({
+      healthy,
+      detail: healthy
+        ? "Connected. This endpoint's settings and credentials work against the tenant."
+        : (result.data.reason ?? "The connector reported this endpoint as unhealthy."),
+    });
   }
 
   return (
@@ -326,29 +372,10 @@ export function EndpointFormSheet({
             </SelectContent>
           </Select>
 
-          <FieldRow
-            label="Secret reference"
-            description={
-              'Where this endpoint\'s credentials come from -- never a credential value itself. ' +
-              '"db:<endpoint name>" keeps them in this console, entered below and encrypted ' +
-              'before they are stored. "env:PREFIX" reads them from the server\'s environment ' +
-              'instead, for a deployment whose secrets are injected by something else. Leave ' +
-              'blank for an endpoint with no credentials bound yet.'
-            }
-            error={fieldErrors.secret_ref}
-          >
-            <Input
-              type="text"
-              value={secretRef}
-              onChange={(event) => setSecretRef(event.target.value)}
-              placeholder="db:my_endpoint"
-              autoComplete="off"
-            />
-          </FieldRow>
-
           <CredentialsPanel
             endpointName={mode.kind === "edit" ? mode.endpoint.name : null}
             secretFields={secretFields}
+            onPendingChange={setPendingSecrets}
           />
 
           <div className="flex flex-col gap-2">
@@ -410,6 +437,30 @@ export function EndpointFormSheet({
               </>
             )}
           </div>
+
+          {mode.kind === "edit" ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void testConnection(mode.endpoint.name)}
+                  disabled={testing}
+                >
+                  {testing ? <Spinner aria-hidden className="mr-2 size-4" /> : null}
+                  {testing ? "Testing…" : "Test connection"}
+                </Button>
+                <p className="text-caption text-muted-foreground">
+                  Signs in to the tenant with the saved settings and credentials.
+                </p>
+              </div>
+              {testResult ? (
+                <Alert variant={testResult.healthy ? "info" : "destructive"}>
+                  <AlertDescription>{testResult.detail}</AlertDescription>
+                </Alert>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-3">
             <Switch id="endpoint-enabled" checked={enabled} onCheckedChange={setEnabled} />

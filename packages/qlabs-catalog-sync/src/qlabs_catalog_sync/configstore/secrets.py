@@ -89,6 +89,7 @@ __all__ = [
     "SUPPORTED_SECRET_REF_SCHEMES",
     "DatabaseSecretBackend",
     "backend_for",
+    "default_secret_ref_for",
     "SecretRef",
     "SecretRefFormatError",
     "SecretResolveStatus",
@@ -117,6 +118,21 @@ DB_SCHEME: Final[str] = "db"
 #: container orchestrated by something that injects secrets as environment variables has no
 #: reason to move.
 ENV_SCHEME: Final[str] = "env"
+
+
+def default_secret_ref_for(endpoint_name: str) -> str:
+    """The reference a newly registered endpoint gets when nobody chose one: ``db:<name>``.
+
+    Credentials in the configuration store are the default because they are the answer for
+    almost every deployment, and because the alternative -- asking an operator registering a
+    client which secret backend to use -- is a question about this system's internals dressed
+    up as a question about their client. A deployment that wants the environment backend still
+    says so explicitly and gets it.
+
+    The locator is the endpoint's own name because a stored credential is sealed against that
+    name and cannot be read under another (see :mod:`qlabs_catalog_sync.configstore.crypto`).
+    """
+    return f"{DB_SCHEME}:{endpoint_name}"
 
 
 class SecretRefFormatError(ValueError):

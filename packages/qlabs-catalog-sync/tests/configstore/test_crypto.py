@@ -18,6 +18,7 @@ what this module guarantees. Each property below is one half of that:
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 
 import pytest
 
@@ -133,13 +134,10 @@ def test_a_key_id_does_not_expose_the_key() -> None:
     assert len(identifier) < len(key.hex()), "the id must not be the key material itself"
 
 
-def test_a_key_file_is_preferred_over_the_inline_variable(tmp_path: object) -> None:
+def test_a_key_file_is_preferred_over_the_inline_variable(tmp_path: Path) -> None:
     """A deployment that mounts a secret file and also carries a stale inline value means
     the file. Silently preferring the environment there opens every credential with the
     wrong key."""
-    from pathlib import Path
-
-    assert isinstance(tmp_path, Path)
     file_key = generate_master_key()
     key_file = tmp_path / "master.key"
     key_file.write_text(file_key)
@@ -192,3 +190,63 @@ def test_an_unusable_key_says_what_is_wrong_without_echoing_it(value: str, expec
 
 def test_a_generated_key_is_the_right_size() -> None:
     assert len(base64.urlsafe_b64decode(generate_master_key())) == KEY_BYTES
+
+
+def test_a_key_is_created_on_first_use_so_nothing_has_to_be_configured(tmp_path: Path) -> None:
+    """The reason saving a credential needs no setup step at all.
+
+    Requiring an operator to generate and install a key before their first credential can be
+    saved is one more thing between "add a client" and "the client is added". The service
+    makes its own the first time it needs one.
+    """
+    from qlabs_catalog_sync.configstore.crypto import ensure_key_file
+
+    key_file = tmp_path / "sub" / ".qlabs-secret.key"
+
+    key = ensure_key_file(key_file)
+
+    assert len(key) == KEY_BYTES
+    assert key_file.exists()
+    # Restricted from the moment it exists -- created 0600, never created world-readable and
+    # then tightened, which would leave a window where it was not.
+    assert key_file.stat().st_mode & 0o077 == 0, "the key file is readable by other users"
+
+
+def test_an_existing_key_is_reused_not_replaced(tmp_path: Path) -> None:
+    """A second key would strand every credential the first one sealed, so a restart must
+    never generate one over the top of an existing file."""
+    from qlabs_catalog_sync.configstore.crypto import ensure_key_file
+
+    key_file = tmp_path / ".qlabs-secret.key"
+
+    first = ensure_key_file(key_file)
+    second = ensure_key_file(key_file)
+
+    assert first == second
+
+
+def test_a_configured_key_always_beats_the_generated_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deployment that has separated its key must never silently fall back to one sitting
+    next to its database -- that would quietly undo the separation it asked for."""
+    from qlabs_catalog_sync.configstore.crypto import resolve_master_key
+
+    configured = generate_master_key()
+    monkeypatch.setenv(MASTER_KEY_ENV_VAR, configured)
+
+    resolved = resolve_master_key(f"sqlite:///{tmp_path / 'state.db'}")
+
+    assert resolved == base64.urlsafe_b64decode(configured)
+    assert not (tmp_path / ".qlabs-secret.key").exists(), "it generated a key it did not need"
+
+
+def test_the_generated_key_lands_beside_the_database(tmp_path: Path) -> None:
+    """Beside the database the service already writes to: a directory that is definitionally
+    writable and that the operator already knows about."""
+    from qlabs_catalog_sync.configstore.crypto import default_key_path_for
+
+    assert (
+        default_key_path_for(f"sqlite:///{tmp_path / 'state.db'}")
+        == tmp_path / ".qlabs-secret.key"
+    )

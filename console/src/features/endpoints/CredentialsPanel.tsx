@@ -14,10 +14,11 @@
 // * **One field at a time.** A connector declares n secret fields (Databricks has
 //   `client_secret` and `token`, one per credential route). Each saves and clears on its own,
 //   because "replace only the client secret" must not require re-entering anything else.
-// * **Only for an endpoint that exists.** A credential is bound to its endpoint by name -- the
-//   server seals it against that name -- so there is nothing to attach one to until the
-//   endpoint has been registered. Create mode says so rather than offering an input that would
-//   fail on submit.
+// * **Typed while registering, not after.** A credential is sealed against the endpoint it
+//   belongs to, so it cannot be written until that endpoint exists -- but that is this
+//   system's sequencing problem, not the operator's. While registering, the panel holds what
+//   was typed and hands it to the form, which saves the endpoint and then its credentials as
+//   one action. The operator fills in one form: name, settings, credentials, save.
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -51,15 +52,21 @@ export function CredentialsPanel({
   endpointName,
   secretFields,
   onChanged,
+  onPendingChange,
 }: {
-  /** The registered endpoint's name, or `null` in create mode -- see the module doc comment. */
+  /** The registered endpoint's name, or `null` while registering -- see the module doc
+   * comment for how the second case still collects credentials. */
   endpointName: string | null;
-  /** `connector.config_secret_fields`. Used as the fallback list so the panel can render every
-   * field the connector wants even before the first `GET /secrets` returns. */
+  /** `connector.config_secret_fields`. The whole list while registering, and the fallback
+   * list afterwards so the panel is never empty while the first `GET /secrets` is in flight. */
   secretFields: readonly string[];
   /** Called after a successful save or clear, so the surrounding screen can refresh the
    * endpoint's secret-resolve badge without the operator reloading. */
   onChanged?: () => void;
+  /** While registering: the credentials typed so far, so the form can save them immediately
+   * after it creates the endpoint. Never called once the endpoint exists -- from then on this
+   * panel writes them itself, one field at a time. */
+  onPendingChange?: (pending: Record<string, string>) => void;
 }) {
   const [statuses, setStatuses] = useState<StoredSecretOut[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -71,7 +78,7 @@ export function CredentialsPanel({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!endpointName) return;
+    if (endpointName === null) return;
     const result = await listEndpointSecrets(endpointName);
     if (result.ok) {
       setStatuses(result.data);
@@ -85,23 +92,15 @@ export function CredentialsPanel({
     void refresh();
   }, [refresh]);
 
-  if (!endpointName) {
-    return (
-      <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-        <p className="text-caption font-medium">Credentials</p>
-        <p className="text-caption text-muted-foreground">
-          Register this endpoint first, then reopen it to enter its credentials. A credential is
-          sealed against the endpoint it belongs to, so there is nothing to attach one to yet.
-        </p>
-      </div>
-    );
-  }
+  const registering = endpointName === null;
 
-  // Prefer the server's list (it knows what is already saved); fall back to the connector's
-  // declared fields so the panel is never empty while the first request is in flight.
-  const rows: StoredSecretOut[] =
-    statuses ??
-    secretFields.map((field) => ({ field, is_set: false, updated_at: null, key_id: null }));
+  // While registering there is nothing stored yet by definition, so the connector's declared
+  // fields are the whole list. Afterwards the server's own list wins (it knows what is saved),
+  // with the declared fields as the fallback while the first request is in flight.
+  const rows: StoredSecretOut[] = registering
+    ? secretFields.map((field) => ({ field, is_set: false, updated_at: null, key_id: null }))
+    : (statuses ??
+      secretFields.map((field) => ({ field, is_set: false, updated_at: null, key_id: null })));
 
   if (rows.length === 0) {
     return (
@@ -112,6 +111,20 @@ export function CredentialsPanel({
         </p>
       </div>
     );
+  }
+
+  function setDraft(field: string, value: string) {
+    const next = { ...drafts, [field]: value };
+    setDrafts(next);
+    if (registering) {
+      // Hand every keystroke up rather than waiting for a "stage it" click: there is no such
+      // click. The form's own Save is the only button, and it must already hold what was typed.
+      const pending: Record<string, string> = {};
+      for (const [key, typed] of Object.entries(next)) {
+        if (typed.trim().length > 0) pending[key] = typed.trim();
+      }
+      onPendingChange?.(pending);
+    }
   }
 
   async function save(field: string) {
@@ -154,8 +167,9 @@ export function CredentialsPanel({
     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
       <Label>Credentials</Label>
       <p className="text-caption text-muted-foreground">
-        Encrypted before it is stored, and never shown again -- there is no way to read a saved
-        credential back, here or through the API. Re-enter it to replace it.
+        {registering
+          ? "Saved with this endpoint, encrypted. Never shown again afterwards -- there is no way to read one back, here or through the API."
+          : "Encrypted before it is stored, and never shown again -- there is no way to read a saved credential back, here or through the API. Re-enter it to replace it."}
       </p>
       {loadError ? (
         <Alert variant="destructive">
@@ -184,31 +198,31 @@ export function CredentialsPanel({
                 autoComplete="new-password"
                 placeholder={row.is_set ? "Enter a new value to replace it" : "Enter the value"}
                 disabled={busy}
-                onChange={(event) =>
-                  setDrafts((current) => ({ ...current, [row.field]: event.target.value }))
-                }
+                onChange={(event) => setDraft(row.field, event.target.value)}
               />
             </FieldRow>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => void save(row.field)}
-                disabled={busy || draft.trim().length === 0}
-              >
-                {busy ? <Spinner aria-hidden className="mr-2 size-4" /> : null}
-                {row.is_set ? "Replace" : "Save"}
-              </Button>
-              {row.is_set ? (
+            {registering ? null : (
+              <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  variant="ghost"
-                  onClick={() => void clear(row.field)}
-                  disabled={busy}
+                  onClick={() => void save(row.field)}
+                  disabled={busy || draft.trim().length === 0}
                 >
-                  Remove
+                  {busy ? <Spinner aria-hidden className="mr-2 size-4" /> : null}
+                  {row.is_set ? "Replace" : "Save"}
                 </Button>
-              ) : null}
-            </div>
+                {row.is_set ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void clear(row.field)}
+                    disabled={busy}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            )}
           </div>
         );
       })}

@@ -77,7 +77,7 @@ async function selectConnector(user: ReturnType<typeof userEvent.setup>, name: s
 describe("EndpointsScreen -- schema-driven settings form (recorded config_schema)", () => {
   it(
     "MUTATION #1 -- generates a labelled field per qlik property, marks the three required ones, " +
-      "and renders no input at all for the secret-typed client_secret",
+      "and keeps the secret-typed client_secret out of the SETTINGS form",
     async () => {
       const { user } = await openRegisterForm();
       await selectConnector(user, "qlik");
@@ -88,13 +88,16 @@ describe("EndpointsScreen -- schema-driven settings form (recorded config_schema
       // `scope` is optional (not in the real schema's `required`) and nullable.
       expect(screen.getByLabelText("Scope")).not.toBeRequired();
 
-      // The secret explanation renders...
-      expect(screen.getByText("client_secret")).toBeInTheDocument();
-      // ...but nothing offers to type a value for it: no labelled control named after it, no
-      // password input anywhere, and the word "secret" appears only in the explanatory text,
-      // never as a control's accessible name.
-      expect(screen.queryByLabelText(/client.?secret/i)).not.toBeInTheDocument();
-      expect(document.querySelector('input[type="password"]')).toBeNull();
+      // A credential IS typed here now (amended C2) -- but in the credentials panel, which
+      // encrypts it, and never as an ordinary setting, which would be stored in the clear.
+      // That distinction is the whole point, so it is asserted structurally: the control named
+      // after the secret field exists, is masked, and is NOT one of the settings inputs.
+      const credential = screen.getByLabelText("client_secret");
+      expect(credential).toHaveAttribute("type", "password");
+      expect(screen.getByLabelText("Base Url")).toHaveAttribute("type", "text");
+      expect(
+        screen.queryAllByPlaceholderText("value").some((row) => row === credential),
+      ).toBe(false);
     },
   );
 
