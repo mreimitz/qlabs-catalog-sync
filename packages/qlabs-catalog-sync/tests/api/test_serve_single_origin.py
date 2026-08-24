@@ -38,6 +38,7 @@ from qlabs_catalog_sync.api.auth import (
     hash_password,
 )
 from qlabs_catalog_sync.cli.deps import CliDeps, RuntimeContext
+from qlabs_catalog_sync.cli.errors import EXIT_CONFIG_ERROR, CliError
 from qlabs_catalog_sync.cli.serve_command import _serve
 from qlabs_catalog_sync.discovery import ConnectorRegistry
 from qlabs_catalog_sync_sdk.testing import FakeConnector
@@ -253,12 +254,19 @@ async def test_the_service_refuses_to_start_with_no_administrator_configured(
     does so **before** anything binds a socket -- a process that bound a port and then served
     only ``/healthz`` would keep passing its liveness probe forever while the console sat
     unusable, which is the failure mode that hides.
-    """
-    from qlabs_catalog_sync.api.auth import ADMIN_PASSWORD_HASH_KEY, AuthNotConfiguredError
 
-    monkeypatch.delenv(
-        f"{ADMIN_SECRET_ENDPOINT.upper()}__{ADMIN_PASSWORD_HASH_KEY.upper()}", raising=False
-    )
+    The refusal surfaces as :class:`~qlabs_catalog_sync.cli.errors.CliError` with the
+    config-error exit code, so an operator gets ``Error: ...`` and exit 2 rather than a
+    traceback; ``tests/cli/test_serve_auth_errors.py`` covers what that looks like from
+    outside the process.
+    """
+    from qlabs_catalog_sync.api.auth import ADMIN_PASSWORD_HASH_KEY, ADMIN_PASSWORD_KEY
+
+    # Both keys, not just the hash: a developer with QLABS_CONSOLE_ADMIN__PASSWORD
+    # exported would otherwise configure a credential here, and this test would bind a
+    # port and never return instead of failing.
+    for key in (ADMIN_PASSWORD_HASH_KEY, ADMIN_PASSWORD_KEY):
+        monkeypatch.delenv(f"{ADMIN_SECRET_ENDPOINT.upper()}__{key.upper()}", raising=False)
     source = FakeConnector.read_only_source(
         name=SOURCE_ENDPOINT, manifest=databricks_shaped_manifest()
     )
@@ -272,7 +280,7 @@ async def test_the_service_refuses_to_start_with_no_administrator_configured(
         deps=CliDeps(registry=registry),
     )
 
-    with pytest.raises(AuthNotConfiguredError):
+    with pytest.raises(CliError) as excinfo:
         await _serve(
             config_path=write_engine_config(tmp_path),
             runtime=runtime,
@@ -284,6 +292,8 @@ async def test_the_service_refuses_to_start_with_no_administrator_configured(
             run_immediately=False,
             stop=asyncio.Event(),
         )
+
+    assert excinfo.value.exit_code == EXIT_CONFIG_ERROR
 
 
 async def _sign_in(client: httpx.AsyncClient, service: _RunningService) -> str:

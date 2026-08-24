@@ -34,8 +34,9 @@ the password itself and :func:`load_admin_credential` hashes it once at startup,
 credential identical to the configured-hash one. It is deliberately the second choice, not
 an equal alternative: the hash wins when both are set, and taking this path logs
 ``console.auth.plaintext_password`` at ``warning`` every startup so a deployment that
-reached for it by accident says so in its own logs. :data:`MIN_PASSWORD_LENGTH` applies to
-both paths — the convenience is skipping a command, not skipping the password policy.
+reached for it by accident says so in its own logs. Neither path applies a password-strength
+policy: any non-empty password is accepted, because the person configuring this console is
+the person who has to sign in to it.
 
 Both keys are read through the existing
 :class:`~qlabs_catalog_sync.config.SecretBackend` — the same abstraction endpoint
@@ -170,7 +171,6 @@ __all__ = [
     "DEFAULT_SCRYPT_PARAMS",
     "DEFAULT_SESSION_TTL",
     "MAX_KDF_MEMORY_BYTES",
-    "MIN_PASSWORD_LENGTH",
     "PUBLIC_PROBE_PATHS",
     "SESSION_COOKIE",
     "SESSION_COOKIE_SECURE",
@@ -229,11 +229,18 @@ ADMIN_USERNAME_KEY: Final[str] = "username"
 #: Username assumed when the backend holds no :data:`ADMIN_USERNAME_KEY`.
 DEFAULT_ADMIN_USERNAME: Final[str] = "admin"
 
-#: Shortest password :func:`hash_password` will hash. The verifier deliberately does not
-#: enforce this — it never sees a password long enough to judge without short-circuiting,
-#: and short-circuiting is exactly what must not happen (see :meth:`AdminCredential.verify`).
-#: This is the only password-policy lever a hash-based credential leaves available.
-MIN_PASSWORD_LENGTH: Final[int] = 12
+#: There is deliberately **no password-strength policy** here — no minimum length, no
+#: character classes. This console is an internal, operator-facing tool for one
+#: administrator, run by the person who chose the password; a length floor here does not
+#: stop a bad password, it only stops the operator from using the one they wanted, and
+#: they route around it in ways nobody can see. Choosing the password is theirs.
+#:
+#: The one value :func:`hash_password` still refuses is the empty string, which is not a
+#: weak password but the absence of one: the console's own sign-in form marks the field
+#: ``required``, so an empty configured password produces a credential nobody can ever
+#: sign in with. Refusing it at startup turns a silent lockout into a message, and catches
+#: the far more common cause -- a ``QLABS_CONSOLE_ADMIN__PASSWORD=`` line with nothing
+#: after the ``=``.
 
 #: Absolute session lifetime. Not sliding: a session created now stops working in eight
 #: hours regardless of activity, which is a working day for the one operator this console
@@ -400,12 +407,15 @@ def hash_password(password: str, *, params: ScryptParams = DEFAULT_SCRYPT_PARAMS
     configure the password instead. The salt is fresh per call, so hashing the same
     password twice gives two different strings and neither reveals that they match.
 
-    Raises :class:`AuthConfigurationError` — with a message that never echoes the input —
-    for a password shorter than :data:`MIN_PASSWORD_LENGTH`.
+    Any non-empty password is accepted, of any length or shape — see the note above
+    :data:`ADMIN_SECRET_ENDPOINT`'s neighbours on why there is no strength policy. Raises
+    :class:`AuthConfigurationError` — with a message that never echoes the input — only
+    for the empty string.
     """
-    if len(password) < MIN_PASSWORD_LENGTH:
+    if not password:
         raise AuthConfigurationError(
-            f"administrator password must be at least {MIN_PASSWORD_LENGTH} characters"
+            "administrator password must not be empty (the sign-in form requires one, so "
+            "an empty password is a credential nobody could ever sign in with)"
         )
     salt = stdlib_secrets.token_bytes(_SALT_BYTES)
     digest = _derive(password, params, salt)
@@ -502,7 +512,7 @@ class AdminCredential:
         plaintext lived beforehand: see :data:`ADMIN_PASSWORD_KEY`.
 
         Raises :class:`AuthConfigurationError` — with a message that never echoes the
-        input — for a password shorter than :data:`MIN_PASSWORD_LENGTH`.
+        input — for an empty password.
         """
         return cls.from_password_hash(
             hash_password(password, params=params), username=username
@@ -604,7 +614,16 @@ def load_admin_credential(*, backend: SecretBackend | None = None) -> AdminCrede
             secret_endpoint=ADMIN_SECRET_ENDPOINT,
             secret_key=source_key,
         )
-        raise
+        # Re-raised naming the variable that carries the rejected value: two keys can
+        # configure this credential now, and "the password is too short" is only
+        # actionable if the operator knows which of them to go and edit. ``from None``
+        # keeps the original off the traceback -- it carries no value either, but the
+        # rule in this module is that nothing derived from a credential gets re-exposed
+        # by accident.
+        raise AuthConfigurationError(
+            f"{exc} (configured in "
+            f"{ADMIN_SECRET_ENDPOINT.upper()}__{source_key.upper()})"
+        ) from None
 
     if encoded is None:
         _LOG.warning(

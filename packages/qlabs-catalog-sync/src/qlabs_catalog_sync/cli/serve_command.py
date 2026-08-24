@@ -40,8 +40,13 @@ from pathlib import Path
 import click
 
 from qlabs_catalog_sync.api.app import create_app
-from qlabs_catalog_sync.api.auth import console_auth_from_environment
+from qlabs_catalog_sync.api.auth import (
+    AuthConfigurationError,
+    AuthNotConfiguredError,
+    console_auth_from_environment,
+)
 from qlabs_catalog_sync.api.server import ApiServer
+from qlabs_catalog_sync.cli.errors import EXIT_CONFIG_ERROR, CliError
 from qlabs_catalog_sync.configstore.bootstrap import (
     BootstrapPartialFailureError,
     bootstrap_from_environment,
@@ -131,7 +136,15 @@ async def _serve(
     # console. Deliberately built before anything binds a socket: refusing to start is a
     # clear crash with the reason in the logs, whereas a process that boots and serves only
     # /healthz keeps passing its liveness probe forever while the console is unusable.
-    auth = console_auth_from_environment()
+    try:
+        auth = console_auth_from_environment()
+    except (AuthNotConfiguredError, AuthConfigurationError) as exc:
+        # Refusing is correct; a traceback is not the way to say so. Both exceptions
+        # already carry an operator-facing message naming the variable to set and never
+        # any part of a configured value, so CliError re-presents it as the documented
+        # `Error: ...` line and exit 2 -- the same shape as an unreadable --config path,
+        # because it is the same kind of problem: this deployment is misconfigured.
+        raise CliError(str(exc), exit_code=EXIT_CONFIG_ERROR) from None
 
     # The configuration store the console reads and writes (C1). It shares the state
     # store's engine -- one database, one connection pool -- and the same connector

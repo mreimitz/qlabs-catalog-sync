@@ -110,7 +110,7 @@
       //
       // and put the line it prints in a `.env` file at the repository root (already
       // gitignored). For local debugging you can skip the hashing step entirely and put
-      // QLABS_CONSOLE_ADMIN__PASSWORD='at-least-12-characters' there instead. It also needs a real engine config; copy deploy/config/tenant.example.yaml
+      // QLABS_CONSOLE_ADMIN__PASSWORD='whatever-you-like' there instead. It also needs a real engine config; copy deploy/config/tenant.example.yaml
       // and fill it in.
       "name": "CLI: serve (API only, real tenant config)",
       "type": "debugpy",
@@ -148,7 +148,7 @@
       //       uv run python scripts/make_admin_hash.py
       //     Paste the QLABS_CONSOLE_ADMIN__PASSWORD_HASH line it prints into .env. Sign in
       //     with the username you hashed (default "admin"). Or skip the hashing and put
-      //     QLABS_CONSOLE_ADMIN__PASSWORD='at-least-12-characters' in .env -- fine locally,
+      //     QLABS_CONSOLE_ADMIN__PASSWORD='whatever-you-like' in .env -- fine locally,
       //     hashed at startup, and the service warns that it took that path.
       //
       // No prompt for a config file: this one runs deploy/config/local-console.yaml, which

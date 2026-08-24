@@ -56,7 +56,6 @@ from qlabs_catalog_sync.api.auth import (
     DEFAULT_ADMIN_USERNAME,
     DEFAULT_SCRYPT_PARAMS,
     MAX_KDF_MEMORY_BYTES,
-    MIN_PASSWORD_LENGTH,
     PUBLIC_PROBE_PATHS,
     SESSION_COOKIE,
     SESSION_COOKIE_SECURE,
@@ -364,23 +363,45 @@ def test_the_plaintext_password_never_reaches_a_log_record(captured_logs: list[A
     assert PASSWORD not in rendered
 
 
-def test_a_plaintext_password_below_the_minimum_length_is_refused() -> None:
-    """``hash_password``'s length floor is the only password policy a hash-based credential
-    leaves available, so the convenience path must not be a way around it."""
-    short = "SENTINEL-x"[:MIN_PASSWORD_LENGTH - 1]
+def test_a_short_plaintext_password_is_accepted() -> None:
+    """There is no password-strength policy, and that is a decision, not an omission.
 
+    This console is an internal tool with one administrator, and the person configuring the
+    password is the person who signs in with it. A length floor here would not have stopped
+    a bad password; it would only have stopped the operator using the one they picked. The
+    test exists so that reintroducing a floor is a deliberate act with a failing test
+    attached, rather than something that creeps back in as an "obvious" hardening.
+    """
+    credential = load_admin_credential(backend=plaintext_backend(password="a"))
+
+    assert credential.verify(username=USERNAME, password="a")
+    assert not credential.verify(username=USERNAME, password="b")
+
+
+def test_an_empty_plaintext_password_is_refused() -> None:
+    """The one value that is not a weak password but the absence of one.
+
+    ``QLABS_CONSOLE_ADMIN__PASSWORD=`` with nothing after the ``=`` is a misconfiguration,
+    and the sign-in form marks the field ``required``, so accepting it would build a
+    credential nobody could ever sign in with and report nothing until someone tried.
+    """
     with pytest.raises(AuthConfigurationError) as excinfo:
-        load_admin_credential(backend=plaintext_backend(password=short))
+        load_admin_credential(backend=plaintext_backend(password=""))
 
-    assert short not in str(excinfo.value)
-    assert str(MIN_PASSWORD_LENGTH) in str(excinfo.value)
+    assert "empty" in str(excinfo.value)
 
 
 def test_a_refused_plaintext_password_is_logged_without_its_value(
     captured_logs: list[Any],
 ) -> None:
+    """A hash that fails to parse is quite likely a password pasted into the wrong
+    variable, so the malformed-credential log must be as value-free as the rest."""
     with pytest.raises(AuthConfigurationError):
-        load_admin_credential(backend=plaintext_backend(password="short"))
+        load_admin_credential(
+            backend=MappingSecretBackend(
+                {(ADMIN_SECRET_ENDPOINT, ADMIN_PASSWORD_HASH_KEY): "short"}
+            )
+        )
 
     events = [e for e in captured_logs if e.get("event") == "console.auth.credential_malformed"]
     assert len(events) == 1
@@ -490,13 +511,19 @@ def test_a_hash_below_the_cost_floor_is_refused_even_though_it_parses() -> None:
         AdminCredential.from_password_hash(weak, username=USERNAME)
 
 
-def test_hash_password_rejects_a_password_below_the_minimum_length() -> None:
-    short = "sh0rt"
-    with pytest.raises(AuthConfigurationError) as excinfo:
-        hash_password(short)
+def test_hash_password_hashes_a_password_of_any_length() -> None:
+    """No strength policy: ``hash_password`` is not the place a password gets judged."""
+    encoded = hash_password("x", params=TEST_PARAMS)
 
-    assert str(MIN_PASSWORD_LENGTH) in str(excinfo.value)
-    assert short not in str(excinfo.value), "the rejected password must not be echoed"
+    credential = AdminCredential.from_password_hash(encoded, username=USERNAME)
+    assert credential.verify(username=USERNAME, password="x")
+
+
+def test_hash_password_rejects_only_the_empty_password() -> None:
+    with pytest.raises(AuthConfigurationError) as excinfo:
+        hash_password("")
+
+    assert "empty" in str(excinfo.value)
 
 
 def test_credential_repr_never_exposes_the_salt_or_the_derived_key() -> None:
